@@ -171,6 +171,3 @@ uv.lock
 
 # CrewAI specific
 .crewai/
-
-# Project specific
-research_report.json

@@ -1,0 +1,50 @@
+{
+  "metadata": {
+    "updated_at": "2026-01-11",
+    "created_at": "2026-01-11"
+  },
+  "economic_indicators": {
+    "interest_rate": [
+      {
+        "value": "3.75%",
+        "date_published": "2025-12-17",
+        "month_period": "Dec-25"
+      }
+    ],
+    "cpih_mom": [
+      {
+        "value": "-0.1%",
+        "date_published": "2025-11-20",
+        "month_period": "Nov-25"
+      }
+    ],
+    "gdp_mom": [
+      {
+        "value": "-0.1%",
+        "date_published": "2025-10-15",
+        "month_period": "Oct-25"
+      }
+    ]
+  },
+  "report_summaries": {
+    "monetary_policy_report": [
+      {
+        "summary": "The MPC maintained the Bank Rate at 4% on 5 November 2025, citing that CPI inflation has peaked, while underlying disinflation is ongoing and supported by subdued economic growth. A cautious approach is being taken towards future cuts as further evidence is required before proceeding. The current economic conditions indicate that inflation rates are expected to fall close to the target of 2% by mid-2026.",
+        "report_date": "2025-11-07",
+        "month_period": "Nov-25"
+      },
+      {
+        "summary": "The Bank of England cut the base rate by 0.25 percentage points to 3.75%, citing easing inflation which is now at 3.2%. The committee balanced the risks of persistent inflation against those of weaker demand, projecting a gradual downward path for interest rates.",
+        "report_date": "2025-12-17",
+        "month_period": "Dec-25"
+      }
+    ],
+    "financial_stability_report": [
+      {
+        "summary": "The Financial Policy Committee highlighted increased risks to financial stability in 2025, due to global uncertainties, pressures on sovereign debt, and high valuations in technology sectors. They emphasized the need for resilience in the UK financial system amidst these challenges.",
+        "report_date": "2025-12-15",
+        "month_period": "Dec-25"
+      }
+    ]
+  }
+}
