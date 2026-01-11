@@ -1,0 +1,80 @@
+research_task:
+  description: >
+    Conduct research on {topic} to find the latest available data for each UK economic indicator, knowing that today's date is {current_date}.
+
+    Your goal is to find the most recent UK economic data for these indicators:
+    - Interest Rate (Bank of England base rate)
+    - CPIH +/- MoM (Consumer Price Index including Housing month-over-month)
+    - GDP +/- MoM (Gross Domestic Product month-over-month)
+    
+    AND the latest Bank of England report summaries:
+    - Monetary Policy Report (latest BoE policy decisions and economic outlook)
+    - Financial Stability Report (latest BoE financial system assessment - published twice yearly in June/December)
+
+    SEARCH STRATEGY - CRITICAL FORMAT REQUIREMENTS:
+    1. Use EXASearchTool ONE SEARCH AT A TIME - never pass arrays or multiple queries
+    2. Each tool call must use this EXACT format: {"search_query": "your search term"}
+    3. Do NOT use any other parameters - only search_query
+    4. PRIORITIZE official sources: ONS (ons.gov.uk) for CPIH/GDP, Bank of England (bankofengland.co.uk) for rates/MPC
+    5. Focus on finding the LATEST available data for each indicator - prioritize December 2025 and January 2026 data
+    6. Search term variations to try:
+       - Interest Rate: "UK interest rate latest 2026" or "Bank of England base rate January 2026" or "BoE rate cut December 2025"
+       - CPIH: "ONS CPIH November 2025 monthly" or "Consumer Price Index housing ONS latest" or "UK inflation November 2025 ONS"
+       - GDP: "ONS GDP monthly October November 2025" or "UK monthly GDP latest ONS" or "GDP monthly estimate UK November 2025"
+       - Monetary Policy Report: "Bank of England December 2025 rate cut 3.75%" or "BoE MPC December 17 2025" or "Bank Rate reduced December 2025"
+       - Financial Stability Report: "Bank of England Financial Stability Report latest 2026" or "BoE financial stability December 2025"
+    7. IMPORTANT: Always include the sign for percentage changes (e.g., +0.1%, -0.1%, +0.0%)
+    8. IMPORTANT: Verify data accuracy with official sources (ONS for CPIH/GDP, BoE for rates/MPC)
+    9. If first search fails, try alternative terms in separate tool calls
+    10. IMPORTANT: For Financial Stability Report, if no recent report found (they're published twice yearly), simply state "Data not found" - do NOT create placeholder content
+
+    CRITICAL: Never pass arrays to EXASearchTool. Always use single objects with only search_query parameter.
+  expected_output: >
+    A bullet point list with the latest available data for each indicator and report summary:
+    
+    - Interest Rate: [value]% ([month-year])
+    - CPIH +/- MoM: [+/-value]% ([month-year])
+    - GDP +/- MoM: [+/-value]% ([month-year])
+    - Monetary Policy Report Summary: [brief summary of key decisions and outlook] ([month-year])
+    - Financial Stability Report Summary: [brief summary of financial system assessment OR "Data not found"] ([month-year])
+    
+    NOTE: Financial Stability Reports are published twice yearly (June/December). If no recent report is available, use "Data not found".
+  agent: researcher
+
+reporting_task:
+  description: >
+    Take the research data and update the JSON report.
+    
+    You will receive simple bullet points with economic data.
+    Your job is to add this new data to the existing JSON report while preserving all existing data.
+    
+    Use the JSON Update Tool to merge the new data with the existing report.
+    
+    The existing JSON report is: {json_report}
+  expected_output: >
+    Return the complete updated JSON report as pure JSON with no formatting.
+    
+    CRITICAL REQUIREMENTS:
+    1. Return ONLY the JSON object - no markdown code blocks, no backticks, no explanatory text
+    2. Do not wrap the JSON in ```json or ``` 
+    3. The output must be valid JSON that can be parsed directly
+    4. Preserve the existing created_at date from the original report
+    5. Update the updated_at date to today's date
+    
+    The JSON structure should be:
+    {
+      "metadata": {
+        "updated_at": "2026-01-11",
+        "created_at": "[preserve original date]"
+      },
+      "economic_indicators": {
+        "interest_rate": [...],
+        "cpih_mom": [...],
+        "gdp_mom": [...]
+      },
+      "report_summaries": {
+        "monetary_policy_report": [...],
+        "financial_stability_report": [...]
+      }
+    }
+  agent: reporting_analyst

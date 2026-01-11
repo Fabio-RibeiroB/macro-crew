@@ -1,0 +1,15 @@
+{
+  "metadata": {
+    "updated_at": "",
+    "created_at": ""
+  },
+  "economic_indicators": {
+    "interest_rate": [],
+    "cpih_mom": [],
+    "gdp_mom": []
+  },
+  "report_summaries": {
+    "monetary_policy_report": [],
+    "financial_stability_report": []
+  }
+}

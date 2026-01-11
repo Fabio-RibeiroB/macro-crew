@@ -1,0 +1,40 @@
+[project]
+name = "uk_macro_crew"
+version = "0.1.0"
+description = "uk_macro_crew using crewAI"
+authors = [{ name = "Your Name", email = "you@example.com" }]
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "crewai[tools]==1.7.2",
+    "exa-py>=2.0.2",
+    "pandas>=2.3.3",
+    "pytest>=7.0.0",
+]
+
+[project.scripts]
+uk_macro_crew = "uk_macro_crew.main:run"
+run_crew = "uk_macro_crew.main:run"
+train = "uk_macro_crew.main:train"
+replay = "uk_macro_crew.main:replay"
+test = "uk_macro_crew.main:test"
+run_with_trigger = "uk_macro_crew.main:run_with_trigger"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.crewai]
+type = "crew"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
