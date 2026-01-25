@@ -1,6 +1,9 @@
 research_task:
   description: >
-    Conduct research on {topic} to find the latest available data for each UK economic indicator, knowing that today's date is {current_date}.
+    Conduct research on {topic} to find the most recent available data for each UK economic indicator, knowing that today's date is {current_date}.
+    
+    CRITICAL: Use today's date to determine what data should logically be available based on typical publication schedules. 
+    Don't just search for "latest" - search for specific months/periods that should have been published by now.
 
     Your goal is to find the most recent UK economic data for these indicators:
     - Interest Rate (Bank of England base rate)
@@ -16,65 +19,117 @@ research_task:
     2. Each tool call must use this EXACT format: {"search_query": "your search term"}
     3. Do NOT use any other parameters - only search_query
     4. PRIORITIZE official sources: ONS (ons.gov.uk) for CPIH/GDP, Bank of England (bankofengland.co.uk) for rates/MPC
-    5. Focus on finding the LATEST available data for each indicator - prioritize December 2025 and January 2026 data
-    6. Search term variations to try:
-       - Interest Rate: "UK interest rate latest 2026" or "Bank of England base rate January 2026" or "BoE rate cut December 2025"
-       - CPIH: "ONS CPIH November 2025 monthly" or "Consumer Price Index housing ONS latest" or "UK inflation November 2025 ONS"
-       - GDP: "ONS GDP monthly October November 2025" or "UK monthly GDP latest ONS" or "GDP monthly estimate UK November 2025"
-       - Monetary Policy Report: "Bank of England December 2025 rate cut 3.75%" or "BoE MPC December 17 2025" or "Bank Rate reduced December 2025"
-       - Financial Stability Report: "Bank of England Financial Stability Report latest 2026" or "BoE financial stability December 2025"
-    7. IMPORTANT: Always include the sign for percentage changes (e.g., +0.1%, -0.1%, +0.0%)
-    8. IMPORTANT: Verify data accuracy with official sources (ONS for CPIH/GDP, BoE for rates/MPC)
-    9. If first search fails, try alternative terms in separate tool calls
-    10. IMPORTANT: For Financial Stability Report, if no recent report found (they're published twice yearly), simply state "Data not found" - do NOT create placeholder content
+    5. Focus on finding the SINGLE LATEST AVAILABLE data point for each indicator - get whatever the most recent published data is
+    6. CRITICAL PUBLICATION SCHEDULE LOGIC: Based on today's date ({current_date}), determine what data should logically be available:
+       - CPIH: Published monthly around 3rd Wednesday. If today is late January 2026, December 2025 CPIH should be available
+       - GDP Monthly: Published 6-8 weeks after month end. If today is late January 2026, November 2025 GDP should be available
+       - Interest Rate: Published after MPC meetings (8 times per year). Search for most recent MPC decision
+       - Always search for the data that should be available based on typical publication schedules, not just the most obvious search terms
+    7. Search term variations to try (keep it simple - complex terms often fail):
+       - Interest Rate: "UK interest rate" or "Bank of England interest rate" or "bank rate"
+       - CPIH: "UK inflation" or "CPIH" or "consumer price index"
+       - GDP: "UK GDP" or "GDP monthly" or "UK economic growth"
+       - Monetary Policy Report: "monetary policy report" or "Bank of England monetary policy"
+       - Financial Stability Report: "financial stability report" or "Bank of England financial stability report" or "BoE financial stability report"
+    8. IMPORTANT: Always include the sign for percentage changes (e.g., +0.1%, -0.1%, +0.0%)
+    9. IMPORTANT: Verify data accuracy with official sources (ONS for CPIH/GDP, BoE for rates/MPC)
+    10. If first search fails, try alternative terms in separate tool calls - but focus on data that should logically be available
+    11. CRITICAL: For each indicator, find the MOST RECENT AVAILABLE data - don't return "not available" unless you genuinely cannot find any recent data
+    12. IMPORTANT: For Financial Stability Report, the December 2025 FSR should definitely be available by now (January 2026). Search specifically for "December 2025" FSR. If you cannot find December 2025, then search for June 2025 as fallback. FSRs are major publications that are always available - do not return "not available" unless you have exhaustively searched.
+    13. IMPORTANT: When calculating next publication dates, be realistic about publication schedules:
+        - CPIH: Next month's data published around 3rd Wednesday of following month
+        - GDP Monthly: Published 6-8 weeks after month end
+        - Interest Rate/MPC: Next scheduled MPC meeting (roughly every 6-7 weeks)
+        - Monetary Policy Report: Published with MPC decisions (8 times per year)
+        - Financial Stability Report: Next scheduled FSR (June or December)
 
     CRITICAL: Never pass arrays to EXASearchTool. Always use single objects with only search_query parameter.
   expected_output: >
-    A bullet point list with the latest available data for each indicator and report summary:
+    A simple bullet point list with the single latest available data for each indicator and report summary:
     
-    - Interest Rate: [value]% ([month-year])
-    - CPIH +/- MoM: [+/-value]% ([month-year])
-    - GDP +/- MoM: [+/-value]% ([month-year])
-    - Monetary Policy Report Summary: [brief summary of key decisions and outlook] ([month-year])
-    - Financial Stability Report Summary: [brief summary of financial system assessment OR "Data not found"] ([month-year])
+    - Interest Rate: [value]% (published: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
+    - CPIH +/- MoM: [+/-value]% (published: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
+    - GDP +/- MoM: [+/-value]% (published: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
+    - Monetary Policy Report Summary: [brief summary of key decisions and outlook] (report date: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
+    - Financial Stability Report Summary: [brief summary of financial system assessment] (report date: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
     
-    NOTE: Financial Stability Reports are published twice yearly (June/December). If no recent report is available, use "Data not found".
+    CRITICAL FSR REQUIREMENT:
+    - The December 2025 Financial Stability Report should be available since we're in January 2026
+    - Search specifically for "December 2025 FSR" or "Financial Stability Report December 2025"
+    - If December 2025 is not found, search for "June 2025 FSR" as fallback
+    - FSRs are major Bank of England publications - they should always be findable
+    - Do NOT return "not available" for FSR unless you have tried multiple specific search terms
+    
+    CRITICAL SOURCE REQUIREMENTS: 
+    - ALWAYS include the actual URL from your EXA search results in the (source: ) field
+    - DO NOT use generic names like "ONS" or "Bank of England" - use the specific webpage URL
+    - The source should be the exact URL where you found the data (e.g., https://www.ons.gov.uk/economy/grossdomesticproduct/bulletins/gdpmonthlyestimateuk/november2025)
+    - If you cannot find the specific URL, use the closest official page URL rather than a generic organization name
+    - Include the exact publication date in YYYY-MM-DD format for each data point
+    - Include the next expected publication date in YYYY-MM-DD format for each indicator/report
+    - If data is not available, mark as "not available" rather than omitting
+    - Financial Stability Reports are published twice yearly (June/December) - find the most recent available report (December 2025 or June 2025).
   agent: researcher
 
 reporting_task:
   description: >
-    Take the research data and update the JSON report.
+    Take the research data and create a simple current snapshot JSON report.
     
-    You will receive simple bullet points with economic data.
-    Your job is to add this new data to the existing JSON report while preserving all existing data.
+    You will receive simple bullet points with the latest economic data.
+    Your job is to format this data into a simple JSON structure that contains only current data points.
     
-    Use the JSON Update Tool to merge the new data with the existing report.
+    IMPORTANT: Focus only on the business data - do not include metadata fields like generated_at or last_updated.
+    The system will automatically add metadata after you generate the JSON.
     
-    The existing JSON report is: {json_report}
+    This is a direct overwrite approach - do not load or preserve any existing data.
+    Create a fresh report containing only the current data provided.
   expected_output: >
-    Return the complete updated JSON report as pure JSON with no formatting.
+    Return a simple JSON report containing only current business data as pure JSON with no formatting.
     
     CRITICAL REQUIREMENTS:
     1. Return ONLY the JSON object - no markdown code blocks, no backticks, no explanatory text
     2. Do not wrap the JSON in ```json or ``` 
     3. The output must be valid JSON that can be parsed directly
-    4. Preserve the existing created_at date from the original report
-    5. Update the updated_at date to today's date
+    4. Do NOT include metadata fields - the system will add these automatically
+    5. Use simple key-value structure for each indicator (no arrays)
+    6. Include publication dates and sources for all data points
+    7. Mark unavailable data as "not available" rather than omitting fields
     
     The JSON structure should be:
     {
-      "metadata": {
-        "updated_at": "2026-01-11",
-        "created_at": "[preserve original date]"
+      "current_economic_indicators": {
+        "interest_rate": {
+          "value": "3.75%",
+          "publication_date": "2025-12-17",
+          "next_publication_date": "2026-02-06",
+          "source": "https://www.bankofengland.co.uk/monetary-policy-summary-and-minutes/2025/december-2025"
+        },
+        "cpih_mom": {
+          "value": "-0.1%",
+          "publication_date": "2025-11-20",
+          "next_publication_date": "2026-01-22",
+          "source": "https://www.ons.gov.uk/economy/inflationandpriceindices/bulletins/consumerpriceinflation/latest"
+        },
+        "gdp_mom": {
+          "value": "-0.1%",
+          "publication_date": "2025-10-15",
+          "next_publication_date": "2026-02-14",
+          "source": "https://www.ons.gov.uk/economy/grossdomesticproduct/bulletins/gdpmonthlyestimateuk/november2025"
+        }
       },
-      "economic_indicators": {
-        "interest_rate": [...],
-        "cpih_mom": [...],
-        "gdp_mom": [...]
-      },
-      "report_summaries": {
-        "monetary_policy_report": [...],
-        "financial_stability_report": [...]
+      "current_report_summaries": {
+        "monetary_policy_report": {
+          "summary": "Brief summary of key decisions...",
+          "report_date": "2025-12-17",
+          "next_publication_date": "2026-02-06",
+          "source": "https://www.bankofengland.co.uk/monetary-policy-summary-and-minutes/2025/december-2025"
+        },
+        "financial_stability_report": {
+          "summary": "Brief summary of financial assessment...",
+          "report_date": "2025-12-15",
+          "next_publication_date": "2026-06-15",
+          "source": "https://www.bankofengland.co.uk/financial-stability-report/2025/december-2025"
+        }
       }
     }
   agent: reporting_analyst

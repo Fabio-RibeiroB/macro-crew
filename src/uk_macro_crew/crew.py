@@ -9,7 +9,6 @@ from crewai_tools import ScrapeWebsiteTool, EXASearchTool
 # you can use the @before_kickoff and @after_kickoff decorators
 # https://docs.crewai.com/concepts/crews#example-crew-class-with-decorators
 from uk_macro_crew.utils import get_exa_api_key, save_json_hook
-from uk_macro_crew.tools.json_tool import JSONTool
 
 os.environ["EXA_API_KEY"] = get_exa_api_key()
 
@@ -49,7 +48,7 @@ class UkMacroCrew:
         return Agent(
             config=self.agents_config["reporting_analyst"],  # type: ignore[index]
             verbose=True,
-            tools=[JSONTool()],
+            # No tools needed - LLM outputs JSON directly
             max_iter=int(os.getenv("AGENT_MAX_ITERATIONS", "5")),
             max_retry_limit=int(os.getenv("AGENT_MAX_RETRIES", "2")),
             max_execution_time=int(os.getenv("AGENT_MAX_EXECUTION_TIME", "600")),  # 10 minutes

@@ -1,15 +1,26 @@
 {
   "metadata": {
-    "updated_at": "",
-    "created_at": ""
+    "generated_at": "",
+    "last_updated": "",
+    "data_currency": "Latest available"
   },
-  "economic_indicators": {
-    "interest_rate": [],
-    "cpih_mom": [],
-    "gdp_mom": []
+  "current_economic_indicators": {
+    "interest_rate": {
+      "status": "not available"
+    },
+    "cpih_mom": {
+      "status": "not available"
+    },
+    "gdp_mom": {
+      "status": "not available"
+    }
   },
-  "report_summaries": {
-    "monetary_policy_report": [],
-    "financial_stability_report": []
+  "current_report_summaries": {
+    "monetary_policy_report": {
+      "status": "not available"
+    },
+    "financial_stability_report": {
+      "status": "not available"
+    }
   }
 }
