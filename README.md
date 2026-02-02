@@ -31,7 +31,7 @@ The system produces a single, comprehensive JSON file that serves as the **prima
 
 ### Output
 
-The system generates `research_report.json` - a structured JSON file that tracks economic indicators over time, with data points tagged by month in MM-YY format.
+The system generates `research_report.json` - a structured JSON file that tracks economic indicators over time, with data points tagged by month in MM-YY format. The system produces comprehensive, paragraph-length summaries for Bank of England reports (Monetary Policy Report and Financial Stability Report) that provide substantive insights into policy decisions, economic outlook, and risk assessments.
 
 ```bash
 pip install uv
@@ -181,14 +181,14 @@ The system maintains data in this JSON format:
   "report_summaries": {
     "monetary_policy_report": [
       {
-        "summary": "Brief summary of policy decisions...",
+        "summary": "Comprehensive paragraph summary covering key policy decisions, inflation outlook, economic growth assessment, and forward-looking guidance - minimum 3-4 sentences providing substantive insights into the Bank's monetary policy stance and economic assessment...",
         "report_date": "2025-12-17",
         "month_period": "Dec-25"
       }
     ],
     "financial_stability_report": [
       {
-        "summary": "Brief summary of financial system assessment...",
+        "summary": "Comprehensive paragraph summary covering banking system resilience, key risk areas, household debt concerns, commercial real estate issues, and systemic risk assessment - minimum 3-4 sentences providing substantive insights into financial stability conditions and risk outlook...",
         "report_date": "2025-12-15",
         "month_period": "Dec-25"
       }

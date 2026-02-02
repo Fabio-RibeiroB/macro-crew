@@ -50,8 +50,8 @@ research_task:
     - Interest Rate: [value]% (published: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
     - CPIH +/- MoM: [+/-value]% (published: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
     - GDP +/- MoM: [+/-value]% (published: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
-    - Monetary Policy Report Summary: [brief summary of key decisions and outlook] (report date: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
-    - Financial Stability Report Summary: [brief summary of financial system assessment] (report date: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
+    - Monetary Policy Report Summary: [comprehensive paragraph summary covering key policy decisions, inflation outlook, economic growth assessment, and forward-looking guidance - minimum 3-4 sentences] (report date: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
+    - Financial Stability Report Summary: [comprehensive paragraph summary covering banking system resilience, key risk areas, household debt concerns, commercial real estate issues, and systemic risk assessment - minimum 3-4 sentences] (report date: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
     
     CRITICAL FSR REQUIREMENT:
     - The December 2025 Financial Stability Report should be available since we're in January 2026
@@ -119,13 +119,13 @@ reporting_task:
       },
       "current_report_summaries": {
         "monetary_policy_report": {
-          "summary": "Brief summary of key decisions...",
+          "summary": "Comprehensive paragraph summary covering key policy decisions, inflation outlook, economic growth assessment, and forward-looking guidance - minimum 3-4 sentences providing substantive insights into the Bank's monetary policy stance and economic assessment...",
           "report_date": "2025-12-17",
           "next_publication_date": "2026-02-06",
           "source": "https://www.bankofengland.co.uk/monetary-policy-summary-and-minutes/2025/december-2025"
         },
         "financial_stability_report": {
-          "summary": "Brief summary of financial assessment...",
+          "summary": "Comprehensive paragraph summary covering banking system resilience, key risk areas, household debt concerns, commercial real estate issues, and systemic risk assessment - minimum 3-4 sentences providing substantive insights into financial stability conditions and risk outlook...",
           "report_date": "2025-12-15",
           "next_publication_date": "2026-06-15",
           "source": "https://www.bankofengland.co.uk/financial-stability-report/2025/december-2025"

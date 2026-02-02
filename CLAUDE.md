@@ -37,8 +37,23 @@ The system produces a single, comprehensive JSON file that serves as the **final
 - **Interest Rates**: Bank of England base rates
 - **CPIH**: Consumer Price Index including Housing (month-over-month)
 - **GDP**: Gross Domestic Product monthly changes
-- **Monetary Policy Report**: BoE policy summaries
-- **Financial Stability Report**: BoE financial stability summaries
+- **Monetary Policy Report**: BoE policy summaries (comprehensive paragraph-length analysis)
+- **Financial Stability Report**: BoE financial stability summaries (comprehensive paragraph-length analysis)
+
+### Report Summary Quality Standards
+The system generates comprehensive, substantive summaries for Bank of England reports:
+
+**Monetary Policy Report Summaries:**
+- Minimum 3-4 sentences providing detailed analysis
+- Covers key policy decisions, inflation outlook, economic growth assessment
+- Includes forward-looking guidance and monetary policy stance
+- Provides meaningful insights into the Bank's economic assessment
+
+**Financial Stability Report Summaries:**
+- Minimum 3-4 sentences covering comprehensive risk assessment
+- Addresses banking system resilience and key risk areas
+- Covers household debt concerns and commercial real estate issues
+- Includes systemic risk assessment and financial stability outlook
 
 ## Data Structure & Monthly Growth Pattern
 
@@ -79,7 +94,7 @@ The system maintains data in `research_report.json` - **the final deliverable** 
   "report_summaries": {
     "monetary_policy_report": [
       {
-        "summary": "Brief summary of latest policy decisions...",
+        "summary": "Comprehensive paragraph summary covering key policy decisions, inflation outlook, economic growth assessment, and forward-looking guidance - minimum 3-4 sentences providing substantive insights into the Bank's monetary policy stance and economic assessment...",
         "report_date": "2025-12-17",
         "month_period": "Dec-25"
       }
@@ -87,7 +102,7 @@ The system maintains data in `research_report.json` - **the final deliverable** 
     ],
     "financial_stability_report": [
       {
-        "summary": "Brief summary of financial system assessment...",
+        "summary": "Comprehensive paragraph summary covering banking system resilience, key risk areas, household debt concerns, commercial real estate issues, and systemic risk assessment - minimum 3-4 sentences providing substantive insights into financial stability conditions and risk outlook...",
         "report_date": "2025-12-15",
         "month_period": "Dec-25"
       }

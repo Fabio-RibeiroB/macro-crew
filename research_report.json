@@ -4,7 +4,7 @@
       "value": "3.75%",
       "publication_date": "2025-12-18",
       "next_publication_date": "2026-02-05",
-      "source": "https://www.bankofengland.co.uk/monetary-policy/interest-rates-and-bank-rate"
+      "source": "https://www.bankofengland.co.uk/monetary-policy/the-interest-rate-bank-rate"
     },
     "cpih_mom": {
       "value": "+0.4%",
@@ -21,20 +21,20 @@
   },
   "current_report_summaries": {
     "monetary_policy_report": {
-      "summary": "The Bank of England's Monetary Policy Committee cut interest rates to 3.75% due to easing inflation and signs of economic strain. They expect gradual further cuts depending on inflation developments.",
+      "summary": "In the December 2025 meeting, the MPC voted to reduce the Bank Rate to 3.75%. CPI inflation fell to 3.2%, leading members to believe it would continue to decrease towards the 2% target. The MPC noted improvements in underlying wage and price pressures, although uncertainties remained regarding the economy\u2019s medium-term trajectory. Further rate cuts could occur if inflationary pressures continued to ease.",
       "report_date": "2025-12-18",
-      "next_publication_date": "not available",
+      "next_publication_date": "2026-02-05",
       "source": "https://www.bankofengland.co.uk/monetary-policy-summary-and-minutes/2025/december-2025"
     },
     "financial_stability_report": {
-      "summary": "The December 2025 report highlighted ongoing risks to the UK financial system, emphasizing the need to monitor vulnerabilities closely as recovery continues.",
-      "report_date": "2025-12-30",
-      "next_publication_date": "June 2026",
+      "summary": "The December 2025 Financial Stability Report highlighted increasing risks to financial stability, with elevated uncertainties from geopolitical tensions and a relaxed economic growth outlook. The FPC emphasized the importance of maintaining a resilient financial system that can absorb shocks. Although the UK banking system remains well-capitalized, there are concerns about stretched valuations in risky assets, particularly in the tech sector. The FPC took steps to assess and mitigate these risks to enhance financial stability.",
+      "report_date": "2025-12-02",
+      "next_publication_date": "2026-06-15",
       "source": "https://www.bankofengland.co.uk/financial-stability-report/2025/december-2025"
     }
   },
   "metadata": {
-    "generated_at": "2026-01-25T15:53:34.027745Z",
-    "last_updated": "2026-01-25T15:53:34.027745Z"
+    "generated_at": "2026-02-02T20:47:50.650600Z",
+    "last_updated": "2026-02-02T20:47:50.650600Z"
   }
 }

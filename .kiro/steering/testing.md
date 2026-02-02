@@ -186,14 +186,14 @@ Tests expect this JSON format:
   "report_summaries": {
     "monetary_policy_report": [
       {
-        "summary": "Brief summary text...",
+        "summary": "Comprehensive paragraph summary covering key policy decisions, inflation outlook, economic growth assessment, and forward-looking guidance - minimum 3-4 sentences providing substantive insights into the Bank's monetary policy stance and economic assessment...",
         "report_date": "2025-12-17",
         "month_period": "Dec-25"
       }
     ],
     "financial_stability_report": [
       {
-        "summary": "Brief summary text...",
+        "summary": "Comprehensive paragraph summary covering banking system resilience, key risk areas, household debt concerns, commercial real estate issues, and systemic risk assessment - minimum 3-4 sentences providing substantive insights into financial stability conditions and risk outlook...",
         "report_date": "2025-12-15",
         "month_period": "Dec-25"
       }
