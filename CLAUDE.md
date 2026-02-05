@@ -2,20 +2,20 @@
 
 ## Project Overview
 
-UK Macro Crew is a multi-agent AI system built with CrewAI that automates the collection and reporting of UK macroeconomic data. The system is designed for **monthly execution** to build a comprehensive time-series dataset of UK economic indicators.
+UK Macro Crew is a multi-agent AI system built with CrewAI that automates the collection and reporting of UK macroeconomic data. The system runs **automatically on publication dates** via a scheduler that checks daily at 5pm.
 
 ### Core Purpose
-- Automate monthly collection of UK macroeconomic data from authoritative sources
+- Automate collection of UK macroeconomic data from authoritative sources
 - Build and maintain a cumulative time-series JSON report (`research_report.json`)
 - Focus on Bank of England and ONS data sources for accuracy
 - Provide chronological tracking of economic trends over time
-- **Monthly Execution**: Run monthly to append latest data to the growing historical dataset
+- **Automated Scheduling**: Runs automatically at 5pm on each indicator's `next_publication_date`
 
 ### Final Output: `research_report.json`
 The system produces a single, comprehensive JSON file that serves as the **final deliverable**:
-- **Location**: `uk_macro_crew/research_report.json`
-- **Structure**: Time-series format with chronological arrays for each indicator
-- **Growth Pattern**: New data is appended monthly, preserving all historical data
+- **Location**: `/home/finstats/public_html/macro-crew/research_report.json`
+- **Copies**: Automatically synced to `dist/` and `public/` for frontend access
+- **Structure**: Current snapshot format with `next_publication_date` for each indicator
 - **Usage**: This file contains the complete economic dataset and is the primary output
 
 ## System Architecture
@@ -112,11 +112,36 @@ The system maintains data in `research_report.json` - **the final deliverable** 
 }
 ```
 
-### Monthly Execution Pattern
-- **Frequency**: Run monthly (typically first week of each month)
-- **Data Accumulation**: Each run appends new data while preserving historical records
-- **Final Output**: `research_report.json` becomes increasingly comprehensive over time
-- **Data Integrity**: Chronological ordering maintained, no data loss between runs
+### Automated Scheduling
+
+The system uses `scheduler.py` to automatically run on publication dates:
+
+**How it works:**
+1. A cron job runs daily at 5pm
+2. The scheduler reads `next_publication_date` from each indicator in `research_report.json`
+3. If today matches any publication date, the CrewAI crew runs
+4. Updated report is copied to `dist/` and `public/` for the frontend
+5. Logs are written to `/home/finstats/logs/scheduler.log`
+
+**Cron job (finstats user):**
+```
+PATH=/home/finstats/.local/bin:/usr/bin:/bin
+0 17 * * * cd public_html/macro-crew && uv run scheduler.py run
+```
+
+**Scheduler commands:**
+```bash
+cd /home/finstats/public_html/macro-crew
+
+# List all next publication dates
+uv run scheduler.py list
+
+# Show scheduler status and next run date
+uv run scheduler.py status
+
+# Manual run (checks if today is a publication date)
+uv run scheduler.py run
+```
 
 ### Data Format Rules
 - **Date Format**: ISO format `YYYY-MM-DD` for `date_published`
@@ -127,13 +152,19 @@ The system maintains data in `research_report.json` - **the final deliverable** 
 ## Project Structure
 
 ```
-uk_macro_crew/
-├── .env                    # API keys (OPENAI_API_KEY, EXA_API_KEY)
+/home/finstats/
+├── .env                    # API keys (OPENAI_API_KEY, EXA_API_KEY) - outside public_html for security
+└── logs/
+    └── scheduler.log       # Scheduler execution logs
+
+/home/finstats/public_html/macro-crew/
+├── scheduler.py           # Publication date scheduler (cron entry point)
 ├── pyproject.toml         # Project configuration and dependencies
-├── research_report.json   # Generated output JSON report
-├── knowledge/             # Static data and configuration
-│   ├── blank_report.json  # Template JSON structure
-│   └── user_preference.txt # User configuration
+├── research_report.json   # Generated output JSON report (primary)
+├── dist/                  # Built React frontend (served by Apache HTTPS)
+│   └── research_report.json  # Copy for frontend
+├── public/
+│   └── research_report.json  # Copy for frontend dev
 ├── src/uk_macro_crew/     # Main source code
 │   ├── main.py           # Entry point and CLI commands
 │   ├── crew.py           # CrewAI crew definition and agent setup
@@ -142,14 +173,9 @@ uk_macro_crew/
 │   │   ├── agents.yaml   # Agent definitions (roles, goals, backstories)
 │   │   └── tasks.yaml    # Task definitions and expected outputs
 │   └── tools/            # Custom CrewAI tools
-│       ├── json_tool.py  # JSON manipulation tool (primary)
-│       ├── csv_tool.py   # CSV manipulation tool (legacy - not used)
-│       └── custom_tool.py # Additional custom tools
+│       └── json_tool.py  # JSON manipulation tool (primary)
 └── tests/                # Test directory
-    ├── test_json_tool.py      # Core JSON tool functionality
-    ├── test_integration.py    # End-to-end workflow tests
-    ├── test_utils.py          # Helper function tests
-    └── test_workflow_simulation.py # Workflow simulation tests
+    └── test_*.py         # Various test files
 ```
 
 ## Technology Stack
@@ -182,66 +208,42 @@ uv sync
 ```
 
 ### Environment Configuration
-Create `.env` file with:
+The `.env` file is stored at `/home/finstats/.env` (outside public_html for security):
 ```bash
 OPENAI_API_KEY=your_openai_api_key_here
 EXA_API_KEY=your_exa_api_key_here
-TIMEFRAME=last 3 months
 ```
+
+The `find_dotenv()` function in `utils.py` searches upward from the source directory and finds this file automatically.
 
 **Required Environment Variables:**
 - **OPENAI_API_KEY**: OpenAI API access for LLM agents
 - **EXA_API_KEY**: Exa search API access for web research
 
-**Optional Environment Variables:**
-- **TIMEFRAME**: Controls research timeframe (default: "last 3 months")
-  - Examples: "latest print", "last 1 year", "most recent data", "last 6 months"
-
 ## Running the System
 
-### Monthly Production Execution
-**Important**: The system is designed for **monthly execution** to build a comprehensive dataset.
+### Automatic Execution (Production)
+The system runs automatically via cron. No manual intervention needed for normal operation.
 
+To check status or upcoming runs:
 ```bash
-# Navigate to project directory first
-cd uk_macro_crew
+cd /home/finstats/public_html/macro-crew
+uv run scheduler.py status
+```
 
-# Monthly production run (searches for latest available data)
-crewai run
+### Manual Execution
+```bash
+cd /home/finstats/public_html/macro-crew
 
-# Alternative entry points for monthly execution
-uv run uk_macro_crew
+# Run the crew directly (bypasses date check)
 uv run run_crew
+
+# Run via scheduler (only runs if today is a publication date)
+uv run scheduler.py run
 ```
-
-### Execution Results
-- **Primary Output**: Updated `research_report.json` with new monthly data appended
-- **Data Preservation**: All historical data maintained in chronological arrays
-- **Growth Pattern**: File grows monthly as new economic indicators are added
-- **Final Deliverable**: `research_report.json` is the complete economic dataset
-
-### Timeframe Configuration (Development/Testing)
-For development and testing purposes, the system supports flexible timeframe specifications:
-
-```bash
-# Development: Run with custom timeframe via command line
-crewai run latest print
-crewai run last 1 year
-crewai run most recent data
-
-# Development: Run with timeframe via environment variable
-TIMEFRAME="latest print" crewai run
-```
-
-**Timeframe Priority Levels:**
-1. **Command Line** (highest priority): `crewai run latest print`
-2. **Environment Variable**: `TIMEFRAME="latest print" crewai run`
-3. **Default**: "latest print" (production default)
-
-**Note**: In production, the system defaults to "latest print" to ensure the most current data is collected monthly.
 
 ### Development Commands
-**Note**: All commands run from the `uk_macro_crew/` directory.
+**Note**: All commands run from the `/home/finstats/public_html/macro-crew/` directory.
 
 ```bash
 # Run tests
@@ -389,8 +391,45 @@ uv run pytest --lf
 - Descriptive names reflecting functionality
 
 ## Security Notes
-- API keys stored in `.env` file (not committed to git)
-- Environment variables loaded via `utils.py` helper functions
+- API keys stored in `/home/finstats/.env` (outside public_html, not web-accessible)
+- `.env` file permissions set to 600 (owner read/write only)
+- Environment variables loaded via `utils.py` helper functions using `find_dotenv()`
 - No hardcoded credentials in source code
 
+## Apache Configuration
+- **HTTPS DocumentRoot**: `/home/finstats/public_html/macro-crew/dist` (React SPA)
+- **FallbackResource**: `/index.html` (SPA routing)
+- The `.env` file is outside the DocumentRoot and not accessible via web
+
+## Deployment Architecture
+```
+Apache (HTTPS:443)
+    └── serves dist/index.html (React frontend)
+              └── fetches dist/research_report.json
+
+Cron (daily 5pm)
+    └── scheduler.py
+              └── checks next_publication_date
+              └── runs CrewAI crew if due
+              └── copies report to dist/ and public/
+              └── logs to /home/finstats/logs/scheduler.log
+```
+
 This guide provides everything needed to understand, modify, and extend the UK Macro Crew system effectively.
+
+---
+
+## Changelog
+
+### 2026-02-05
+- **Added**: `scheduler.py` - Python utility for automated crew execution based on publication dates
+  - `list` command: Shows all next publication dates
+  - `status` command: Shows next scheduled run and upcoming dates
+  - `run` command: Cron entry point - runs crew if today matches a publication date
+- **Added**: Cron job for finstats user - runs daily at 17:00
+- **Added**: Logging to `/home/finstats/logs/scheduler.log`
+- **Changed**: `.env` location moved to `/home/finstats/.env` (outside public_html for security)
+- **Changed**: `.env` permissions set to 600
+- **Installed**: `uv` 0.9.30 for finstats user (`~/.local/bin/uv`)
+- **Installed**: All Python dependencies via `uv sync` (156 packages including CrewAI 1.7.2)
+- **Verified**: First successful automated run - collected interest_rate and monetary_policy_report data
