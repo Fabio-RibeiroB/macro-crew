@@ -8,10 +8,10 @@
     "interest_rate": {
       "status": "not available"
     },
-    "cpih_mom": {
+    "cpih": {
       "status": "not available"
     },
-    "gdp_mom": {
+    "gdp": {
       "status": "not available"
     }
   },

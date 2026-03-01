@@ -163,16 +163,16 @@ The system maintains data in this JSON format:
         "month_period": "Dec-25"
       }
     ],
-    "cpih_mom": [
+    "cpih": [
       {
-        "value": "-0.1%",
+        "value": "4.0%",
         "date_published": "2025-11-20",
         "month_period": "Nov-25"
       }
     ],
-    "gdp_mom": [
+    "gdp": [
       {
-        "value": "-0.1%",
+        "value": "+0.1%",
         "date_published": "2025-10-15",
         "month_period": "Oct-25"
       }
