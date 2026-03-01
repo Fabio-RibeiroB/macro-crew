@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Activity, RefreshCw, AlertCircle } from 'lucide-react';
+import { Activity, AlertCircle } from 'lucide-react';
 import { EconomicIndicatorCard } from '@/app/components/EconomicIndicatorCard';
 import { ReportSummaryCard } from '@/app/components/ReportSummaryCard';
 import { Button } from '@/app/components/ui/button';
@@ -12,13 +12,13 @@ interface EconomicData {
       next_publication_date: string;
       source: string;
     };
-    cpih_mom: {
+    cpih: {
       value: string;
       publication_date: string;
       next_publication_date: string;
       source: string;
     };
-    gdp_mom: {
+    gdp: {
       value: string;
       publication_date: string;
       next_publication_date: string;
@@ -48,7 +48,6 @@ interface EconomicData {
 export default function App() {
   const [data, setData] = useState<EconomicData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadData = async () => {
@@ -65,18 +64,12 @@ export default function App() {
       console.error('Error loading research report:', err);
     } finally {
       setIsLoading(false);
-      setIsRefreshing(false);
     }
   };
 
   useEffect(() => {
     loadData();
   }, []);
-
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    loadData();
-  };
 
   const formatDateTime = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -93,7 +86,6 @@ export default function App() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
         <div className="text-center">
-          <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
           <p className="text-gray-600">Loading economic data...</p>
         </div>
       </div>
@@ -107,8 +99,7 @@ export default function App() {
           <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Failed to Load Data</h2>
           <p className="text-gray-600 mb-4">{error}</p>
-          <Button onClick={handleRefresh} className="flex items-center gap-2 mx-auto">
-            <RefreshCw className="h-4 w-4" />
+          <Button onClick={() => window.location.reload()} className="flex items-center gap-2 mx-auto">
             Try Again
           </Button>
         </div>
@@ -123,14 +114,14 @@ export default function App() {
       ...data.current_economic_indicators.interest_rate
     },
     {
-      key: 'cpih_mom',
-      title: 'CPIH Inflation (Month-on-Month)',
-      ...data.current_economic_indicators.cpih_mom
+      key: 'cpih',
+      title: 'CPIH Inflation (Annual Rate)',
+      ...data.current_economic_indicators.cpih
     },
     {
-      key: 'gdp_mom',
-      title: 'GDP Growth (Month-on-Month)',
-      ...data.current_economic_indicators.gdp_mom
+      key: 'gdp',
+      title: 'GDP Growth (Quarterly)',
+      ...data.current_economic_indicators.gdp
     }
   ];
 
@@ -166,15 +157,6 @@ export default function App() {
                 </p>
               </div>
             </div>
-            
-            <Button 
-              onClick={handleRefresh} 
-              disabled={isRefreshing}
-              className="flex items-center gap-2"
-            >
-              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
           </div>
         </div>
 
