@@ -171,3 +171,4 @@ uv.lock
 
 # CrewAI specific
 .crewai/
+node_modules
