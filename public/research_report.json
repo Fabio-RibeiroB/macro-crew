@@ -4,37 +4,37 @@
       "value": "3.75%",
       "publication_date": "2026-02-05",
       "next_publication_date": "2026-03-19",
-      "source": "https://www.bankofengland.co.uk/monetary-policy/interest-rates-and-bank-rate"
+      "source": "https://www.bankofengland.co.uk/monetary-policy-summary-and-minutes/2026/february-2026"
     },
-    "cpih_mom": {
-      "value": "+0.2%",
-      "publication_date": "2026-01-20",
-      "next_publication_date": "2026-02-15",
-      "source": "https://www.ons.gov.uk/economy/inflationandpriceindices/bulletins/consumerpriceinflation/december2025"
+    "cpih": {
+      "value": "3.2%",
+      "publication_date": "2026-02-18",
+      "next_publication_date": "2026-03-25",
+      "source": "https://www.ons.gov.uk/economy/inflationandpriceindices/bulletins/consumerpriceinflation/latest"
     },
-    "gdp_mom": {
-      "value": "-0.1%",
+    "gdp": {
+      "value": "+0.1%",
       "publication_date": "2026-01-15",
-      "next_publication_date": "2026-02-15",
-      "source": "https://www.ons.gov.uk/economy/grossdomesticproduct/bulletins/gdpmonthlyestimateuk/november2025"
+      "next_publication_date": "2026-02-12",
+      "source": "https://www.ons.gov.uk/economy/grossdomesticproductgdp/bulletins/gdpmonthlyestimateuk/latest"
     }
   },
   "current_report_summaries": {
     "monetary_policy_report": {
-      "summary": "In the latest February 2026 Monetary Policy Report, the Bank of England announced that the Bank Rate has been held at 3.75% following six rate cuts since August 2024. Inflation has decreased significantly from its peak and is projected to approach the 2% target by spring. The report emphasizes balancing the risks of persistent inflation against weakening demand and household spending. Future rate cuts are anticipated if economic conditions evolve as expected.",
+      "summary": "The Monetary Policy Committee (MPC) voted to maintain the Bank Rate at 3.75%. CPI inflation is expected to return to the 2% target by April 2026 amid signs of easing inflationary pressures and subdued economic growth.",
       "report_date": "2026-02-05",
       "next_publication_date": "2026-03-19",
-      "source": "https://www.bankofengland.co.uk/monetary-policy"
+      "source": "https://www.bankofengland.co.uk/monetary-policy-report/2026/february-2026"
     },
     "financial_stability_report": {
-      "summary": "The December 2025 Financial Stability Report indicated that the UK banking system remains resilient amidst economic challenges. Key risks were highlighted, including rising household debt and pressures in the commercial real estate market. The FSR emphasized the importance of maintaining financial stability while addressing potential systemic risks, with ongoing assessments of vulnerabilities and mitigative strategies.",
-      "report_date": "2025-12-18",
-      "next_publication_date": "2026-06-18",
-      "source": "https://www.bankofengland.co.uk/financial-stability"
+      "summary": "Risks to financial stability have increased in 2025 due to global uncertainties and elevated geopolitical tensions. However, the UK banking system remains resilient, and capital requirements for banks are under review to ensure the sector supports sustainable economic growth.",
+      "report_date": "2025-12-02",
+      "next_publication_date": "not available",
+      "source": "https://www.bankofengland.co.uk/financial-stability-report/2025/december-2025"
     }
   },
   "metadata": {
-    "generated_at": "2026-02-05T20:00:00.240832Z",
-    "last_updated": "2026-02-05T20:00:00.240832Z"
+    "generated_at": "2026-03-01T19:38:01.012253Z",
+    "last_updated": "2026-03-01T19:38:01.012253Z"
   }
 }

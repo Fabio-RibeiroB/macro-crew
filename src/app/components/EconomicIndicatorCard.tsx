@@ -17,8 +17,8 @@ export function EconomicIndicatorCard({
   nextPublicationDate,
   source,
 }: EconomicIndicatorCardProps) {
-  const isPositive = value.startsWith('+');
-  const isNegative = value.startsWith('-');
+  const isPositive = value?.startsWith('+') ?? false;
+  const isNegative = value?.startsWith('-') ?? false;
   
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
