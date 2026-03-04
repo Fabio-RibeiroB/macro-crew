@@ -52,15 +52,35 @@ def load_report():
 
 
 def get_publication_dates(report):
-    """Extract all next_publication_date values keyed by indicator name."""
+    """Extract next_publication_date and current data date keyed by indicator name."""
     dates = {}
-    for section in ("current_economic_indicators", "current_report_summaries"):
+    section_date_fields = {
+        "current_economic_indicators": "publication_date",
+        "current_report_summaries": "report_date",
+    }
+    for section, date_field in section_date_fields.items():
         if section not in report:
             continue
         for key, value in report[section].items():
-            if isinstance(value, dict) and "next_publication_date" in value:
-                dates[key] = value["next_publication_date"]
+            if not isinstance(value, dict):
+                continue
+            if "next_publication_date" not in value:
+                continue
+            dates[key] = {
+                "next_publication_date": value.get("next_publication_date", "not available"),
+                "current_date": value.get(date_field, ""),
+            }
     return dates
+
+
+def is_due_or_overdue(indicator_info, today):
+    """Return True if indicator needs collection today or is overdue."""
+    next_pub = indicator_info.get("next_publication_date", "not available")
+    current = indicator_info.get("current_date", "")
+    if next_pub == "not available" or not next_pub:
+        return False
+    # ISO date strings compare correctly as plain strings
+    return today >= next_pub and current < next_pub
 
 
 def cmd_list(args):
@@ -70,17 +90,24 @@ def cmd_list(args):
     today = date.today().isoformat()
 
     print(f"\nNext publication dates (today is {today}):\n")
-    print(f"  {'Indicator':<35} {'Date':<12} Note")
-    print(f"  {'-'*35} {'-'*12} {'-'*10}")
+    print(f"  {'Indicator':<35} {'Next Pub Date':<14} Note")
+    print(f"  {'-'*35} {'-'*14} {'-'*15}")
 
-    for indicator, pub_date in sorted(dates.items(), key=lambda x: x[1]):
-        if pub_date < today:
-            note = "OVERDUE"
-        elif pub_date == today:
-            note = "TODAY"
+    def sort_key(item):
+        next_pub = item[1]["next_publication_date"]
+        return next_pub if next_pub != "not available" else "9999-99-99"
+
+    for indicator, info in sorted(dates.items(), key=sort_key):
+        next_pub = info["next_publication_date"]
+        if next_pub == "not available":
+            note = "SKIPPED"
+        elif is_due_or_overdue(info, today) and next_pub < today:
+            note = "OVERDUE - will trigger"
+        elif next_pub == today:
+            note = "TODAY - will trigger"
         else:
             note = ""
-        print(f"  {indicator:<35} {pub_date:<12} {note}")
+        print(f"  {indicator:<35} {next_pub:<14} {note}")
     print()
 
 
@@ -90,16 +117,21 @@ def cmd_status(args):
     dates = get_publication_dates(report)
     today = date.today().isoformat()
 
-    due_today = [k for k, v in dates.items() if v == today]
-    future = {k: v for k, v in dates.items() if v > today}
-    overdue = {k: v for k, v in dates.items() if v < today}
+    flat = {k: v["next_publication_date"] for k, v in dates.items()
+            if v["next_publication_date"] != "not available"}
+    unavailable = [k for k, v in dates.items()
+                   if v["next_publication_date"] == "not available"]
+    due_today = [k for k, v in flat.items() if v == today]
+    future = {k: v for k, v in flat.items() if v > today}
+    overdue = {k: v for k, v in flat.items() if v < today}
 
     print(f"\nScheduler status (today is {today}, cron runs daily at 17:00):\n")
 
     if overdue:
-        print("  OVERDUE:")
+        print("  OVERDUE (will trigger on next cron run):")
         for k, v in sorted(overdue.items(), key=lambda x: x[1]):
-            print(f"    {k:<35} {v}")
+            current = dates[k]["current_date"]
+            print(f"    {k:<35} due {v}  (last collected: {current})")
 
     if due_today:
         print("  DUE TODAY (will run at 17:00):")
@@ -120,6 +152,11 @@ def cmd_status(args):
     elif not due_today:
         print("  No future publication dates found in the report.")
 
+    if unavailable:
+        print("\n  No date available (skipped):")
+        for k in unavailable:
+            print(f"    {k}")
+
     print()
 
 
@@ -135,14 +172,26 @@ def cmd_run(args):
         sys.exit(1)
 
     dates = get_publication_dates(report)
-    due_today = [k for k, v in dates.items() if v == today]
+    triggered = [k for k, v in dates.items() if is_due_or_overdue(v, today)]
 
-    if not due_today:
-        logging.info(f"No publications due today ({today}). Nothing to do.")
+    if not triggered:
+        logging.info(f"No publications due or overdue ({today}). Nothing to do.")
         return
 
-    logging.info(f"Publications due today ({today}): {', '.join(due_today)}")
-    logging.info(f"Starting crew run: {' '.join(CREW_CMD)}")
+    due_today = [k for k in triggered if dates[k]["next_publication_date"] == today]
+    overdue = [k for k in triggered if dates[k]["next_publication_date"] < today]
+
+    if due_today:
+        logging.info(f"Publications due today ({today}): {', '.join(due_today)}")
+    if overdue:
+        for name in overdue:
+            next_pub = dates[name]["next_publication_date"]
+            logging.warning(
+                f"OVERDUE: {name} — was due {next_pub}, not yet collected (today {today})"
+            )
+
+    logging.info(f"Starting crew run for: {', '.join(triggered)}")
+    logging.info(f"Command: {' '.join(CREW_CMD)}")
 
     start = time.time()
 
