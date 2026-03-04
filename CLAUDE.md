@@ -35,8 +35,8 @@ The system produces a single, comprehensive JSON file that serves as the **final
 
 ### Key Economic Indicators Tracked
 - **Interest Rates**: Bank of England base rates
-- **CPIH**: Consumer Price Index including Housing (month-over-month)
-- **GDP**: Gross Domestic Product monthly changes
+- **CPIH**: Consumer Price Index including Housing (headline annual rate)
+- **GDP**: Gross Domestic Product quarterly growth
 - **Monetary Policy Report**: BoE policy summaries (comprehensive paragraph-length analysis)
 - **Financial Stability Report**: BoE financial stability summaries (comprehensive paragraph-length analysis)
 
@@ -74,17 +74,17 @@ The system maintains data in `research_report.json` - **the final deliverable** 
       }
       // Previous months' data preserved here...
     ],
-    "cpih_mom": [
+    "cpih": [
       {
-        "value": "-0.1%",
+        "value": "4.0%",
         "date_published": "2025-11-20",
         "month_period": "Nov-25"
       }
       // Historical data continues...
     ],
-    "gdp_mom": [
+    "gdp": [
       {
-        "value": "-0.1%",
+        "value": "+0.1%",
         "date_published": "2025-10-15",
         "month_period": "Oct-25"
       }

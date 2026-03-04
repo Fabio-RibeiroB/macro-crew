@@ -7,8 +7,8 @@ research_task:
 
     Your goal is to find the most recent UK economic data for these indicators:
     - Interest Rate (Bank of England base rate)
-    - CPIH +/- MoM (Consumer Price Index including Housing month-over-month)
-    - GDP +/- MoM (Gross Domestic Product month-over-month)
+    - CPIH (Consumer Price Index including Housing headline rate)
+    - GDP (Gross Domestic Product quarterly growth)
     
     AND the latest Bank of England report summaries:
     - Monetary Policy Report (latest BoE policy decisions and economic outlook)
@@ -48,8 +48,8 @@ research_task:
     A simple bullet point list with the single latest available data for each indicator and report summary:
     
     - Interest Rate: [value]% (published: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
-    - CPIH +/- MoM: [+/-value]% (published: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
-    - GDP +/- MoM: [+/-value]% (published: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
+    - CPIH: [value]% (published: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
+    - GDP: [+/-value]% (published: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
     - Monetary Policy Report Summary: [comprehensive paragraph summary covering key policy decisions, inflation outlook, economic growth assessment, and forward-looking guidance - minimum 3-4 sentences] (report date: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
     - Financial Stability Report Summary: [comprehensive paragraph summary covering banking system resilience, key risk areas, household debt concerns, commercial real estate issues, and systemic risk assessment - minimum 3-4 sentences] (report date: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
     
@@ -104,13 +104,13 @@ reporting_task:
           "next_publication_date": "2026-02-06",
           "source": "https://www.bankofengland.co.uk/monetary-policy-summary-and-minutes/2025/december-2025"
         },
-        "cpih_mom": {
+        "cpih": {
           "value": "-0.1%",
           "publication_date": "2025-11-20",
           "next_publication_date": "2026-01-22",
           "source": "https://www.ons.gov.uk/economy/inflationandpriceindices/bulletins/consumerpriceinflation/latest"
         },
-        "gdp_mom": {
+        "gdp": {
           "value": "-0.1%",
           "publication_date": "2025-10-15",
           "next_publication_date": "2026-02-14",
