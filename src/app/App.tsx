@@ -52,10 +52,19 @@ export default function App() {
 
   const loadData = async () => {
     try {
-      const response = await fetch('/research_report.json');
+      const reportUrl = `${import.meta.env.BASE_URL}research_report.json`;
+      const response = await fetch(reportUrl);
       if (!response.ok) {
         throw new Error(`Failed to load data: ${response.statusText}`);
       }
+
+      const contentType = response.headers.get('content-type') ?? '';
+      if (!contentType.includes('application/json')) {
+        throw new Error(
+          `Expected JSON from ${reportUrl} but got ${contentType || 'unknown content type'}`,
+        );
+      }
+
       const jsonData = await response.json();
       setData(jsonData);
       setError(null);
