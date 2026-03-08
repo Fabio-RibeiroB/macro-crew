@@ -1,6 +1,6 @@
 # UK Macro Crew
 
-UK Macro Crew is a multi-agent AI system built with [crewAI](https://crewai.com) that automates the monthly collection and reporting of UK macroeconomic data. The system uses specialized agents to research and maintain a chronological JSON report of key UK economic indicators.
+UK Macro Crew is a multi-agent AI system built with [crewAI](https://crewai.com) that automates collection and reporting of UK macroeconomic data. The system uses specialized agents to research and produce a validated current snapshot JSON report of key UK economic indicators.
 
 ## Installation
 
@@ -10,28 +10,34 @@ First, if you haven't already, install uv:
 
 ## What It Does
 
-The system is designed for **monthly execution** to build a comprehensive time-series dataset of UK macroeconomic data including:
+The system is designed for regular execution to produce the latest available UK macroeconomic snapshot including:
 - **Interest Rates**: Bank of England base rates
 - **CPIH**: Consumer Price Index including Housing (month-over-month changes)
 - **GDP**: Gross Domestic Product monthly changes
 - **Monetary Policy Report**: Bank of England policy summaries
 - **Financial Stability Report**: BoE financial stability summaries
 
-### Final Output: `research_report.json`
-The system produces a single, comprehensive JSON file that serves as the **primary deliverable**:
+### Final Outputs: `research_report.json` and `history_report.json`
+The system produces two JSON files:
 - **Location**: `research_report.json` (in project root)
-- **Growth Pattern**: New data is appended monthly, preserving all historical data
-- **Structure**: Time-series format with chronological arrays for each indicator
-- **Usage**: This file contains the complete economic dataset and grows with each monthly execution
+- **Growth Pattern**: File is overwritten on each successful run with the latest validated snapshot
+- **Structure**: Snapshot format with current indicator values and report summaries
+- **Usage**: This file contains the current macro view used by the dashboard
+- **Location**: `history_report.json` (in project root)
+- **Growth Pattern**: Appends/upserts by publication date on each successful run
+- **Structure**: Chronological arrays per indicator/report for trend analysis
+- **Usage**: This file is the historical backbone for charts and longitudinal analysis
 
 ### Agents
 
 - **Researcher Agent**: Searches for and retrieves key UK economic indicators from authoritative sources
-- **Reporting Analyst Agent**: Updates and maintains a chronological JSON report with collected data
+- **Reporting Analyst Agent**: Formats collected data into a current JSON snapshot
 
 ### Output
 
-The system generates `research_report.json` - a structured JSON file that tracks economic indicators over time, with data points tagged by month in MM-YY format.
+The system generates:
+- `research_report.json`: a structured snapshot file with the latest available economic indicators and report summaries.
+- `history_report.json`: a validated historical dataset built from each successful snapshot run.
 
 ```bash
 pip install uv
@@ -102,17 +108,17 @@ CREW_FAIL_FAST=false
 To start the UK macro data collection process:
 
 ```bash
-# Monthly production run (searches for latest available data)
+# Production run (searches for latest available data)
 crewai run
 
-# Alternative entry points for monthly execution
+# Alternative entry points
 uv run uk_macro_crew
 uv run run_crew
 ```
 
 The system is now simplified to always search for the **latest available data** for each economic indicator. This ensures you always get the most recent UK macroeconomic data without needing to specify timeframes.
 
-This initializes the UK Macro Crew, where the Researcher Agent searches for the latest UK economic data and the Reporting Analyst Agent updates the `research_report.json` file with new findings. If the latest data already exists in the JSON file, it will be updated; otherwise, new data will be appended.
+This initializes the UK Macro Crew, where the Researcher Agent searches for the latest UK economic data and the Reporting Analyst Agent writes a fresh validated `research_report.json` snapshot.
 
 ### Additional Commands
 
@@ -128,6 +134,9 @@ uv run train <n_iterations> <filename>
 
 # Replay specific task execution
 uv run replay <task_id>
+
+# Seed/update history_report.json from current snapshot
+uv run migrate_history
 ```
 
 ## How It Works
@@ -142,57 +151,52 @@ The UK Macro Crew consists of two specialized AI agents working together:
 
 ### Reporting Analyst Agent  
 - **Role**: Economic Data Analyst and Report Maintainer
-- **Goal**: Update and maintain chronological economic data reports
+- **Goal**: Build a current and validated economic data snapshot
 - **Tools**: JSON manipulation tool for structured data updates
-- **Output**: Time-series JSON report with proper chronological ordering
+- **Output**: Snapshot JSON report with publication dates, next publication dates, and sources
 
 ### Data Structure
 
-The system maintains data in this JSON format:
+The system maintains data in this JSON snapshot format:
 ```json
 {
   "metadata": {
-    "updated_at": "2026-01-11",
-    "created_at": "2026-01-11"
+    "generated_at": "2026-03-06T17:02:19.884768Z",
+    "last_updated": "2026-03-06T17:02:19.884768Z"
   },
-  "economic_indicators": {
-    "interest_rate": [
-      {
-        "value": "3.75%",
-        "date_published": "2025-12-17", 
-        "month_period": "Dec-25"
-      }
-    ],
-    "cpih": [
-      {
-        "value": "4.0%",
-        "date_published": "2025-11-20",
-        "month_period": "Nov-25"
-      }
-    ],
-    "gdp": [
-      {
-        "value": "+0.1%",
-        "date_published": "2025-10-15",
-        "month_period": "Oct-25"
-      }
-    ]
+  "current_economic_indicators": {
+    "interest_rate": {
+      "value": "3.75%",
+      "publication_date": "2026-02-05",
+      "next_publication_date": "2026-03-19",
+      "source": "https://www.bankofengland.co.uk/monetary-policy/the-interest-rate-bank-rate"
+    },
+    "cpih": {
+      "value": "-0.3%",
+      "publication_date": "2026-02-18",
+      "next_publication_date": "2026-03-25",
+      "source": "https://www.ons.gov.uk/economy/inflationandpriceindices/bulletins/consumerpriceinflation/january2026"
+    },
+    "gdp": {
+      "value": "+0.1%",
+      "publication_date": "2026-02-12",
+      "next_publication_date": "2026-03-31",
+      "source": "https://www.ons.gov.uk/economy/grossdomesticproductgdp"
+    }
   },
-  "report_summaries": {
-    "monetary_policy_report": [
-      {
-        "summary": "Brief summary of policy decisions...",
-        "report_date": "2025-12-17",
-        "month_period": "Dec-25"
-      }
-    ],
-    "financial_stability_report": [
-      {
-        "summary": "Brief summary of financial system assessment...",
-        "report_date": "2025-12-15",
-        "month_period": "Dec-25"
-      }
-    ]
+  "current_report_summaries": {
+    "monetary_policy_report": {
+      "summary": "Brief summary of policy decisions...",
+      "report_date": "2026-02-05",
+      "next_publication_date": "2026-03-19",
+      "source": "https://www.bankofengland.co.uk/monetary-policy-report/2026/february-2026"
+    },
+    "financial_stability_report": {
+      "summary": "Brief summary of financial system assessment...",
+      "report_date": "2025-12-15",
+      "next_publication_date": "2026-06-15",
+      "source": "https://www.bankofengland.co.uk/financial-stability-report"
+    }
   }
 }
 ```
@@ -217,7 +221,8 @@ For support, questions, or feedback regarding the UK Macro Crew:
 uk-macro-tracker/          # Project root
 ├── .env                   # API keys (OPENAI_API_KEY, EXA_API_KEY)
 ├── .env.dist             # Environment template
-├── research_report.json  # Generated economic data report
+├── research_report.json  # Generated current snapshot
+├── history_report.json   # Generated historical time series
 ├── knowledge/            # Templates and configuration
 ├── src/uk_macro_crew/    # Main source code
 │   ├── config/          # Agent and task YAML configurations

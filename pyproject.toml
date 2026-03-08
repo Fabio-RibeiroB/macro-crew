@@ -18,6 +18,7 @@ train = "uk_macro_crew.main:train"
 replay = "uk_macro_crew.main:replay"
 test = "uk_macro_crew.main:test"
 run_with_trigger = "uk_macro_crew.main:run_with_trigger"
+migrate_history = "uk_macro_crew.migrate_history:migrate"
 
 [build-system]
 requires = ["hatchling"]

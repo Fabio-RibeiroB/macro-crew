@@ -23,6 +23,7 @@ from pathlib import Path
 
 PROJECT_DIR = Path("/home/finstats/public_html/macro-crew")
 REPORT_FILE = PROJECT_DIR / "research_report.json"
+HISTORY_FILE = PROJECT_DIR / "history_report.json"
 DIST_DIR = PROJECT_DIR / "dist"
 PUBLIC_DIR = PROJECT_DIR / "public"
 LOG_FILE = Path("/home/finstats/logs/scheduler.log")
@@ -232,14 +233,15 @@ def cmd_run(args):
     if result.stdout:
         logging.info(f"Crew output (last 300 chars): {result.stdout[-300:]}")
 
-    # Copy updated report to dist/ and public/
+    # Copy updated artifacts to dist/ and public/
     for dest_dir in (DIST_DIR, PUBLIC_DIR):
-        target = dest_dir / "research_report.json"
-        try:
-            shutil.copy2(REPORT_FILE, target)
-            logging.info(f"Copied report to {target}")
-        except Exception as e:
-            logging.error(f"Failed to copy report to {target}: {e}")
+        for source_file in (REPORT_FILE, HISTORY_FILE):
+            target = dest_dir / source_file.name
+            try:
+                shutil.copy2(source_file, target)
+                logging.info(f"Copied report to {target}")
+            except Exception as e:
+                logging.error(f"Failed to copy report to {target}: {e}")
 
     logging.info("Done.")
 

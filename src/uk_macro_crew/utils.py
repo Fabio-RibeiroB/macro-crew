@@ -5,6 +5,9 @@ import json
 import logging
 from datetime import datetime
 from dotenv import load_dotenv, find_dotenv
+from uk_macro_crew.schema import validate_latest_snapshot, SchemaValidationError
+from uk_macro_crew.history import build_history_from_snapshot, get_history_filename
+from uk_macro_crew.normalization import normalize_latest_snapshot
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -37,6 +40,7 @@ def save_json_hook(result) -> None:
         result: The result object from crew execution containing the JSON output
     """
     json_filename = get_json_filename()
+    history_filename = get_history_filename()
     
     try:
         # Extract the JSON content from the result
@@ -59,31 +63,49 @@ def save_json_hook(result) -> None:
         
         json_content = json_content.strip()
         
-        # Parse JSON and add system-generated metadata
+        # Parse JSON, validate contract, and add system-generated metadata
         try:
             parsed_json = json.loads(json_content)
-            
-            # Ensure metadata exists and add system-generated fields
+            parsed_json = normalize_latest_snapshot(parsed_json)
+
+            # Validate business payload before we write anything.
+            validate_latest_snapshot(parsed_json)
+
+            # Ensure metadata exists and add system-generated fields.
             if "metadata" not in parsed_json:
                 parsed_json["metadata"] = {}
-            
-            # Add reliable system-generated metadata (Python handles this, not the LLM)
+
+            # Add reliable system-generated metadata (Python handles this, not the LLM).
             current_time = datetime.now().isoformat() + "Z"
             parsed_json["metadata"]["generated_at"] = current_time
             parsed_json["metadata"]["last_updated"] = current_time
-            
-            # Format the JSON with proper indentation
+
+            # Format the JSON with proper indentation.
             json_content = json.dumps(parsed_json, indent=2)
-            
+            history_content = json.dumps(
+                build_history_from_snapshot(parsed_json, history_filename), indent=2
+            )
+
         except json.JSONDecodeError as e:
             logger.error(f"Result content is not valid JSON: {e}")
-            logger.warning("Saving content as-is despite JSON validation error")
-        
-        # Save to file
-        with open(json_filename, "w", encoding="utf-8") as f:
+            raise Exception(f"Failed to save JSON report: invalid JSON content: {e}")
+        except SchemaValidationError as e:
+            logger.error(f"Result content failed schema validation: {e}")
+            raise Exception(f"Failed to save JSON report: schema validation failed: {e}")
+
+        # Atomic writes: if temp write fails, existing files stay untouched.
+        tmp_filename = f"{json_filename}.tmp"
+        tmp_history_filename = f"{history_filename}.tmp"
+        with open(tmp_filename, "w", encoding="utf-8") as f:
             f.write(json_content)
-        
+        with open(tmp_history_filename, "w", encoding="utf-8") as f:
+            f.write(history_content)
+
+        os.replace(tmp_history_filename, history_filename)
+        os.replace(tmp_filename, json_filename)
+
         logger.info(f"Successfully saved JSON report to {json_filename}")
+        logger.info(f"Successfully saved history report to {history_filename}")
         
     except OSError as e:
         logger.error(f"Error saving JSON file {json_filename}: {e}")

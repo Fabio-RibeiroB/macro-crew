@@ -7,8 +7,8 @@ research_task:
 
     Your goal is to find the most recent UK economic data for these indicators:
     - Interest Rate (Bank of England base rate)
-    - CPIH (Consumer Price Index including Housing headline rate)
-    - GDP (Gross Domestic Product quarterly growth)
+    - CPIH (Consumer Price Index including Housing monthly change)
+    - GDP (Gross Domestic Product monthly growth)
     
     AND the latest Bank of England report summaries:
     - Monetary Policy Report (latest BoE policy decisions and economic outlook)

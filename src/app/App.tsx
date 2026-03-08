@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Activity, AlertCircle } from 'lucide-react';
 import { EconomicIndicatorCard } from '@/app/components/EconomicIndicatorCard';
 import { ReportSummaryCard } from '@/app/components/ReportSummaryCard';
+import { HistoricalTrendCard } from '@/app/components/HistoricalTrendCard';
 import { Button } from '@/app/components/ui/button';
 
 interface EconomicData {
@@ -45,19 +46,42 @@ interface EconomicData {
   };
 }
 
+interface HistoryData {
+  history: {
+    economic_indicators: {
+      interest_rate: Array<{ value: string; publication_date: string }>;
+      cpih: Array<{ value: string; publication_date: string }>;
+      gdp: Array<{ value: string; publication_date: string }>;
+    };
+  };
+}
+
 export default function App() {
   const [data, setData] = useState<EconomicData | null>(null);
+  const [historyData, setHistoryData] = useState<HistoryData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadData = async () => {
     try {
-      const response = await fetch('/research_report.json');
-      if (!response.ok) {
-        throw new Error(`Failed to load data: ${response.statusText}`);
+      const [snapshotResponse, historyResponse] = await Promise.all([
+        fetch('/research_report.json'),
+        fetch('/history_report.json'),
+      ]);
+
+      if (!snapshotResponse.ok) {
+        throw new Error(`Failed to load data: ${snapshotResponse.statusText}`);
       }
-      const jsonData = await response.json();
-      setData(jsonData);
+      const jsonData = await snapshotResponse.json();
+      setData(jsonData as EconomicData);
+
+      if (historyResponse.ok) {
+        const historyJson = await historyResponse.json();
+        setHistoryData(historyJson as HistoryData);
+      } else {
+        setHistoryData(null);
+      }
+
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data');
@@ -115,12 +139,12 @@ export default function App() {
     },
     {
       key: 'cpih',
-      title: 'CPIH Inflation (Annual Rate)',
+      title: 'CPIH Inflation (Monthly Change)',
       ...data.current_economic_indicators.cpih
     },
     {
       key: 'gdp',
-      title: 'GDP Growth (Quarterly)',
+      title: 'GDP Growth (Monthly)',
       ...data.current_economic_indicators.gdp
     }
   ];
@@ -136,6 +160,39 @@ export default function App() {
       title: 'Financial Stability Report',
       ...data.current_report_summaries.financial_stability_report
     }
+  ];
+
+  const toTrendPoints = (
+    entries: Array<{ value: string; publication_date: string }> | undefined
+  ) => {
+    if (!entries) return [];
+    return entries
+      .map((entry) => {
+        const numericValue = Number(entry.value.replace('%', ''));
+        return {
+          date: entry.publication_date,
+          value: Number.isFinite(numericValue) ? numericValue : NaN,
+        };
+      })
+      .filter((point) => Number.isFinite(point.value));
+  };
+
+  const trendCards = [
+    {
+      key: 'interest_rate_trend',
+      title: 'Bank Rate Trend',
+      data: toTrendPoints(historyData?.history?.economic_indicators?.interest_rate),
+    },
+    {
+      key: 'cpih_trend',
+      title: 'CPIH Monthly Change Trend',
+      data: toTrendPoints(historyData?.history?.economic_indicators?.cpih),
+    },
+    {
+      key: 'gdp_trend',
+      title: 'GDP Monthly Growth Trend',
+      data: toTrendPoints(historyData?.history?.economic_indicators?.gdp),
+    },
   ];
 
   return (
@@ -193,6 +250,22 @@ export default function App() {
                 reportDate={report.report_date}
                 nextPublicationDate={report.next_publication_date}
                 source={report.source}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Historical Trends Section */}
+        <div className="mt-10">
+          <h2 className="text-xl font-semibold text-gray-800 mb-4">
+            Historical Trends
+          </h2>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {trendCards.map((trend) => (
+              <HistoricalTrendCard
+                key={trend.key}
+                title={trend.title}
+                data={trend.data}
               />
             ))}
           </div>
