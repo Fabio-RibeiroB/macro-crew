@@ -3,6 +3,7 @@ import { Activity, AlertCircle } from 'lucide-react';
 import { EconomicIndicatorCard } from '@/app/components/EconomicIndicatorCard';
 import { ReportSummaryCard } from '@/app/components/ReportSummaryCard';
 import { HistoricalTrendCard } from '@/app/components/HistoricalTrendCard';
+import { PublicationCalendarCard } from '@/app/components/PublicationCalendarCard';
 import { Button } from '@/app/components/ui/button';
 
 interface EconomicData {
@@ -181,6 +182,45 @@ export default function App() {
       .filter((point) => Number.isFinite(point.value));
   };
 
+
+  const upcomingPublications = [
+    {
+      id: 'interest_rate_next',
+      title: 'Bank of England Interest Rate',
+      nextPublicationDate: data.current_economic_indicators.interest_rate.next_publication_date,
+      source: data.current_economic_indicators.interest_rate.source,
+      category: 'Indicator' as const,
+    },
+    {
+      id: 'cpih_next',
+      title: 'CPIH Inflation',
+      nextPublicationDate: data.current_economic_indicators.cpih.next_publication_date,
+      source: data.current_economic_indicators.cpih.source,
+      category: 'Indicator' as const,
+    },
+    {
+      id: 'gdp_next',
+      title: 'GDP Growth',
+      nextPublicationDate: data.current_economic_indicators.gdp.next_publication_date,
+      source: data.current_economic_indicators.gdp.source,
+      category: 'Indicator' as const,
+    },
+    {
+      id: 'mpr_next',
+      title: 'Monetary Policy Report',
+      nextPublicationDate: data.current_report_summaries.monetary_policy_report.next_publication_date,
+      source: data.current_report_summaries.monetary_policy_report.source,
+      category: 'Report' as const,
+    },
+    {
+      id: 'fsr_next',
+      title: 'Financial Stability Report',
+      nextPublicationDate: data.current_report_summaries.financial_stability_report.next_publication_date,
+      source: data.current_report_summaries.financial_stability_report.source,
+      category: 'Report' as const,
+    },
+  ];
+
   const trendCards = [
     {
       key: 'interest_rate_trend',
@@ -257,6 +297,15 @@ export default function App() {
               />
             ))}
           </div>
+        </div>
+
+
+        {/* Publication Calendar Section */}
+        <div className="mt-10">
+          <h2 className="text-xl font-semibold text-gray-800 mb-4">
+            Upcoming Releases
+          </h2>
+          <PublicationCalendarCard items={upcomingPublications} />
         </div>
 
         {/* Historical Trends Section */}
