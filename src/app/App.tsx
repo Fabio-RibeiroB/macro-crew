@@ -64,6 +64,21 @@ export default function App() {
 
   const loadData = async () => {
     try {
+      void fetch('/history_report.json')
+        .then(async (historyResponse) => {
+          const historyContentType = historyResponse.headers.get('content-type') ?? '';
+          if (historyResponse.ok && historyContentType.includes('application/json')) {
+            const historyJson = await historyResponse.json();
+            setHistoryData(historyJson as HistoryData);
+          } else {
+            setHistoryData(null);
+          }
+        })
+        .catch((historyErr) => {
+          console.warn('History data unavailable, continuing without trends:', historyErr);
+          setHistoryData(null);
+        });
+
       const snapshotResponse = await fetch('/research_report.json');
 
       if (!snapshotResponse.ok) {
@@ -71,20 +86,6 @@ export default function App() {
       }
       const jsonData = await snapshotResponse.json();
       setData(jsonData as EconomicData);
-
-      try {
-        const historyResponse = await fetch('/history_report.json');
-        const historyContentType = historyResponse.headers.get('content-type') ?? '';
-        if (historyResponse.ok && historyContentType.includes('application/json')) {
-          const historyJson = await historyResponse.json();
-          setHistoryData(historyJson as HistoryData);
-        } else {
-          setHistoryData(null);
-        }
-      } catch (historyErr) {
-        console.warn('History data unavailable, continuing without trends:', historyErr);
-        setHistoryData(null);
-      }
 
       setError(null);
     } catch (err) {
