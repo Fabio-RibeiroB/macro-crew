@@ -64,7 +64,10 @@ export default function App() {
 
   const loadData = async () => {
     try {
-      void fetch('/history_report.json')
+      const snapshotUrl = `${import.meta.env.BASE_URL}research_report.json`;
+      const historyUrl = `${import.meta.env.BASE_URL}history_report.json`;
+
+      void fetch(historyUrl)
         .then(async (historyResponse) => {
           const historyContentType = historyResponse.headers.get('content-type') ?? '';
           if (historyResponse.ok && historyContentType.includes('application/json')) {
@@ -79,14 +82,22 @@ export default function App() {
           setHistoryData(null);
         });
 
-      const snapshotResponse = await fetch('/research_report.json');
+      const snapshotResponse = await fetch(snapshotUrl);
 
       if (!snapshotResponse.ok) {
         throw new Error(`Failed to load data: ${snapshotResponse.statusText}`);
       }
+      const snapshotContentType = snapshotResponse.headers.get('content-type') ?? '';
+      if (!snapshotContentType.includes('application/json')) {
+        throw new Error(
+          `Expected JSON from ${snapshotUrl} but got ${
+            snapshotContentType || 'unknown content type'
+          }`,
+        );
+      }
+
       const jsonData = await snapshotResponse.json();
       setData(jsonData as EconomicData);
-
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data');
