@@ -64,10 +64,7 @@ export default function App() {
 
   const loadData = async () => {
     try {
-      const [snapshotResponse, historyResponse] = await Promise.all([
-        fetch('/research_report.json'),
-        fetch('/history_report.json'),
-      ]);
+      const snapshotResponse = await fetch('/research_report.json');
 
       if (!snapshotResponse.ok) {
         throw new Error(`Failed to load data: ${snapshotResponse.statusText}`);
@@ -75,10 +72,17 @@ export default function App() {
       const jsonData = await snapshotResponse.json();
       setData(jsonData as EconomicData);
 
-      if (historyResponse.ok) {
-        const historyJson = await historyResponse.json();
-        setHistoryData(historyJson as HistoryData);
-      } else {
+      try {
+        const historyResponse = await fetch('/history_report.json');
+        const historyContentType = historyResponse.headers.get('content-type') ?? '';
+        if (historyResponse.ok && historyContentType.includes('application/json')) {
+          const historyJson = await historyResponse.json();
+          setHistoryData(historyJson as HistoryData);
+        } else {
+          setHistoryData(null);
+        }
+      } catch (historyErr) {
+        console.warn('History data unavailable, continuing without trends:', historyErr);
         setHistoryData(null);
       }
 
