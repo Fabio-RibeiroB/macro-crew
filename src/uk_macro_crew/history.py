@@ -1,7 +1,12 @@
 import json
 import os
+import logging
 from datetime import datetime
 from typing import Any, Dict, List
+from uk_macro_crew.official_history import fetch_economic_indicator_history
+
+
+logger = logging.getLogger(__name__)
 
 
 def get_history_filename() -> str:
@@ -90,15 +95,12 @@ def _upsert_by_date(entries: List[Dict[str, Any]], date_key: str, candidate: Dic
     entries.sort(key=lambda item: item.get(date_key, ""))
 
 
-def build_history_from_snapshot(snapshot_payload: Dict[str, Any], history_filename: str) -> Dict[str, Any]:
-    now_iso = _iso_now()
-    history_payload = _load_history(history_filename, now_iso)
-
-    economic_history = history_payload["history"]["economic_indicators"]
-    report_history = history_payload["history"]["report_summaries"]
-
+def _append_snapshot_economic_history(
+    economic_history: Dict[str, List[Dict[str, Any]]],
+    snapshot_payload: Dict[str, Any],
+    now_iso: str,
+) -> None:
     indicators = snapshot_payload.get("current_economic_indicators", {})
-    reports = snapshot_payload.get("current_report_summaries", {})
 
     for indicator_name in ("interest_rate", "cpih", "gdp"):
         indicator = indicators.get(indicator_name, {})
@@ -110,6 +112,31 @@ def build_history_from_snapshot(snapshot_payload: Dict[str, Any], history_filena
             "collected_at": now_iso,
         }
         _upsert_by_date(economic_history[indicator_name], "publication_date", candidate)
+
+
+def build_history_from_snapshot(
+    snapshot_payload: Dict[str, Any],
+    history_filename: str,
+    economic_history_fetcher=fetch_economic_indicator_history,
+) -> Dict[str, Any]:
+    now_iso = _iso_now()
+    history_payload = _load_history(history_filename, now_iso)
+
+    economic_history = history_payload["history"]["economic_indicators"]
+    report_history = history_payload["history"]["report_summaries"]
+
+    reports = snapshot_payload.get("current_report_summaries", {})
+
+    try:
+        official_economic_history = economic_history_fetcher()
+        for indicator_name in ("interest_rate", "cpih", "gdp"):
+            economic_history[indicator_name] = official_economic_history.get(indicator_name, [])
+    except Exception as exc:
+        logger.warning(
+            "Falling back to snapshot-based economic history because official refresh failed: %s",
+            exc,
+        )
+        _append_snapshot_economic_history(economic_history, snapshot_payload, now_iso)
 
     for report_name in ("monetary_policy_report", "financial_stability_report"):
         report = reports.get(report_name, {})

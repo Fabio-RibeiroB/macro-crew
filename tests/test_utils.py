@@ -16,6 +16,35 @@ from uk_macro_crew.utils import (
 )
 
 
+def _mock_history_payload():
+    return {
+        "metadata": {
+            "created_at": "2026-03-14T00:00:00Z",
+            "last_updated": "2026-03-14T00:00:00Z",
+            "version": "1.0",
+        },
+        "history": {
+            "economic_indicators": {
+                "interest_rate": [
+                    {
+                        "value": "3.75%",
+                        "publication_date": "2026-02-05",
+                        "next_publication_date": "not available",
+                        "source": "https://www.bankofengland.co.uk",
+                        "collected_at": "2026-03-14T00:00:00Z",
+                    }
+                ],
+                "cpih": [],
+                "gdp": [],
+            },
+            "report_summaries": {
+                "monetary_policy_report": [],
+                "financial_stability_report": [],
+            },
+        },
+    }
+
+
 class TestUtils:
     """Test cases for utility functions."""
 
@@ -88,7 +117,11 @@ class TestUtils:
                 os.chdir(temp_dir)
                 
                 # Should not raise an exception
-                save_json_hook(result)
+                with patch(
+                    "uk_macro_crew.utils.build_history_from_snapshot",
+                    return_value=_mock_history_payload(),
+                ):
+                    save_json_hook(result)
                 
                 # Verify file was created
                 assert os.path.exists("research_report.json")
@@ -162,7 +195,11 @@ class TestUtils:
             try:
                 os.chdir(temp_dir)
                 
-                save_json_hook(result)
+                with patch(
+                    "uk_macro_crew.utils.build_history_from_snapshot",
+                    return_value=_mock_history_payload(),
+                ):
+                    save_json_hook(result)
                 
                 # Verify file was created and content is clean JSON
                 with open("research_report.json", "r") as f:
@@ -297,7 +334,11 @@ class TestUtils:
             original_cwd = os.getcwd()
             try:
                 os.chdir(temp_dir)
-                save_json_hook(result)
+                with patch(
+                    "uk_macro_crew.utils.build_history_from_snapshot",
+                    return_value=_mock_history_payload(),
+                ):
+                    save_json_hook(result)
                 with open("research_report.json", "r", encoding="utf-8") as f:
                     saved_data = json.load(f)
                 assert saved_data["current_economic_indicators"]["cpih"]["value"] == "+0.3%"

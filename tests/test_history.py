@@ -48,11 +48,29 @@ def test_build_history_appends_new_date_entries():
     with tempfile.TemporaryDirectory() as temp_dir:
         history_file = os.path.join(temp_dir, "history_report.json")
 
-        first = build_history_from_snapshot(_snapshot("2026-02-12", "+0.1%"), history_file)
+        fetcher = lambda: {
+            "interest_rate": [],
+            "cpih": [],
+            "gdp": [{"value": "+0.1%", "publication_date": "2026-02-12"}],
+        }
+
+        first = build_history_from_snapshot(
+            _snapshot("2026-02-12", "+0.1%"), history_file, economic_history_fetcher=fetcher
+        )
         with open(history_file, "w", encoding="utf-8") as f:
             json.dump(first, f)
 
-        second = build_history_from_snapshot(_snapshot("2026-03-12", "+0.2%"), history_file)
+        second_fetcher = lambda: {
+            "interest_rate": [],
+            "cpih": [],
+            "gdp": [
+                {"value": "+0.1%", "publication_date": "2026-02-12"},
+                {"value": "+0.2%", "publication_date": "2026-03-12"},
+            ],
+        }
+        second = build_history_from_snapshot(
+            _snapshot("2026-03-12", "+0.2%"), history_file, economic_history_fetcher=second_fetcher
+        )
         gdp_entries = second["history"]["economic_indicators"]["gdp"]
 
         assert len(gdp_entries) == 2
@@ -64,12 +82,45 @@ def test_build_history_dedupes_same_date_by_upsert():
     with tempfile.TemporaryDirectory() as temp_dir:
         history_file = os.path.join(temp_dir, "history_report.json")
 
-        first = build_history_from_snapshot(_snapshot("2026-02-12", "+0.1%"), history_file)
+        fetcher = lambda: {
+            "interest_rate": [],
+            "cpih": [],
+            "gdp": [{"value": "+0.1%", "publication_date": "2026-02-12"}],
+        }
+        first = build_history_from_snapshot(
+            _snapshot("2026-02-12", "+0.1%"), history_file, economic_history_fetcher=fetcher
+        )
         with open(history_file, "w", encoding="utf-8") as f:
             json.dump(first, f)
 
-        second = build_history_from_snapshot(_snapshot("2026-02-12", "+0.4%"), history_file)
+        second_fetcher = lambda: {
+            "interest_rate": [],
+            "cpih": [],
+            "gdp": [{"value": "+0.4%", "publication_date": "2026-02-12"}],
+        }
+        second = build_history_from_snapshot(
+            _snapshot("2026-02-12", "+0.4%"), history_file, economic_history_fetcher=second_fetcher
+        )
         gdp_entries = second["history"]["economic_indicators"]["gdp"]
 
         assert len(gdp_entries) == 1
         assert gdp_entries[0]["value"] == "+0.4%"
+
+
+def test_build_history_falls_back_to_snapshot_when_official_fetch_fails():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        history_file = os.path.join(temp_dir, "history_report.json")
+
+        def failing_fetcher():
+            raise RuntimeError("network issue")
+
+        history = build_history_from_snapshot(
+            _snapshot("2026-02-12", "+0.1%"),
+            history_file,
+            economic_history_fetcher=failing_fetcher,
+        )
+        gdp_entries = history["history"]["economic_indicators"]["gdp"]
+
+        assert len(gdp_entries) == 1
+        assert gdp_entries[0]["publication_date"] == "2026-02-12"
+        assert gdp_entries[0]["value"] == "+0.1%"
