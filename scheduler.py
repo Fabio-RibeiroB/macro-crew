@@ -20,6 +20,7 @@ import sys
 import time
 from datetime import date
 from pathlib import Path
+from uk_macro_crew.official_schedule import fetch_official_release_schedule
 
 PROJECT_DIR = Path("/home/finstats/public_html/macro-crew")
 REPORT_FILE = PROJECT_DIR / "research_report.json"
@@ -32,6 +33,8 @@ LOG_FILE = Path("/home/finstats/logs/scheduler.log")
 UV_BIN = Path("/home/finstats/.local/bin/uv")
 CREW_CMD = [str(UV_BIN), "run", "run_crew"]
 CREW_TIMEOUT = 1800  # 30 minutes — LLM calls can be slow
+WEEKLY_REBUILD_WEEKDAY = 6  # Sunday
+MAX_SNAPSHOT_AGE_DAYS = 7
 
 
 def setup_logging():
@@ -70,8 +73,50 @@ def get_publication_dates(report):
             dates[key] = {
                 "next_publication_date": value.get("next_publication_date", "not available"),
                 "current_date": value.get(date_field, ""),
+                "schedule_source": "snapshot",
             }
     return dates
+
+
+def enrich_with_official_dates(report_dates):
+    enriched = {key: value.copy() for key, value in report_dates.items()}
+    try:
+        official_dates = fetch_official_release_schedule()
+    except Exception as exc:
+        logging.warning("Failed to refresh official release schedule, falling back to snapshot dates: %s", exc)
+        return enriched
+
+    for key, value in official_dates.items():
+        current = enriched.get(
+            key,
+            {
+                "current_date": "",
+                "next_publication_date": "not available",
+                "schedule_source": "snapshot",
+            },
+        )
+        current["next_publication_date"] = value.get("next_publication_date", current["next_publication_date"])
+        current["schedule_source"] = "official"
+        current["schedule_url"] = value.get("source", "not available")
+        enriched[key] = current
+
+    return enriched
+
+
+def should_force_weekly_refresh(today):
+    return today.weekday() == WEEKLY_REBUILD_WEEKDAY
+
+
+def is_snapshot_stale(report, today):
+    metadata = report.get("metadata", {})
+    last_updated = metadata.get("last_updated") or metadata.get("generated_at")
+    if not last_updated:
+        return True
+    try:
+        snapshot_date = date.fromisoformat(last_updated[:10])
+    except ValueError:
+        return True
+    return (today - snapshot_date).days >= MAX_SNAPSHOT_AGE_DAYS
 
 
 def is_due_or_overdue(indicator_info, today):
@@ -87,12 +132,13 @@ def is_due_or_overdue(indicator_info, today):
 def cmd_list(args):
     """Show all next publication dates from the report."""
     report = load_report()
-    dates = get_publication_dates(report)
-    today = date.today().isoformat()
+    today_obj = date.today()
+    today = today_obj.isoformat()
+    dates = enrich_with_official_dates(get_publication_dates(report))
 
     print(f"\nNext publication dates (today is {today}):\n")
-    print(f"  {'Indicator':<35} {'Next Pub Date':<14} Note")
-    print(f"  {'-'*35} {'-'*14} {'-'*15}")
+    print(f"  {'Indicator':<35} {'Next Pub Date':<14} {'Source':<10} Note")
+    print(f"  {'-'*35} {'-'*14} {'-'*10} {'-'*15}")
 
     def sort_key(item):
         next_pub = item[1]["next_publication_date"]
@@ -108,15 +154,19 @@ def cmd_list(args):
             note = "TODAY - will trigger"
         else:
             note = ""
-        print(f"  {indicator:<35} {next_pub:<14} {note}")
+        schedule_source = info.get("schedule_source", "snapshot")
+        print(f"  {indicator:<35} {next_pub:<14} {schedule_source:<10} {note}")
+    if should_force_weekly_refresh(today_obj):
+        print("\n  Weekly rebuild is due today.")
     print()
 
 
 def cmd_status(args):
     """Show the next scheduled run — the earliest future publication date."""
     report = load_report()
-    dates = get_publication_dates(report)
-    today = date.today().isoformat()
+    today_obj = date.today()
+    today = today_obj.isoformat()
+    dates = enrich_with_official_dates(get_publication_dates(report))
 
     flat = {k: v["next_publication_date"] for k, v in dates.items()
             if v["next_publication_date"] != "not available"}
@@ -127,6 +177,11 @@ def cmd_status(args):
     overdue = {k: v for k, v in flat.items() if v < today}
 
     print(f"\nScheduler status (today is {today}, cron runs daily at 17:00):\n")
+
+    if should_force_weekly_refresh(today_obj):
+        print("  Weekly rebuild: due today")
+    elif is_snapshot_stale(report, today_obj):
+        print("  Snapshot freshness fallback: stale snapshot will trigger refresh")
 
     if overdue:
         print("  OVERDUE (will trigger on next cron run):")
@@ -164,7 +219,8 @@ def cmd_status(args):
 def cmd_run(args):
     """Cron entry point: run the crew if today is a publication date."""
     setup_logging()
-    today = date.today().isoformat()
+    today_obj = date.today()
+    today = today_obj.isoformat()
 
     try:
         report = load_report()
@@ -172,10 +228,12 @@ def cmd_run(args):
         logging.error(f"Failed to load report: {e}")
         sys.exit(1)
 
-    dates = get_publication_dates(report)
+    dates = enrich_with_official_dates(get_publication_dates(report))
     triggered = [k for k, v in dates.items() if is_due_or_overdue(v, today)]
+    weekly_rebuild = should_force_weekly_refresh(today_obj)
+    stale_snapshot = is_snapshot_stale(report, today_obj)
 
-    if not triggered:
+    if not triggered and not weekly_rebuild and not stale_snapshot:
         logging.info(f"No publications due or overdue ({today}). Nothing to do.")
         return
 
@@ -190,8 +248,15 @@ def cmd_run(args):
             logging.warning(
                 f"OVERDUE: {name} — was due {next_pub}, not yet collected (today {today})"
             )
+    if weekly_rebuild:
+        logging.info("Weekly rebuild due today; forcing refresh even without a release trigger.")
+    if stale_snapshot:
+        logging.warning("Snapshot is stale; forcing refresh to avoid serving outdated data.")
 
-    logging.info(f"Starting crew run for: {', '.join(triggered)}")
+    if triggered:
+        logging.info(f"Starting crew run for: {', '.join(triggered)}")
+    else:
+        logging.info("Starting crew run for forced refresh.")
     logging.info(f"Command: {' '.join(CREW_CMD)}")
 
     start = time.time()
