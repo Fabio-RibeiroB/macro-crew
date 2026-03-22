@@ -18,7 +18,7 @@ import shutil
 import subprocess
 import sys
 import time
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from uk_macro_crew.official_schedule import fetch_official_release_schedule
 
@@ -167,6 +167,17 @@ def cmd_status(args):
     today_obj = date.today()
     today = today_obj.isoformat()
     dates = enrich_with_official_dates(get_publication_dates(report))
+    metadata = report.get("metadata", {})
+    last_updated_raw = metadata.get("last_updated") or metadata.get("generated_at")
+    last_updated_display = "not available"
+    last_updated_date = None
+    if last_updated_raw:
+        try:
+            parsed = datetime.fromisoformat(last_updated_raw.replace("Z", "+00:00"))
+            last_updated_display = parsed.strftime("%Y-%m-%d %H:%M:%S")
+            last_updated_date = parsed.date()
+        except ValueError:
+            last_updated_display = last_updated_raw
 
     flat = {k: v["next_publication_date"] for k, v in dates.items()
             if v["next_publication_date"] != "not available"}
@@ -177,6 +188,7 @@ def cmd_status(args):
     overdue = {k: v for k, v in flat.items() if v < today}
 
     print(f"\nScheduler status (today is {today}, cron runs daily at 17:00):\n")
+    print(f"  Last successful update: {last_updated_display}")
 
     if should_force_weekly_refresh(today_obj):
         print("  Weekly rebuild: due today")
@@ -188,6 +200,9 @@ def cmd_status(args):
         for k, v in sorted(overdue.items(), key=lambda x: x[1]):
             current = dates[k]["current_date"]
             print(f"    {k:<35} due {v}  (last collected: {current})")
+        most_recent_overdue = max(overdue.values())
+        if last_updated_date is None or last_updated_date < date.fromisoformat(most_recent_overdue):
+            print("  WARNING: Report appears stale - crew may be failing. Check logs at /home/finstats/logs/scheduler.log")
 
     if due_today:
         print("  DUE TODAY (will run at 17:00):")
