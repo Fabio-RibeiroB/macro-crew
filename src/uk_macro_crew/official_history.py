@@ -13,9 +13,9 @@ BOE_BANK_RATE_URL = (
     "https://www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp"
     "?csv.x=yes&Datefrom={date_from}&Dateto=now&SeriesCodes=IUDBEDR&CSVF=CN&UsingCodes=Y"
 )
-ONS_CPIH_MONTHLY_RATE_URL = (
+ONS_CPIH_ANNUAL_RATE_URL = (
     "https://www.ons.gov.uk/generator?format=csv&uri="
-    "%2Feconomy%2Finflationandpriceindices%2Ftimeseries%2Fl59c%2Fmm23"
+    "%2Feconomy%2Finflationandpriceindices%2Ftimeseries%2Fl55o%2Fmm23"
 )
 ONS_GDP_DATASET_PAGE_URL = "https://www.ons.gov.uk/datasets/gdp-to-four-decimal-places"
 ONS_GDP_DATASET_URL_PATTERN = re.compile(
@@ -162,7 +162,7 @@ def fetch_economic_indicator_history(
     date_from = reference_date.replace(year=reference_date.year - years).strftime("%d/%b/%Y")
 
     interest_rate_payload = _request_text(BOE_BANK_RATE_URL.format(date_from=date_from))
-    cpih_payload = _request_text(ONS_CPIH_MONTHLY_RATE_URL)
+    cpih_payload = _request_text(ONS_CPIH_ANNUAL_RATE_URL)
     gdp_payload = _request_text(_discover_ons_gdp_dataset_url())
 
     interest_rate_entries = _filter_last_n_years(

@@ -76,7 +76,7 @@ def test_fetch_economic_indicator_history_filters_to_last_five_years(monkeypatch
                 "31 Mar 2026,IUDBEDR,4.50",
             ]
         ),
-        "l59c": "\n".join(
+        "l55o": "\n".join(
             [
                 '"Title","Series"',
                 '"2020 FEB","0.2"',
@@ -101,8 +101,8 @@ def test_fetch_economic_indicator_history_filters_to_last_five_years(monkeypatch
         lowered = url.lower()
         if "iudbedr" in lowered:
             return responses["IUDBEDR"]
-        if "l59c" in lowered:
-            return responses["l59c"]
+        if "l55o" in lowered:
+            return responses["l55o"]
         if "download.ons.gov.uk/downloads/datasets/gdp-to-four-decimal-places" in lowered:
             return responses["gdp_csv"]
         if "datasets/gdp-to-four-decimal-places" in lowered:
