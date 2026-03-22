@@ -39,6 +39,13 @@ def normalize_latest_snapshot(payload: Dict[str, Any]) -> Dict[str, Any]:
                     if key.endswith("_date") and PARTIAL_DATE_RE.match(entry[key]):
                         entry[key] = ALLOWED_PLACEHOLDER
 
+    # Normalize plain_english_context strings if present
+    context = payload.get("plain_english_context")
+    if isinstance(context, dict):
+        for key, value in list(context.items()):
+            if isinstance(value, str):
+                context[key] = _normalize_string(value)
+
     indicators = payload.get("current_economic_indicators", {})
     if isinstance(indicators, dict):
         for key in ("cpih", "gdp"):

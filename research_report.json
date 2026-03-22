@@ -2,39 +2,45 @@
   "current_economic_indicators": {
     "interest_rate": {
       "value": "3.75%",
-      "publication_date": "2026-02-05",
-      "next_publication_date": "2026-03-19",
-      "source": "https://www.bankofengland.co.uk/monetary-policy/the-interest-rate-bank-rate"
+      "publication_date": "2026-03-19",
+      "next_publication_date": "2026-04-30",
+      "source": "https://www.bankofengland.co.uk/monetary-policy-summary-and-minutes/2026/march-2026"
     },
     "cpih": {
-      "value": "-0.3%",
+      "value": "+3.2%",
       "publication_date": "2026-02-18",
-      "next_publication_date": "2026-03-25",
+      "next_publication_date": "2026-04-25",
       "source": "https://www.ons.gov.uk/economy/inflationandpriceindices/bulletins/consumerpriceinflation/january2026"
     },
     "gdp": {
-      "value": "+0.1%",
-      "publication_date": "2026-02-12",
-      "next_publication_date": "2026-03-31",
-      "source": "https://www.ons.gov.uk/economy/grossdomesticproductgdp"
+      "value": "+0.2%",
+      "publication_date": "2026-03-13",
+      "next_publication_date": "2026-04-16",
+      "source": "https://www.ons.gov.uk/economy/grossdomesticproductgdp/bulletins/gdpmonthlyestimateuk/january2026"
     }
   },
   "current_report_summaries": {
     "monetary_policy_report": {
-      "summary": "The February 2026 Monetary Policy Report highlighted that the Bank of England's Monetary Policy Committee voted to maintain the Bank Rate at 3.75% due to balanced concerns of inflation and economic growth. CPI inflation was recorded at 3.0%, with expectations of it returning to the target level of 2% in the upcoming months as energy prices stabilize. The report indicated that while inflation pressures are easing, the need for monitoring remains high, and rate cuts may be on the horizon if economic conditions dictate.",
-      "report_date": "2026-02-05",
-      "next_publication_date": "2026-03-19",
-      "source": "https://www.bankofengland.co.uk/monetary-policy-report/2026/february-2026"
+      "summary": "In the March 2026 Monetary Policy Committee meeting, the Bank of England maintained the Bank Rate at 3.75% amid rising inflation pressures linked to geopolitical tensions in the Middle East causing energy price hikes. The committee noted that inflation is expected to remain above the 2% target in the near term due to these pressures. The economic outlook remains uncertain, particularly regarding the impacts of energy prices on economic activity and inflation. Policymakers emphasized that future monetary policy will be data-dependent, indicating the possibility of rate cuts if inflation shows sustained downward trends.",
+      "report_date": "2026-03-19",
+      "next_publication_date": "2026-04-30",
+      "source": "https://www.bankofengland.co.uk/monetary-policy-summary-and-minutes/2026/march-2026"
     },
     "financial_stability_report": {
-      "summary": "The December 2025 Financial Stability Report provided an assessment of the UK's financial system, noting improvements in banking sector resilience amidst increased household debt levels. It highlighted that while the banking system remains robust, vulnerabilities, especially in commercial real estate, are being closely monitored. The report also expressed concerns over systemic risks due to changing global economic conditions, hinting at imperatives for further regulatory scrutiny.",
+      "summary": "The latest Financial Stability Report reflects concerns about increased risks posed by global market volatility and domestic economic challenges. Key areas of focus include the resilience of the banking sector in the face of rising household debt levels and potential instability in commercial real estate markets. Additionally, the report highlights the effects of higher interest rates on financial markets and the broader economy, with policymakers urging careful monitoring of household and corporate vulnerabilities. Strategies to enhance financial resilience and ensure preparedness for global disruptions were discussed.",
       "report_date": "2025-12-15",
       "next_publication_date": "2026-06-15",
       "source": "https://www.bankofengland.co.uk/financial-stability-report"
     }
   },
+  "plain_english_context": {
+    "overall_summary": "The current UK economy is experiencing a challenging phase with interest rates remaining at 3.75% and inflation noticeably above the Bank of England's 2% target at 3.2%. This combination suggests that prices for everyday goods and services are still rising, affecting household budgets and financial decisions, while growth remains modest.",
+    "interest_rate": "With interest rates set at 3.75%, those with mortgages are likely feeling the pinch as higher rates translate to increased monthly payments. On the other hand, savers might benefit slightly, as some banks offer better interest rates on savings accounts.",
+    "cpih": "An inflation rate of +3.2% means that the cost of living is higher than a year ago, impacting everything from grocery bills to utility costs. This is well above the Bank of England's target, suggesting that everyday purchases are becoming more expensive for consumers.",
+    "gdp": "The GDP growth of +0.2% indicates that the economy is growing at a very slow pace. While growth is positive, it suggests that businesses might be hesitant to invest and that job creation could remain sluggish, impacting employment opportunities."
+  },
   "metadata": {
-    "generated_at": "2026-03-06T17:02:19.884768Z",
-    "last_updated": "2026-03-06T17:02:19.884768Z"
+    "generated_at": "2026-03-22T15:55:45.707401Z",
+    "last_updated": "2026-03-22T15:55:45.707401Z"
   }
 }

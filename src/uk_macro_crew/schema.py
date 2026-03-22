@@ -166,3 +166,12 @@ def validate_latest_snapshot(payload: dict) -> None:
             obj["next_publication_date"],
             f"{report_name}.{date_field}",
         )
+
+    # plain_english_context is optional — validate only if present
+    context = payload.get("plain_english_context")
+    if context is not None:
+        if not isinstance(context, dict):
+            raise SchemaValidationError("plain_english_context must be an object")
+        for field in ("overall_summary", "interest_rate", "cpih", "gdp"):
+            if field in context and not isinstance(context[field], str):
+                raise SchemaValidationError(f"plain_english_context.{field} must be a string")

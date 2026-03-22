@@ -7,7 +7,7 @@ research_task:
 
     Your goal is to find the most recent UK economic data for these indicators:
     - Interest Rate (Bank of England base rate)
-    - CPIH (Consumer Price Index including Housing monthly change)
+    - CPIH (Consumer Price Index including Housing annual rate — year-on-year % change, e.g. 3.9%)
     - GDP (Gross Domestic Product monthly growth)
     
     AND the latest Bank of England report summaries:
@@ -21,8 +21,8 @@ research_task:
     4. PRIORITIZE official sources: ONS (ons.gov.uk) for CPIH/GDP, Bank of England (bankofengland.co.uk) for rates/MPC
     5. Focus on finding the SINGLE LATEST AVAILABLE data point for each indicator - get whatever the most recent published data is
     6. CRITICAL PUBLICATION SCHEDULE LOGIC: Based on today's date ({current_date}), determine what data should logically be available:
-       - CPIH: Published monthly around 3rd Wednesday. If today is late January 2026, December 2025 CPIH should be available
-       - GDP Monthly: Published 6-8 weeks after month end. If today is late January 2026, November 2025 GDP should be available
+       - CPIH: Published monthly around 3rd Wednesday. Based on {current_date}, determine which months' CPIH data should be available. Always report the ANNUAL rate (year-on-year % change), NOT the monthly change
+       - GDP Monthly: Published 6-8 weeks after month end. Based on {current_date}, determine which months' GDP data should be available
        - Interest Rate: Published after MPC meetings (8 times per year). Search for most recent MPC decision
        - Always search for the data that should be available based on typical publication schedules, not just the most obvious search terms
     7. Search term variations to try (keep it simple - complex terms often fail):
@@ -35,7 +35,7 @@ research_task:
     9. IMPORTANT: Verify data accuracy with official sources (ONS for CPIH/GDP, BoE for rates/MPC)
     10. If first search fails, try alternative terms in separate tool calls - but focus on data that should logically be available
     11. CRITICAL: For each indicator, find the MOST RECENT AVAILABLE data - don't return "not available" unless you genuinely cannot find any recent data
-    12. IMPORTANT: For Financial Stability Report, the December 2025 FSR should definitely be available by now (January 2026). Search specifically for "December 2025" FSR. If you cannot find December 2025, then search for June 2025 as fallback. FSRs are major publications that are always available - do not return "not available" unless you have exhaustively searched.
+    12. IMPORTANT: For Financial Stability Report, search for the most recent FSR available (June or December). If the latest cycle is not found, search the prior cycle. FSRs are major publications that are always available - do not return "not available" unless you have exhaustively searched.
     13. IMPORTANT: When calculating next publication dates, be realistic about publication schedules:
         - CPIH: Next month's data published around 3rd Wednesday of following month
         - GDP Monthly: Published 6-8 weeks after month end
@@ -48,15 +48,15 @@ research_task:
     A simple bullet point list with the single latest available data for each indicator and report summary:
     
     - Interest Rate: [value]% (published: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
-    - CPIH: [value]% (published: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
+    - CPIH: [value]% annual rate year-on-year (published: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
     - GDP: [+/-value]% (published: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
     - Monetary Policy Report Summary: [comprehensive paragraph summary covering key policy decisions, inflation outlook, economic growth assessment, and forward-looking guidance - minimum 3-4 sentences] (report date: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
     - Financial Stability Report Summary: [comprehensive paragraph summary covering banking system resilience, key risk areas, household debt concerns, commercial real estate issues, and systemic risk assessment - minimum 3-4 sentences] (report date: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
     
     CRITICAL FSR REQUIREMENT:
-    - The December 2025 Financial Stability Report should be available since we're in January 2026
-    - Search specifically for "December 2025 FSR" or "Financial Stability Report December 2025"
-    - If December 2025 is not found, search for "June 2025 FSR" as fallback
+    - The latest Financial Stability Report should be available based on {current_date}
+    - Search specifically for the most recent FSR (June or December cycle)
+    - If the latest cycle is not found, search the prior cycle as fallback
     - FSRs are major Bank of England publications - they should always be findable
     - Do NOT return "not available" for FSR unless you have tried multiple specific search terms
     
@@ -74,27 +74,33 @@ research_task:
 reporting_task:
   description: >
     Take the research data and create a simple current snapshot JSON report.
-    
+
     You will receive simple bullet points with the latest economic data.
     Your job is to format this data into a simple JSON structure that contains only current data points.
-    
+
     IMPORTANT: Focus only on the business data - do not include metadata fields like generated_at or last_updated.
     The system will automatically add metadata after you generate the JSON.
-    
+
     This is a direct overwrite approach - do not load or preserve any existing data.
     Create a fresh report containing only the current data provided.
+
+    You must also write a plain_english_context section aimed at ordinary people (not economists).
+    For each indicator and an overall summary, write 2-3 sentences explaining what the current reading
+    means in practical terms for everyday life in the UK — mortgages, savings, jobs, prices, cost of living.
+    Be specific to the actual numbers. Do not use jargon. Write as if explaining to a curious friend.
   expected_output: >
     Return a simple JSON report containing only current business data as pure JSON with no formatting.
-    
+
     CRITICAL REQUIREMENTS:
     1. Return ONLY the JSON object - no markdown code blocks, no backticks, no explanatory text
-    2. Do not wrap the JSON in ```json or ``` 
+    2. Do not wrap the JSON in ```json or ```
     3. The output must be valid JSON that can be parsed directly
     4. Do NOT include metadata fields - the system will add these automatically
     5. Use simple key-value structure for each indicator (no arrays)
     6. Include publication dates and sources for all data points
     7. Mark unavailable data as "not available" rather than omitting fields
-    
+    8. Always include the plain_english_context section with all four fields
+
     The JSON structure should be:
     {
       "current_economic_indicators": {
@@ -105,7 +111,7 @@ reporting_task:
           "source": "https://www.bankofengland.co.uk/monetary-policy-summary-and-minutes/2025/december-2025"
         },
         "cpih": {
-          "value": "-0.1%",
+          "value": "3.9%",
           "publication_date": "2025-11-20",
           "next_publication_date": "2026-01-22",
           "source": "https://www.ons.gov.uk/economy/inflationandpriceindices/bulletins/consumerpriceinflation/latest"
@@ -130,6 +136,12 @@ reporting_task:
           "next_publication_date": "2026-06-15",
           "source": "https://www.bankofengland.co.uk/financial-stability-report/2025/december-2025"
         }
+      },
+      "plain_english_context": {
+        "overall_summary": "2-3 sentences giving a plain-English snapshot of the UK economy right now — what the combination of interest rates, inflation and growth means for ordinary people today.",
+        "interest_rate": "2-3 sentences on what the current Bank Rate means for mortgage holders, savers, and borrowers. Be specific to the actual rate value.",
+        "cpih": "2-3 sentences on what the current inflation rate means for the cost of living. Mention whether it is above or below the Bank of England's 2% target and what that means.",
+        "gdp": "2-3 sentences on what the current monthly GDP figure means for jobs, businesses and the broader economy."
       }
     }
   agent: reporting_analyst
