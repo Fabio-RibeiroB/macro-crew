@@ -1,68 +1,69 @@
-import { FileText, Calendar, ExternalLink } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/app/components/ui/card';
-import { Badge } from '@/app/components/ui/badge';
+import { ExternalLink } from 'lucide-react';
 
 interface ReportSummaryCardProps {
+  tag: string;
   title: string;
+  description: string;
   summary: string;
   reportDate: string;
   nextPublicationDate: string;
   source: string;
 }
 
-export function ReportSummaryCard({
-  title,
-  summary,
-  reportDate,
-  nextPublicationDate,
-  source,
-}: ReportSummaryCardProps) {
+export function ReportSummaryCard({ tag, title, description, summary, reportDate, nextPublicationDate, source }: ReportSummaryCardProps) {
   const formatDate = (dateStr: string) => {
+    if (!dateStr || dateStr === 'not available') return 'TBC';
     const date = new Date(dateStr);
-    return date.toLocaleDateString('en-GB', { 
-      day: 'numeric', 
-      month: 'short', 
-      year: 'numeric' 
-    });
+    if (isNaN(date.getTime())) return 'TBC';
+    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
   };
 
   return (
-    <Card className="hover:shadow-lg transition-shadow">
-      <CardHeader>
+    <div
+      className="rounded-xl border overflow-hidden transition-colors duration-200"
+      style={{ background: 'var(--dash-card)', borderColor: 'var(--dash-border)' }}
+    >
+      <div className="px-6 pt-6 pb-4 border-b" style={{ borderColor: 'var(--dash-border)' }}>
         <div className="flex items-start justify-between gap-4">
-          <div className="flex items-start gap-3 flex-1">
-            <FileText className="h-5 w-5 text-blue-600 mt-1 flex-shrink-0" />
-            <div className="flex-1">
-              <CardTitle className="text-lg mb-2">{title}</CardTitle>
-              <CardDescription className="flex items-center gap-2 text-sm">
-                <Calendar className="h-3.5 w-3.5" />
-                Report Date: {formatDate(reportDate)}
-              </CardDescription>
-            </div>
+          <div className="flex-1">
+            <span
+              className="inline-block text-xs font-medium px-2.5 py-1 rounded-full mb-3"
+              style={{ background: 'var(--dash-tag-bg)', color: 'var(--dash-tag-text)' }}
+            >
+              {tag}
+            </span>
+            <h3 className="text-base font-semibold mb-1" style={{ color: 'var(--dash-text-1)' }}>{title}</h3>
+            <p className="text-xs" style={{ color: 'var(--dash-text-4)' }}>{description}</p>
           </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <p className="text-sm text-gray-700 leading-relaxed mb-4">
-          {summary}
-        </p>
-        
-        <div className="flex items-center justify-between gap-4 pt-3 border-t">
-          <Badge variant="secondary" className="text-xs">
-            Next Report: {formatDate(nextPublicationDate)}
-          </Badge>
-          
-          <a 
-            href={source} 
-            target="_blank" 
+          <a
+            href={source}
+            target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1 text-blue-600 hover:text-blue-800 transition-colors"
+            className="flex-shrink-0 flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border transition-colors mt-1"
+            style={{ color: 'var(--dash-blue)', borderColor: 'var(--dash-border)', background: 'transparent' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--dash-blue-bg)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
           >
             <ExternalLink className="h-3.5 w-3.5" />
-            <span className="text-xs">Read Full Report</span>
+            Full report
           </a>
         </div>
-      </CardContent>
-    </Card>
+        <p className="text-xs mt-3" style={{ color: 'var(--dash-text-4)' }}>Published {formatDate(reportDate)}</p>
+      </div>
+
+      <div className="px-6 py-5">
+        <p
+          className="text-sm leading-relaxed"
+          style={{ fontFamily: "'Source Serif 4', Georgia, serif", lineHeight: '1.8', color: 'var(--dash-text-2)' }}
+        >
+          {summary}
+        </p>
+      </div>
+
+      <div className="px-6 py-3 border-t flex items-center gap-2 text-xs" style={{ borderColor: 'var(--dash-border)', background: 'var(--dash-bg)' }}>
+        <span style={{ color: 'var(--dash-text-4)' }}>Next publication:</span>
+        <span className="font-medium" style={{ color: 'var(--dash-warning)' }}>{formatDate(nextPublicationDate)}</span>
+      </div>
+    </div>
   );
 }

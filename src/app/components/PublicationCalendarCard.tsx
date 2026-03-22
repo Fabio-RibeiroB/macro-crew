@@ -1,6 +1,4 @@
-import { CalendarClock, ExternalLink } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
-import { Badge } from '@/app/components/ui/badge';
+import { ExternalLink, CalendarClock } from 'lucide-react';
 
 interface PublicationItem {
   id: string;
@@ -10,105 +8,109 @@ interface PublicationItem {
   category: 'Indicator' | 'Report';
 }
 
-interface PublicationCalendarCardProps {
-  items: PublicationItem[];
-}
-
 const PLACEHOLDER = 'not available';
 
 function parseDate(value: string): Date | null {
-  if (!value || value === PLACEHOLDER) {
-    return null;
-  }
+  if (!value || value === PLACEHOLDER) return null;
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-  return parsed;
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 function formatDate(value: string): string {
   const parsed = parseDate(value);
-  if (!parsed) {
-    return 'Not available';
-  }
-  return parsed.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  if (!parsed) return 'TBC';
+  return parsed.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 function daysUntil(value: string): number | null {
   const parsed = parseDate(value);
-  if (!parsed) {
-    return null;
-  }
-
+  if (!parsed) return null;
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const target = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
-  const millisecondsPerDay = 1000 * 60 * 60 * 24;
-
-  return Math.round((target.getTime() - today.getTime()) / millisecondsPerDay);
+  return Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-export function PublicationCalendarCard({ items }: PublicationCalendarCardProps) {
-  const orderedItems = [...items].sort((left, right) => {
-    const leftDate = parseDate(left.nextPublicationDate);
-    const rightDate = parseDate(right.nextPublicationDate);
+function countdownLabel(days: number | null): string {
+  if (days === null) return 'TBC';
+  if (days < 0) return `${Math.abs(days)}d ago`;
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Tomorrow';
+  return `In ${days} days`;
+}
 
-    if (leftDate && rightDate) {
-      return leftDate.getTime() - rightDate.getTime();
-    }
-    if (leftDate) {
-      return -1;
-    }
-    if (rightDate) {
-      return 1;
-    }
-    return left.title.localeCompare(right.title);
+function dotColor(days: number | null): string {
+  if (days === null || days < 0) return 'var(--dash-border)';
+  if (days <= 7) return 'var(--dash-negative)';
+  if (days <= 30) return 'var(--dash-warning)';
+  return 'var(--dash-positive)';
+}
+
+function countdownColor(days: number | null): string {
+  if (days === null || days < 0) return 'var(--dash-text-4)';
+  if (days <= 7) return 'var(--dash-negative)';
+  if (days <= 30) return 'var(--dash-warning)';
+  return 'var(--dash-positive)';
+}
+
+export function PublicationCalendarCard({ items }: { items: PublicationItem[] }) {
+  const orderedItems = [...items].sort((a, b) => {
+    const aDate = parseDate(a.nextPublicationDate);
+    const bDate = parseDate(b.nextPublicationDate);
+    if (aDate && bDate) return aDate.getTime() - bDate.getTime();
+    return aDate ? -1 : bDate ? 1 : a.title.localeCompare(b.title);
   });
 
   return (
-    <Card className="hover:shadow-lg transition-shadow">
-      <CardHeader>
-        <CardTitle className="text-base font-semibold text-gray-800 flex items-center gap-2">
-          <CalendarClock className="h-4 w-4 text-blue-600" />
-          Upcoming Publication Calendar
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <div
+      className="rounded-xl border overflow-hidden h-full flex flex-col transition-colors duration-200"
+      style={{ background: 'var(--dash-card)', borderColor: 'var(--dash-border)' }}
+    >
+      <div className="px-5 py-5 border-b" style={{ borderColor: 'var(--dash-border)' }}>
+        <div className="flex items-center gap-2 mb-1">
+          <CalendarClock className="h-4 w-4" style={{ color: 'var(--dash-blue)' }} />
+          <h3 className="text-base font-semibold" style={{ color: 'var(--dash-text-1)' }}>Coming Up</h3>
+        </div>
+        <p className="text-xs" style={{ color: 'var(--dash-text-4)' }}>When the next official data releases are due</p>
+      </div>
+
+      <div className="flex-1 divide-y" style={{ borderColor: 'var(--dash-border)' }}>
         {orderedItems.map((item) => {
           const days = daysUntil(item.nextPublicationDate);
-          const countdownLabel =
-            days === null
-              ? 'Date unknown'
-              : days < 0
-                ? `${Math.abs(days)} day(s) ago`
-                : days === 0
-                  ? 'Today'
-                  : `In ${days} day(s)`;
-
           return (
-            <div key={item.id} className="border rounded-md p-3 bg-white/70">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium text-gray-900">{item.title}</p>
-                <Badge variant="secondary" className="text-xs">
-                  {item.category}
-                </Badge>
+            <div
+              key={item.id}
+              className="px-5 py-4 transition-colors duration-150"
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--dash-card-hover)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                  <div className="mt-1.5 w-2 h-2 rounded-full flex-shrink-0" style={{ background: dotColor(days) }} />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium leading-snug" style={{ color: 'var(--dash-text-2)' }}>{item.title}</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--dash-text-4)' }}>{formatDate(item.nextPublicationDate)}</p>
+                    <span
+                      className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full"
+                      style={{ background: 'var(--dash-border)', color: 'var(--dash-text-4)' }}
+                    >
+                      {item.category}
+                    </span>
+                  </div>
+                </div>
+                <span className="flex-shrink-0 text-sm font-semibold" style={{ color: countdownColor(days) }}>
+                  {countdownLabel(days)}
+                </span>
               </div>
-              <div className="mt-2 flex items-center justify-between gap-2 text-xs text-gray-600">
-                <span>Next release: {formatDate(item.nextPublicationDate)}</span>
-                <Badge variant="outline" className="text-xs">
-                  {countdownLabel}
-                </Badge>
-              </div>
+
               <a
                 href={item.source}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-2 inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
+                className="inline-flex items-center gap-1 text-xs transition-colors mt-2.5"
+                style={{ color: 'var(--dash-text-4)' }}
+                onMouseEnter={e => (e.currentTarget.style.color = 'var(--dash-blue)')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--dash-text-4)')}
               >
                 <ExternalLink className="h-3 w-3" />
                 Source
@@ -116,7 +118,7 @@ export function PublicationCalendarCard({ items }: PublicationCalendarCardProps)
             </div>
           );
         })}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
