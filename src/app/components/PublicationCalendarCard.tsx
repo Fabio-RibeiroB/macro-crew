@@ -54,7 +54,12 @@ function daysUntil(value: string): number | null {
 }
 
 export function PublicationCalendarCard({ items }: PublicationCalendarCardProps) {
-  const orderedItems = [...items].sort((left, right) => {
+  const futureItems = items.filter((item) => {
+    const days = daysUntil(item.nextPublicationDate);
+    return days === null || days >= 0;
+  });
+
+  const orderedItems = [...futureItems].sort((left, right) => {
     const leftDate = parseDate(left.nextPublicationDate);
     const rightDate = parseDate(right.nextPublicationDate);
 
@@ -79,6 +84,9 @@ export function PublicationCalendarCard({ items }: PublicationCalendarCardProps)
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {orderedItems.length === 0 && (
+          <p className="text-sm text-gray-500">No upcoming publications scheduled.</p>
+        )}
         {orderedItems.map((item) => {
           const days = daysUntil(item.nextPublicationDate);
           const countdownLabel =
