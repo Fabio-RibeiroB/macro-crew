@@ -97,7 +97,7 @@ export function EconomicIndicatorCard({
     >
       <div className="h-1 w-full" style={{ background: accentColor }} />
 
-      <div className="p-6 flex flex-col flex-1 gap-3">
+      <div className="p-6 flex flex-col flex-1 gap-4">
         <div className="flex items-center justify-between">
           <span
             className="text-xs font-semibold px-2.5 py-1 rounded-full"
@@ -111,7 +111,7 @@ export function EconomicIndicatorCard({
             {(sentimentMode === 'neutral' || (!isPositive && !isNegative)) && <Minus className="h-4 w-4" style={{ color: 'var(--dash-blue)' }} />}
             <button
               onClick={() => setShowInfo(!showInfo)}
-              className="transition-colors"
+            className="transition-colors rounded-md"
               style={{ color: showInfo ? 'var(--dash-blue)' : 'var(--dash-text-4)' }}
               aria-label="More information"
             >
@@ -122,7 +122,7 @@ export function EconomicIndicatorCard({
 
         {showInfo && (
           <div
-            className="p-3 rounded-lg text-xs leading-relaxed border"
+            className="p-4 rounded-lg text-sm leading-7 border"
             style={{ background: 'var(--dash-bg)', color: 'var(--dash-text-3)', borderColor: 'var(--dash-border)' }}
           >
             {description}
@@ -130,8 +130,8 @@ export function EconomicIndicatorCard({
         )}
 
         <div
-          className="text-5xl font-bold leading-none tracking-tight"
-          style={{ color: valueColor, fontFamily: "'JetBrains Mono', monospace" }}
+          className="text-4xl sm:text-5xl font-bold leading-none tracking-tight"
+          style={{ color: valueColor, fontFamily: "var(--font-mono)" }}
         >
           {value}
         </div>
@@ -146,7 +146,7 @@ export function EconomicIndicatorCard({
               : <TrendingDown className="h-3.5 w-3.5" style={{ color: 'var(--dash-text-4)' }} />
             )}
             <span
-              className="text-xs"
+              className="text-sm"
               style={{
                 color: deltaGood === true
                   ? 'var(--dash-positive)'
@@ -170,18 +170,18 @@ export function EconomicIndicatorCard({
           </span>
         )}
 
-        <p className="text-xs" style={{ color: 'var(--dash-text-4)' }}>{measurement}</p>
-        <p className="text-sm font-medium leading-snug" style={{ color: 'var(--dash-text-2)' }}>{title}</p>
+        <p className="text-sm" style={{ color: 'var(--dash-text-4)' }}>{measurement}</p>
+        <p className="text-base font-semibold leading-7" style={{ color: 'var(--dash-text-2)' }}>{title}</p>
 
         <div className="mt-auto pt-4 border-t space-y-2" style={{ borderColor: 'var(--dash-border)' }}>
-          <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center justify-between text-sm">
             <span style={{ color: 'var(--dash-text-4)' }}>Published</span>
             <span style={{ color: 'var(--dash-text-3)' }}>
               {formatDate(publicationDate)}
               {pubAgo && <span style={{ color: 'var(--dash-text-4)' }} className="ml-1">({pubAgo})</span>}
             </span>
           </div>
-          <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center justify-between text-sm">
             <span style={{ color: 'var(--dash-text-4)' }}>Next release</span>
             <span className="font-medium" style={{ color: 'var(--dash-blue)' }}>{formatDate(nextPublicationDate)}</span>
           </div>
@@ -191,7 +191,7 @@ export function EconomicIndicatorCard({
           href={source}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 text-xs transition-colors mt-1"
+          className="inline-flex items-center gap-1.5 text-sm transition-colors mt-1"
           style={{ color: 'var(--dash-text-4)' }}
           onMouseEnter={e => (e.currentTarget.style.color = 'var(--dash-blue)')}
           onMouseLeave={e => (e.currentTarget.style.color = 'var(--dash-text-4)')}

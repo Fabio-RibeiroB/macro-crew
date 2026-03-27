@@ -2,12 +2,18 @@
 
 /* ── Dashboard design tokens ─────────────────────────── */
 :root {
+  --font-body: 'Public Sans', system-ui, sans-serif;
+  --font-headline: 'Manrope', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
   /* Light mode */
   --dash-bg:           #f8fafc;
   --dash-card:         #ffffff;
   --dash-card-hover:   #f1f5f9;
   --dash-border:       #e2e8f0;
   --dash-border-sub:   #f1f5f9;
+  --dash-section:      #ffffff;
+  --dash-section-accent:#eef4ff;
   --dash-header:       #ffffff;
   --dash-text-1:       #0f172a;
   --dash-text-2:       #334155;
@@ -32,6 +38,8 @@
   --dash-card-hover:   #263348;
   --dash-border:       #334155;
   --dash-border-sub:   #1e293b;
+  --dash-section:      #162033;
+  --dash-section-accent:#12233f;
   --dash-header:       #0f172a;
   --dash-text-1:       #e2e8f0;
   --dash-text-2:       #cbd5e1;
@@ -137,7 +145,7 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: 'DM Sans', system-ui, sans-serif;
+    font-family: var(--font-body);
   }
 
   html {
@@ -145,29 +153,27 @@
   }
 
   h1 {
-    font-family: 'Barlow Condensed', sans-serif;
+    font-family: var(--font-headline);
     font-size: var(--text-2xl);
-    font-weight: 600;
-    line-height: 1.2;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
   }
 
   h2 {
-    font-family: 'Barlow Condensed', sans-serif;
+    font-family: var(--font-headline);
     font-size: var(--text-xl);
     font-weight: 600;
-    line-height: 1.3;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
   }
 
   h3 {
-    font-family: 'Barlow Condensed', sans-serif;
+    font-family: var(--font-headline);
     font-size: var(--text-lg);
-    font-weight: 500;
+    font-weight: 700;
     line-height: 1.4;
-    letter-spacing: 0.03em;
+    letter-spacing: -0.01em;
   }
 
   h4 {

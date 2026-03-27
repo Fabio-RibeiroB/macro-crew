@@ -9,9 +9,18 @@ interface PublicationItem {
 }
 
 const PLACEHOLDER = 'not available';
+const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 function parseDate(value: string): Date | null {
   if (!value || value === PLACEHOLDER) return null;
+
+  const dateOnlyMatch = value.match(DATE_ONLY_PATTERN);
+  if (dateOnlyMatch) {
+    const [, year, month, day] = dateOnlyMatch;
+    const parsed = new Date(Number(year), Number(month) - 1, Number(day));
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
@@ -54,12 +63,17 @@ function countdownColor(days: number | null): string {
 }
 
 export function PublicationCalendarCard({ items }: { items: PublicationItem[] }) {
-  const orderedItems = [...items].sort((a, b) => {
+  const orderedItems = [...items]
+    .filter((item) => {
+      const days = daysUntil(item.nextPublicationDate);
+      return days === null || days >= 0;
+    })
+    .sort((a, b) => {
     const aDate = parseDate(a.nextPublicationDate);
     const bDate = parseDate(b.nextPublicationDate);
     if (aDate && bDate) return aDate.getTime() - bDate.getTime();
     return aDate ? -1 : bDate ? 1 : a.title.localeCompare(b.title);
-  });
+    });
 
   return (
     <div
@@ -75,6 +89,11 @@ export function PublicationCalendarCard({ items }: { items: PublicationItem[] })
       </div>
 
       <div className="flex-1 divide-y" style={{ borderColor: 'var(--dash-border)' }}>
+        {orderedItems.length === 0 && (
+          <p className="px-5 py-4 text-sm" style={{ color: 'var(--dash-text-4)' }}>
+            No upcoming publications scheduled.
+          </p>
+        )}
         {orderedItems.map((item) => {
           const days = daysUntil(item.nextPublicationDate);
           return (

@@ -254,20 +254,37 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-12">
-
-        <p className="text-base leading-relaxed max-w-3xl" style={{ color: 'var(--dash-text-3)' }}>
-          This dashboard tracks the key numbers that shape the UK economy — updated automatically
-          whenever official data is published. Tap the <strong style={{ color: 'var(--dash-text-2)' }}>ⓘ</strong> on any card to learn what it means.
-        </p>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 space-y-8">
+        <section
+          className="rounded-2xl border px-5 py-5 sm:px-6 sm:py-6"
+          style={{ background: 'var(--dash-section)', borderColor: 'var(--dash-border)' }}
+        >
+          <div className="max-w-4xl space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--dash-blue)' }}>
+              Quick Read
+            </p>
+            <p className="text-lg sm:text-xl leading-8" style={{ color: 'var(--dash-text-2)' }}>
+              This dashboard tracks the main UK economic releases and explains what changed, when it changed, and what is coming next.
+            </p>
+            <p className="text-sm sm:text-base leading-7 max-w-3xl" style={{ color: 'var(--dash-text-3)' }}>
+              Use the top cards for the latest numbers, the report section for the Bank of England view, and the charts for longer-term trends. Tap <strong style={{ color: 'var(--dash-text-2)' }}>ⓘ</strong> on any indicator card for a short explanation.
+            </p>
+          </div>
+        </section>
 
         {/* ── Key Indicators ── */}
-        <section>
-          <div className="mb-5">
-            <h2 className="text-lg font-semibold" style={{ color: 'var(--dash-text-1)' }}>Key Indicators</h2>
-            <p className="text-sm mt-1" style={{ color: 'var(--dash-text-4)' }}>The three most-watched economic statistics in the UK</p>
+        <section
+          className="rounded-2xl border px-5 py-6 sm:px-6 sm:py-7"
+          style={{ background: 'var(--dash-section)', borderColor: 'var(--dash-border)' }}
+        >
+          <div className="mb-6 pb-4 border-b" style={{ borderColor: 'var(--dash-border)' }}>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--dash-blue)' }}>Section 1</p>
+            <h2 className="text-2xl mt-2" style={{ color: 'var(--dash-text-1)' }}>Key Indicators</h2>
+            <p className="text-sm sm:text-base mt-2 max-w-2xl leading-7" style={{ color: 'var(--dash-text-3)' }}>
+              The three figures most people look for first: interest rates, inflation, and monthly growth.
+            </p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             {indicators.map((ind) => (
               <EconomicIndicatorCard
                 key={ind.key}
@@ -294,13 +311,19 @@ export default function App() {
         )}
 
         {/* ── Reports + Calendar ── */}
-        <section>
-          <div className="mb-5">
-            <h2 className="text-lg font-semibold" style={{ color: 'var(--dash-text-1)' }}>Bank of England Reports</h2>
-            <p className="text-sm mt-1" style={{ color: 'var(--dash-text-4)' }}>Plain-English summaries of the Bank's latest publications</p>
+        <section
+          className="rounded-2xl border px-5 py-6 sm:px-6 sm:py-7"
+          style={{ background: 'var(--dash-section)', borderColor: 'var(--dash-border)' }}
+        >
+          <div className="mb-6 pb-4 border-b" style={{ borderColor: 'var(--dash-border)' }}>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--dash-blue)' }}>Section 2</p>
+            <h2 className="text-2xl mt-2" style={{ color: 'var(--dash-text-1)' }}>Reports and Upcoming Dates</h2>
+            <p className="text-sm sm:text-base mt-2 max-w-2xl leading-7" style={{ color: 'var(--dash-text-3)' }}>
+              Read the latest Bank of England summaries on the left and scan the next official releases on the right.
+            </p>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-            <div className="lg:col-span-3 space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 items-start">
+            <div className="lg:col-span-3 space-y-5">
               {reports.map((r) => (
                 <ReportSummaryCard
                   key={r.key}
@@ -321,12 +344,18 @@ export default function App() {
         </section>
 
         {/* ── Historical Trends ── */}
-        <section>
-          <div className="mb-5">
-            <h2 className="text-lg font-semibold" style={{ color: 'var(--dash-text-1)' }}>Historical Trends</h2>
-            <p className="text-sm mt-1" style={{ color: 'var(--dash-text-4)' }}>See how each indicator has moved over the past 1–5 years</p>
+        <section
+          className="rounded-2xl border px-5 py-6 sm:px-6 sm:py-7"
+          style={{ background: 'var(--dash-section)', borderColor: 'var(--dash-border)' }}
+        >
+          <div className="mb-6 pb-4 border-b" style={{ borderColor: 'var(--dash-border)' }}>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--dash-blue)' }}>Section 3</p>
+            <h2 className="text-2xl mt-2" style={{ color: 'var(--dash-text-1)' }}>Historical Trends</h2>
+            <p className="text-sm sm:text-base mt-2 max-w-2xl leading-7" style={{ color: 'var(--dash-text-3)' }}>
+              Use these charts to see whether the latest number is part of a larger move or just a one-off change.
+            </p>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
             {trendCards.map((t) => (
               <HistoricalTrendCard
                 key={t.key}

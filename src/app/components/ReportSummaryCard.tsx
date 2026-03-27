@@ -32,8 +32,8 @@ export function ReportSummaryCard({ tag, title, description, summary, reportDate
             >
               {tag}
             </span>
-            <h3 className="text-base font-semibold mb-1" style={{ color: 'var(--dash-text-1)' }}>{title}</h3>
-            <p className="text-xs" style={{ color: 'var(--dash-text-4)' }}>{description}</p>
+            <h3 className="text-lg font-semibold mb-2" style={{ color: 'var(--dash-text-1)' }}>{title}</h3>
+            <p className="text-sm leading-7 max-w-2xl" style={{ color: 'var(--dash-text-3)' }}>{description}</p>
           </div>
           <a
             href={source}
@@ -48,19 +48,19 @@ export function ReportSummaryCard({ tag, title, description, summary, reportDate
             Full report
           </a>
         </div>
-        <p className="text-xs mt-3" style={{ color: 'var(--dash-text-4)' }}>Published {formatDate(reportDate)}</p>
+        <p className="text-sm mt-4" style={{ color: 'var(--dash-text-4)' }}>Published {formatDate(reportDate)}</p>
       </div>
 
-      <div className="px-6 py-5">
+      <div className="px-6 py-6">
         <p
-          className="text-sm leading-relaxed"
-          style={{ fontFamily: "'Source Serif 4', Georgia, serif", lineHeight: '1.8', color: 'var(--dash-text-2)' }}
+          className="text-base"
+          style={{ lineHeight: '1.9', color: 'var(--dash-text-2)', maxWidth: '68ch' }}
         >
           {summary}
         </p>
       </div>
 
-      <div className="px-6 py-3 border-t flex items-center gap-2 text-xs" style={{ borderColor: 'var(--dash-border)', background: 'var(--dash-bg)' }}>
+      <div className="px-6 py-4 border-t flex items-center gap-2 text-sm" style={{ borderColor: 'var(--dash-border)', background: 'var(--dash-bg)' }}>
         <span style={{ color: 'var(--dash-text-4)' }}>Next publication:</span>
         <span className="font-medium" style={{ color: 'var(--dash-warning)' }}>{formatDate(nextPublicationDate)}</span>
       </div>
