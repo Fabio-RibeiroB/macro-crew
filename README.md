@@ -55,6 +55,8 @@ crewai install
 ```bash
 OPENAI_API_KEY=your_openai_api_key_here
 EXA_API_KEY=your_exa_api_key_here
+MODEL=gpt-6-luna                 # Optional: OpenAI model (default: gpt-6-luna)
+OPENAI_REASONING_EFFORT=none    # Optional: reasoning effort (default: none)
 
 # Error Handling & Timeout Configuration
 AGENT_MAX_ITERATIONS=8          # Maximum iterations per agent (default: 8)
@@ -66,7 +68,7 @@ CREW_MAX_RPM=100              # Rate limit for crew (default: 100)
 ```
 
 The system requires:
-- **OpenAI API Key**: For the LLM agents (GPT-4o-mini by default)
+- **OpenAI API Key**: For the LLM agents (`gpt-6-luna` by default, override with `MODEL`)
 - **Exa API Key**: For web search and data retrieval
 
 ## Error Handling & Reliability
