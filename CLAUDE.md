@@ -185,7 +185,7 @@ uv run scheduler.py run
 - **Python 3.10-3.13**: Runtime environment
 - **UV**: Package manager and dependency management
 - **EXA-PY 2.0.2+**: Web search and data retrieval
-- **OpenAI GPT-4o-mini**: Default LLM for agents
+- **OpenAI gpt-6-luna**: Default LLM for agents (override with the `MODEL` env var)
 - **Pandas 2.3.3+**: Data manipulation (legacy CSV tool only)
 - **Pytest**: Testing framework
 
@@ -212,6 +212,8 @@ The `.env` file is stored at `/home/finstats/.env` (outside public_html for secu
 ```bash
 OPENAI_API_KEY=your_openai_api_key_here
 EXA_API_KEY=your_exa_api_key_here
+MODEL=gpt-6-luna
+OPENAI_REASONING_EFFORT=none
 ```
 
 The `find_dotenv()` function in `utils.py` searches upward from the source directory and finds this file automatically.
@@ -219,6 +221,10 @@ The `find_dotenv()` function in `utils.py` searches upward from the source direc
 **Required Environment Variables:**
 - **OPENAI_API_KEY**: OpenAI API access for LLM agents
 - **EXA_API_KEY**: Exa search API access for web research
+
+**Optional Environment Variables:**
+- **MODEL**: OpenAI model id (default `gpt-6-luna`)
+- **OPENAI_REASONING_EFFORT**: reasoning effort for models that accept it (default `none`; required for `gpt-6-luna` tool calling)
 
 ## Running the System
 
