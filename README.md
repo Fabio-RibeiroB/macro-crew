@@ -56,7 +56,8 @@ crewai install
 OPENAI_API_KEY=your_openai_api_key_here
 EXA_API_KEY=your_exa_api_key_here
 MODEL=gpt-6-luna                 # Optional: OpenAI model (default: gpt-6-luna)
-OPENAI_REASONING_EFFORT=none    # Optional: reasoning effort (default: none)
+# Leave OPENAI_REASONING_EFFORT unset. The crew picks a value the model accepts
+# (gpt-6-luna uses none). Setting a value that model rejects stops startup.
 
 # Error Handling & Timeout Configuration
 AGENT_MAX_ITERATIONS=8          # Maximum iterations per agent (default: 8)
@@ -70,6 +71,8 @@ CREW_MAX_RPM=100              # Rate limit for crew (default: 100)
 The system requires:
 - **OpenAI API Key**: For the LLM agents (`gpt-6-luna` by default, override with `MODEL`)
 - **Exa API Key**: For web search and data retrieval
+
+`OPENAI_REASONING_EFFORT` is optional. Leave it unset so the effort matches `MODEL`: `gpt-6-luna` and `gpt-6-sol` use `none` (required for their Chat Completions tool calls), `gpt-6-astra` and `gpt-6.1-sol` use `medium` because they reject `none`, and `gpt-5-pro` uses `high` because that is the only value it accepts. Other verified models use the default published on their model page. Non-reasoning models such as `gpt-4o-mini` omit the parameter. An explicit value the model does not accept raises `ReasoningEffortError` at startup. An empty value omits the parameter.
 
 ## Error Handling & Reliability
 

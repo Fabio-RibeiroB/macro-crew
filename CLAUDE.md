@@ -213,7 +213,7 @@ The `.env` file is stored at `/home/finstats/.env` (outside public_html for secu
 OPENAI_API_KEY=your_openai_api_key_here
 EXA_API_KEY=your_exa_api_key_here
 MODEL=gpt-6-luna
-OPENAI_REASONING_EFFORT=none
+# Leave OPENAI_REASONING_EFFORT unset; the crew picks a per-model value.
 ```
 
 The `find_dotenv()` function in `utils.py` searches upward from the source directory and finds this file automatically.
@@ -224,7 +224,7 @@ The `find_dotenv()` function in `utils.py` searches upward from the source direc
 
 **Optional Environment Variables:**
 - **MODEL**: OpenAI model id (default `gpt-6-luna`)
-- **OPENAI_REASONING_EFFORT**: reasoning effort for models that accept it (default `none`; required for `gpt-6-luna` tool calling)
+- **OPENAI_REASONING_EFFORT**: optional override. Unset uses a per-model default (`none` for `gpt-6-luna`). A value that model does not accept raises an error at startup.
 
 ## Running the System
 

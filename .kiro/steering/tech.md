@@ -6,7 +6,7 @@
 - **UV**: Modern Python package manager for dependency management and virtual environments
 - **Pandas 2.3.3+**: Data manipulation (used in legacy CSV tool, not in current implementation)
 - **EXA-PY 2.0.2+**: Web search and data retrieval tool for economic data
-- **OpenAI gpt-6-luna**: Default LLM for agents (configurable via MODEL env var; reasoning effort via OPENAI_REASONING_EFFORT, default `none`)
+- **OpenAI gpt-6-luna**: Default LLM for agents (configurable via MODEL env var; reasoning effort is chosen per model, override with OPENAI_REASONING_EFFORT)
 - **Pytest 7.0.0+**: Testing framework with coverage support
 
 ## Build System
@@ -69,7 +69,7 @@ uv run run_with_trigger '<json_payload>'
 OPENAI_API_KEY=your_key_here    # Required: OpenAI API access
 EXA_API_KEY=your_key_here       # Required: Exa search API access
 MODEL=gpt-6-luna                # Optional: OpenAI model (default: gpt-6-luna)
-OPENAI_REASONING_EFFORT=none    # Optional: reasoning effort (default: none)
+# OPENAI_REASONING_EFFORT is optional. Leave unset; the crew picks a per-model value.
 TIMEFRAME=last 3 months         # Optional: Research timeframe (default: "last 3 months")
 
 # Error Handling & Reliability Configuration
