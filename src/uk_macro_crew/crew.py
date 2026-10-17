@@ -1,5 +1,6 @@
 import os
 import re
+from dataclasses import dataclass
 from crewai import Agent, Crew, LLM, Process, Task
 from crewai.project import CrewBase, agent, crew, task, after_kickoff
 from crewai.agents.agent_builder.base_agent import BaseAgent
@@ -19,50 +20,222 @@ os.environ["EXA_API_KEY"] = get_exa_api_key()
 # at repeated structured work such as this collection pipeline.
 # https://help.openai.com/en/articles/20001600
 DEFAULT_MODEL = "gpt-6-luna"
-# Chat Completions function calling on gpt-6-luna only works at effort "none",
-# which is also the migration guide's starting point for GPT-4.x apps.
-DEFAULT_REASONING_EFFORT = "none"
 
-_O_SERIES_MODEL = re.compile(r"^o\d")
-_GPT_GENERATION = re.compile(r"^gpt-(\d+)")
+# Allowed efforts below are taken from the OpenAI model pages fetched
+# 2026-10-17 (https://developers.openai.com/api/docs/models). The value we
+# send when OPENAI_REASONING_EFFORT is unset is `default`, which is the
+# documented default except where a comment says this app overrides it.
+_EFFORT_ORDER = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
+_DATE_SUFFIX = re.compile(r"-\d{4}-\d{2}-\d{2}$")
+
+
+class ReasoningEffortError(ValueError):
+    """OPENAI_REASONING_EFFORT is not valid for the selected model."""
+
+
+@dataclass(frozen=True)
+class _ReasoningProfile:
+    prefix: str
+    allowed: frozenset[str]
+    default: str
+
+
+def _efforts(*names: str) -> frozenset[str]:
+    return frozenset(names)
+
+
+# Longest prefix wins. Snapshot dates are stripped before matching.
+_REASONING_PROFILES: tuple[_ReasoningProfile, ...] = (
+    # Chat Completions function calling requires none. The API default is medium.
+    _ReasoningProfile(
+        "gpt-6-luna",
+        _efforts("none", "low", "medium", "high", "xhigh", "max"),
+        "none",
+    ),
+    _ReasoningProfile(
+        "gpt-6-sol",
+        _efforts("none", "low", "medium", "high", "xhigh", "max"),
+        "none",
+    ),
+    # Model page lists these values and does not label a default. medium is
+    # in the list; none is rejected (HTTP 400).
+    _ReasoningProfile(
+        "gpt-6-astra",
+        _efforts("low", "medium", "high", "xhigh", "max"),
+        "medium",
+    ),
+    # Page: none and minimal are not supported; medium is the default.
+    _ReasoningProfile(
+        "gpt-6.1-sol",
+        _efforts("low", "medium", "high", "xhigh", "max"),
+        "medium",
+    ),
+    # Page: defaults to and only supports high.
+    _ReasoningProfile("gpt-5-pro", _efforts("high"), "high"),
+    _ReasoningProfile(
+        "gpt-5.6-luna",
+        _efforts("none", "low", "medium", "high", "xhigh", "max"),
+        "medium",
+    ),
+    _ReasoningProfile(
+        "gpt-5.6-sol",
+        _efforts("none", "low", "medium", "high", "xhigh", "max"),
+        "medium",
+    ),
+    _ReasoningProfile(
+        "gpt-5.6-terra",
+        _efforts("none", "low", "medium", "high", "xhigh", "max"),
+        "medium",
+    ),
+    _ReasoningProfile(
+        "gpt-5.5",
+        _efforts("none", "low", "medium", "high", "xhigh"),
+        "medium",
+    ),
+    _ReasoningProfile(
+        "gpt-5.4-mini",
+        _efforts("none", "low", "medium", "high", "xhigh"),
+        "none",
+    ),
+    _ReasoningProfile(
+        "gpt-5.4-nano",
+        _efforts("none", "low", "medium", "high", "xhigh"),
+        "none",
+    ),
+    _ReasoningProfile(
+        "gpt-5.4",
+        _efforts("none", "low", "medium", "high", "xhigh"),
+        "none",
+    ),
+    _ReasoningProfile(
+        "gpt-5.2",
+        _efforts("none", "low", "medium", "high", "xhigh"),
+        "none",
+    ),
+    _ReasoningProfile(
+        "gpt-5.1",
+        _efforts("none", "low", "medium", "high"),
+        "none",
+    ),
+    # mini/nano pages do not repeat the list. The Using GPT-5 guide says
+    # reasoning.effort supports minimal, low, medium, and high, and to start
+    # with medium. https://developers.openai.com/api/docs/guides/gpt-5
+    _ReasoningProfile(
+        "gpt-5-mini",
+        _efforts("minimal", "low", "medium", "high"),
+        "medium",
+    ),
+    _ReasoningProfile(
+        "gpt-5-nano",
+        _efforts("minimal", "low", "medium", "high"),
+        "medium",
+    ),
+    _ReasoningProfile(
+        "gpt-5",
+        _efforts("minimal", "low", "medium", "high"),
+        "medium",
+    ),
+)
+
+# These families have no reasoning.effort line on their model pages.
+_NON_REASONING_PREFIXES: tuple[str, ...] = (
+    "gpt-3.5",
+    "gpt-4.1",
+    "gpt-4o",
+    "gpt-4",
+)
 
 
 def _bare_model_name(model: str) -> str:
-    """Return the model id without a provider prefix."""
+    """Return the model id without a provider prefix or snapshot date."""
     name = model.rsplit("/", 1)[-1].strip().lower()
     if name.startswith("ft:"):
         parts = name.split(":")
         # ft:<org>:<base>:<id>
         if len(parts) >= 3 and parts[2]:
             name = parts[2]
-    return name
+    return _DATE_SUFFIX.sub("", name)
 
 
-def _model_supports_reasoning_effort(model: str) -> bool:
-    """True for o-series and GPT generation 5+, which accept reasoning_effort."""
-    name = _bare_model_name(model)
-    if _O_SERIES_MODEL.match(name):
+def _matches_prefix(name: str, prefix: str) -> bool:
+    return name == prefix or name.startswith(prefix + "-")
+
+
+def _reasoning_profile(name: str) -> _ReasoningProfile | None:
+    matches = [
+        profile
+        for profile in _REASONING_PROFILES
+        if _matches_prefix(name, profile.prefix)
+    ]
+    if not matches:
+        return None
+    return max(matches, key=lambda profile: len(profile.prefix))
+
+
+def _is_non_reasoning_model(name: str) -> bool:
+    """True when the model page does not accept reasoning_effort."""
+    if "-chat" in name or name.startswith("chatgpt-"):
         return True
-    generation = _GPT_GENERATION.match(name)
-    return generation is not None and int(generation.group(1)) >= 5
+    return any(_matches_prefix(name, prefix) for prefix in _NON_REASONING_PREFIXES)
+
+
+def _format_allowed(allowed: frozenset[str]) -> str:
+    return ", ".join(effort for effort in _EFFORT_ORDER if effort in allowed)
+
+
+def resolve_reasoning_effort(model: str, configured: str | None) -> str:
+    """Return the reasoning_effort to send, or "" to omit it.
+
+    Unset ``configured`` selects the model's verified default. An empty string
+    omits the parameter. An explicit value the model does not accept raises
+    ``ReasoningEffortError`` before any API call.
+    """
+    name = _bare_model_name(model)
+    if configured is not None:
+        effort = configured.strip().lower()
+        if effort == "":
+            return ""
+    else:
+        effort = None
+
+    if _is_non_reasoning_model(name):
+        if effort is None:
+            return ""
+        raise ReasoningEffortError(
+            f"{name} does not accept reasoning_effort. "
+            f"Unset OPENAI_REASONING_EFFORT (it is currently {effort!r})."
+        )
+
+    profile = _reasoning_profile(name)
+    if profile is None:
+        if effort is None:
+            return ""
+        raise ReasoningEffortError(
+            f"No verified reasoning_effort values for {name!r}. "
+            f"Refusing to send OPENAI_REASONING_EFFORT={effort!r}. "
+            "Unset it to omit the parameter."
+        )
+
+    if effort is None:
+        return profile.default
+    if effort not in profile.allowed:
+        raise ReasoningEffortError(
+            f"{name} does not accept reasoning_effort={effort!r}. "
+            f"Allowed values: {_format_allowed(profile.allowed)}. "
+            f"Unset OPENAI_REASONING_EFFORT to use {profile.default!r}."
+        )
+    return effort
 
 
 def build_agent_llm() -> LLM:
     """Build the shared agent LLM.
 
     ``MODEL`` overrides the default. ``OPENAI_REASONING_EFFORT`` overrides the
-    effort sent to models that accept it; an empty value omits the parameter.
+    per-model effort; an empty value omits the parameter. An explicit value
+    the model does not accept raises ``ReasoningEffortError``.
     """
     model = (os.getenv("MODEL") or DEFAULT_MODEL).strip() or DEFAULT_MODEL
-    configured_effort = os.getenv("OPENAI_REASONING_EFFORT")
-    if configured_effort is None:
-        effort = (
-            DEFAULT_REASONING_EFFORT
-            if _model_supports_reasoning_effort(model)
-            else ""
-        )
-    else:
-        effort = configured_effort.strip()
+    effort = resolve_reasoning_effort(model, os.getenv("OPENAI_REASONING_EFFORT"))
 
     llm = LLM(model=model, reasoning_effort=effort or None)
 
