@@ -42,6 +42,8 @@ HTTPS directory's Options None setting is changed to SymLinksIfOwnerMatch,
 with common finstats ownership checked before cutover. This is scoped to this
 site's HTTPS directory; CGI and directory listing remain disabled. No database/API server or new paid service is required.
 
+The HTML entry point must revalidate on each visit so a cached page does not pin
+an older frontend release. Hashed JS/CSS assets retain their normal cache behaviour.
 The public manifest is fetched with `cache: no-store`; payloads have immutable URLs
 and checksums. Add the following to the published directory's `.htaccess` where
 Apache permits it (or apply the equivalent server configuration):
