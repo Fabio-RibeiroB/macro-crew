@@ -172,3 +172,6 @@ uv.lock
 # CrewAI specific
 .crewai/
 node_modules
+
+# Verified public data is generated at runtime, never bundled from stale fixtures.
+/public/data/

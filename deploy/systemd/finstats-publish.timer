@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh verified FinStats figures every 30 minutes
+
+[Timer]
+OnCalendar=*-*-* *:00,30:00 UTC
+Persistent=true
+RandomizedDelaySec=30
+Unit=finstats-publish.service
+
+[Install]
+WantedBy=timers.target
