@@ -67,8 +67,10 @@ def build_agent_llm() -> LLM:
     else:
         effort = configured_effort.strip()
 
+    token_parameter = ("max_completion_tokens" if _model_supports_reasoning_effort(model)
+                       else "max_tokens")
     llm = LLM(model=model, reasoning_effort=effort or None,
-              max_tokens=bounded_int("FINSTATS_AI_MAX_OUTPUT_TOKENS", 4096, 8192),
+              **{token_parameter: bounded_int("FINSTATS_AI_MAX_OUTPUT_TOKENS", 4096, 8192)},
               timeout=60, max_retries=0)
 
     # CrewAI 1.7.2's native OpenAI client only attaches reasoning_effort when

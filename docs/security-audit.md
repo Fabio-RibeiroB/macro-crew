@@ -63,7 +63,9 @@ older than current Admin API support. See [OpenAI Admin APIs](https://developers
 
 The local gate is an **attempt limit**, not a dollar/token accounting system. A
 training invocation can contain multiple calls. SDK retries are disabled; output
-is capped at 4096 tokens/call (configurable 1–8192) and call timeout at 60 seconds.
+is capped at 4096 tokens/call (configurable 1–8192) and call timeout at 60 seconds. Modern reasoning-capable models use
+`max_completion_tokens` (including reasoning tokens); older models use `max_tokens`,
+following the [Chat Completions reference](https://developers.openai.com/api/reference/python/resources/chat/subresources/completions/methods/create).
 Agent limits remain relevant. Input tokens, tool costs and framework calls still
 need reconciliation; direct Python use outside guarded CLI entry points can
 bypass the gate. Provider model permissions and enforced spend limits remain
