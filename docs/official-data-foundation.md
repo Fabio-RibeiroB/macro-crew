@@ -66,3 +66,24 @@ Validation: 26 source/storage tests passed on Python 3.12, including synthetic
 same-date revisions, unchanged new releases, historic backfill, truncated history,
 transaction rollback and SQLite backup/restore. Synthetic changes are confined to
 tests. No collection run invokes AI.
+
+## Review hardening: receipt chronology and schema v2
+
+Source content remains deduplicated, but every accepted collection now has a
+separate receipt linking its attempt to that content. For A → B → A under the
+same source date, the third receipt selects A while historical cutoffs still
+select the earlier A or B. Exports can identify both content and receipt IDs;
+receipt order remains local evidence, not proof of official intraday ordering.
+Older source vintages still cannot supersede newer releases.
+
+SQLite schema v2 migrates accepted v1 attempts by validating their retained raw
+archive and linking each receipt to the original snapshot. It leaves the original
+observations intact. A missing/corrupt archive stops migration without partial
+receipt reconstruction; restore the archive before retrying. Back up DB and raw
+files together before upgrading an existing shadow directory. Timestamp formatting
+is normalised to UTC microseconds for accurate as-known cutoffs.
+
+The lightweight GitHub Actions job runs all core tests on Python 3.10/3.12/3.13,
+excluding the two CrewAI SDK/construction suites. Those legacy integration tests
+need the existing full dependency environment; this job does not claim to cover
+it. There are no real API keys or live research runs in CI.
