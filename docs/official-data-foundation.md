@@ -39,3 +39,51 @@ PYTHONPATH=src python -m pytest tests/test_finstats_sources.py
 
 The existing heavy AI dependencies are unchanged. The wheel includes both the
 legacy and new packages; the new module can also run from source with `PYTHONPATH`.
+
+## Evidence and vintages
+
+`Store` writes exact raw bytes by SHA-256 before committing a source snapshot and
+its observations in one SQLite transaction. Every ingest attempt is retained,
+including rejected responses. Identical replay records another attempt without
+duplicating observations; a new release or correction preserves a separate vintage.
+A newer complete history cannot silently lose existing reference periods.
+
+`latest(key, known_at=...)` selects by source vintage, with local first-seen order
+for same-date corrections. Backfilling an older release does not replace the latest
+release or imply it was locally known before ingestion. Intraday source ordering
+is **not established** by these feeds: first-seen order is provisional. There is no
+complete historic archive, withdrawal workflow or as-shown publication log yet.
+A changed definition requires an explicit migration rather than an in-place rewrite.
+
+Use `Store.backup(path)` for a SQLite-consistent backup, then back up the `raw/`
+directory separately. A restored DB alone supports numerical queries but needs its
+raw archive to verify the evidence; the restoration test covers DB query integrity.
+Data belongs on local disk outside the web document root. No legacy snapshots are
+imported as official observations. Operational scheduling, retention and automatic
+fallback formats remain later increments.
+
+Validation: 26 source/storage tests passed on Python 3.12, including synthetic
+same-date revisions, unchanged new releases, historic backfill, truncated history,
+transaction rollback and SQLite backup/restore. Synthetic changes are confined to
+tests. No collection run invokes AI.
+
+## Review hardening: receipt chronology and schema v2
+
+Source content remains deduplicated, but every accepted collection now has a
+separate receipt linking its attempt to that content. For A → B → A under the
+same source date, the third receipt selects A while historical cutoffs still
+select the earlier A or B. Exports can identify both content and receipt IDs;
+receipt order remains local evidence, not proof of official intraday ordering.
+Older source vintages still cannot supersede newer releases.
+
+SQLite schema v2 migrates accepted v1 attempts by validating their retained raw
+archive and linking each receipt to the original snapshot. It leaves the original
+observations intact. A missing/corrupt archive stops migration without partial
+receipt reconstruction; restore the archive before retrying. Back up DB and raw
+files together before upgrading an existing shadow directory. Timestamp formatting
+is normalised to UTC microseconds for accurate as-known cutoffs.
+
+The lightweight GitHub Actions job runs all core tests on Python 3.10/3.12/3.13,
+excluding the two CrewAI SDK/construction suites. Those legacy integration tests
+need the existing full dependency environment; this job does not claim to cover
+it. There are no real API keys or live research runs in CI.
