@@ -1,386 +1,684 @@
-import { useState, useEffect } from 'react';
-import { AlertCircle, RefreshCw, Sun, Moon } from 'lucide-react';
-import { EconomicIndicatorCard } from '@/app/components/EconomicIndicatorCard';
-import { ReportSummaryCard } from '@/app/components/ReportSummaryCard';
-import { HistoricalTrendCard } from '@/app/components/HistoricalTrendCard';
-import { PublicationCalendarCard } from '@/app/components/PublicationCalendarCard';
-import { PlainEnglishSection } from '@/app/components/PlainEnglishSection';
+import { lazy, Suspense, useEffect, useState } from "react";
+import {
+  ArrowDown,
+  ArrowRight,
+  Check,
+  ChevronDown,
+  ExternalLink,
+  Landmark,
+  Moon,
+  RefreshCw,
+  ShieldCheck,
+  ShoppingBasket,
+  Sprout,
+  Sun,
+} from "lucide-react";
+const HistoricalTrendCard = lazy(() =>
+  import("./components/HistoricalTrendCard").then((module) => ({
+    default: module.HistoricalTrendCard,
+  })),
+);
+import {
+  chartPoints,
+  formatPeriod,
+  freshness,
+  legacyReports,
+  loadVerified,
+  percent,
+  previousReading,
+} from "./data/verified.mjs";
+import "../styles/friendly.css";
 
-interface EconomicData {
-  current_economic_indicators: {
-    interest_rate: { value: string; publication_date: string; next_publication_date: string; source: string };
-    cpih: { value: string; publication_date: string; next_publication_date: string; source: string };
-    gdp: { value: string; publication_date: string; next_publication_date: string; source: string };
-  };
-  current_report_summaries: {
-    monetary_policy_report: { summary: string; report_date: string; next_publication_date: string; source: string };
-    financial_stability_report: { summary: string; report_date: string; next_publication_date: string; source: string };
-  };
-  metadata: { generated_at: string; last_updated: string };
-  plain_english_context?: {
-    overall_summary?: string;
-    interest_rate?: string;
-    cpih?: string;
-    gdp?: string;
-  };
+const topics = {
+  cpih: {
+    eyebrow: "Cost of living",
+    title: "How fast are prices rising?",
+    short: "Inflation",
+    Icon: ShoppingBasket,
+    measurement: "CPIH · change over 12 months",
+    color: "#b56b43",
+    meaning:
+      "CPIH measures price changes across everyday goods, services and housing costs. Your own inflation rate depends on what you spend money on.",
+    caution:
+      "Lower inflation means prices are rising more slowly. It does not usually mean prices are falling.",
+  },
+  bank_rate: {
+    eyebrow: "Borrowing & saving",
+    title: "What is Bank Rate?",
+    short: "Bank Rate",
+    Icon: Landmark,
+    measurement: "Bank of England · annual interest rate",
+    color: "#277567",
+    meaning:
+      "Bank Rate influences what lenders charge and what savers earn. Your mortgage or savings rate can differ, and fixed-rate deals usually change when the deal ends.",
+    caution:
+      "This is a daily observation of the policy rate, not a new MPC announcement.",
+  },
+  gdp: {
+    eyebrow: "Growth & jobs",
+    title: "Is the economy growing?",
+    short: "Monthly GDP",
+    Icon: Sprout,
+    measurement: "Real GDP · change from the previous month",
+    color: "#6b76b5",
+    meaning:
+      "GDP measures economic output. Growth can support business activity and jobs, but it does not tell us whether every household is better off.",
+    caution:
+      "One month can be volatile. Early estimates can change as the ONS receives more information.",
+  },
+};
+const keys = ["cpih", "bank_rate", "gdp"] as const;
+function checkedAt(value: string | null) {
+  return value
+    ? new Date(value).toLocaleString("en-GB", {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "Europe/London",
+      }) + " UK time"
+    : "Not yet checked";
 }
-
-interface HistoryData {
-  history: {
-    economic_indicators: {
-      interest_rate: Array<{ value: string; publication_date: string }>;
-      cpih: Array<{ value: string; publication_date: string }>;
-      gdp: Array<{ value: string; publication_date: string }>;
-    };
-  };
+function OfficialLink({
+  href,
+  children,
+}: {
+  href: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <a
+      className="fs-link"
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {children} <ExternalLink size={13} aria-hidden="true" />
+    </a>
+  );
+}
+function MetricCard({
+  metric,
+  kind,
+}: {
+  metric: any;
+  kind: keyof typeof topics;
+}) {
+  const topic = topics[kind];
+  const status = freshness(metric);
+  const previous = previousReading(metric);
+  const delta = previous
+    ? Number(metric.latest.value) - Number(previous.value)
+    : null;
+  return (
+    <article
+      className="fs-stat"
+      style={{ "--topic": topic.color } as React.CSSProperties}
+    >
+      <div className="fs-stat-top">
+        <span className="fs-eyebrow">
+          <topic.Icon size={17} aria-hidden="true" />
+          {topic.eyebrow}
+        </span>
+        <span className="fs-mini-label">Official data</span>
+      </div>
+      <h3>{topic.title}</h3>
+      <p className="fs-number">{percent(metric.latest?.value)}</p>
+      <p className="fs-measure">{topic.measurement}</p>
+      <p className="fs-period">
+        {kind === "bank_rate" ? "Observed" : "For"}{" "}
+        <strong>{formatPeriod(metric.latest?.period)}</strong>
+      </p>
+      <div className="fs-comparison">
+        {previous && delta !== null ? (
+          <>
+            <span>
+              {Math.abs(delta) < 0.00001
+                ? "Unchanged"
+                : `${delta > 0 ? "+" : "−"}${Math.abs(delta).toFixed(2).replace(/0$/, "")} percentage points`}
+            </span>{" "}
+            compared with {formatPeriod(previous.period)}
+          </>
+        ) : (
+          "A directly comparable previous reading is not available."
+        )}
+      </div>
+      <p className="fs-stat-meaning">{topic.meaning}</p>
+      <div className={`fs-fresh fs-fresh-${status.kind}`}>
+        <ShieldCheck size={14} aria-hidden="true" />
+        {status.label}
+      </div>
+      <details className="fs-details">
+        <summary>
+          Where this figure comes from{" "}
+          <ChevronDown size={15} aria-hidden="true" />
+        </summary>
+        <dl>
+          <div>
+            <dt>Source series</dt>
+            <dd>
+              {metric.definition.dataset} / {metric.definition.series}
+            </dd>
+          </div>
+          <div>
+            <dt>Official release</dt>
+            <dd>
+              {metric.source_published_date
+                ? formatPeriod(metric.source_published_date)
+                : "Not supplied by the daily feed"}
+            </dd>
+          </div>
+          <div>
+            <dt>Last successful check</dt>
+            <dd>{checkedAt(metric.last_successful_check_at)}</dd>
+          </div>
+          <div>
+            <dt>Next expected release</dt>
+            <dd>
+              {metric.next_release_date
+                ? formatPeriod(metric.next_release_date)
+                : "See the official calendar"}
+            </dd>
+          </div>
+        </dl>
+        <p>{topic.caution}</p>
+        <OfficialLink href={metric.definition.source_url}>
+          View the official series
+        </OfficialLink>
+      </details>
+    </article>
+  );
 }
 
 export default function App() {
-  const [data, setData] = useState<EconomicData | null>(null);
-  const [historyData, setHistoryData] = useState<HistoryData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isDark, setIsDark] = useState(() => {
-    const stored = localStorage.getItem('theme');
-    return stored ? stored === 'dark' : true;
-  });
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', isDark);
-    localStorage.setItem('theme', isDark ? 'dark' : 'light');
-  }, [isDark]);
-
-  const loadData = async () => {
+  const [data, setData] = useState<any>(null);
+  const [reports, setReports] = useState<any[]>([]);
+  const [reportTime, setReportTime] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [dark, setDark] = useState(() => {
     try {
-      const cacheBuster = Date.now();
-      const snapshotUrl = `${import.meta.env.BASE_URL}research_report.json?v=${cacheBuster}`;
-      const historyUrl = `${import.meta.env.BASE_URL}history_report.json?v=${cacheBuster}`;
-
-      void fetch(historyUrl, { cache: 'no-store' })
-        .then(async (res) => {
-          const ct = res.headers.get('content-type') ?? '';
-          if (res.ok && ct.includes('application/json')) {
-            setHistoryData((await res.json()) as HistoryData);
-          } else {
-            setHistoryData(null);
-          }
-        })
-        .catch((err) => { console.warn('History unavailable:', err); setHistoryData(null); });
-
-      const snapshotResponse = await fetch(snapshotUrl, { cache: 'no-store' });
-      if (!snapshotResponse.ok) throw new Error(`Failed to load data: ${snapshotResponse.statusText}`);
-      const ct = snapshotResponse.headers.get('content-type') ?? '';
-      if (!ct.includes('application/json')) throw new Error(`Expected JSON but got ${ct || 'unknown'}`);
-      setData((await snapshotResponse.json()) as EconomicData);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load data');
+      return localStorage.getItem("theme") === "dark";
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+    try {
+      localStorage.setItem("theme", dark ? "dark" : "light");
+    } catch {
+      /* Theme still works without storage. */
+    }
+  }, [dark]);
+  const refresh = async () => {
+    setLoading(true);
+    try {
+      const next = await loadVerified(import.meta.env.BASE_URL);
+      setData(next);
+      setError("");
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : "The latest figures could not be checked",
+      );
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
-
-  useEffect(() => { loadData(); }, []);
-
-  const formatDateTime = (dateStr: string) => {
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return dateStr;
-    return date.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--dash-bg)' }}>
-        <div className="text-center space-y-4">
-          <div className="w-8 h-8 border-2 border-[var(--dash-blue)] border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-sm" style={{ color: 'var(--dash-text-3)' }}>Loading economic data…</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !data) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--dash-bg)' }}>
-        <div className="text-center max-w-sm mx-auto p-8 rounded-xl border" style={{ background: 'var(--dash-card)', borderColor: 'var(--dash-border)' }}>
-          <AlertCircle className="h-10 w-10 mx-auto mb-4" style={{ color: 'var(--dash-negative)' }} />
-          <h2 className="text-lg font-semibold mb-2" style={{ color: 'var(--dash-text-1)' }}>Couldn't load data</h2>
-          <p className="text-sm mb-6" style={{ color: 'var(--dash-text-3)' }}>{error}</p>
+  useEffect(() => {
+    void refresh();
+    const controller = new AbortController();
+    fetch(`${import.meta.env.BASE_URL}research_report.json`, {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error("Commentary unavailable");
+        return r.json();
+      })
+      .then((value) => {
+        setReports(legacyReports(value));
+        setReportTime(value?.metadata?.generated_at ?? null);
+      })
+      .catch(() => {});
+    const timer = window.setInterval(() => {
+      void refresh();
+    }, 5 * 60_000);
+    return () => {
+      controller.abort();
+      window.clearInterval(timer);
+    };
+  }, []);
+  const inflation = data?.metrics.cpih.latest;
+  const gdp = data?.metrics.gdp.latest;
+  const intro =
+    inflation && gdp
+      ? `Prices were ${Number(inflation.value) > 0 ? "higher than" : Number(inflation.value) < 0 ? "lower than" : "unchanged from"} a year earlier in ${formatPeriod(inflation.period)}, while economic output ${Number(gdp.value) > 0 ? "grew" : Number(gdp.value) < 0 ? "fell" : "was unchanged"} in ${formatPeriod(gdp.period)}. Reference periods and publication dates are shown below.`
+      : "Start with the big picture, then explore what the numbers and policy decisions could mean for everyday life.";
+  return (
+    <div className="fs-root">
+      <a className="fs-skip" href="#overview">
+        Skip to the economy overview
+      </a>
+      <header className="fs-header">
+        <div className="fs-header-inner">
+          <a href="#" className="fs-brand" aria-label="FinStats home">
+            <span className="fs-brand-mark">
+              <Sprout size={23} />
+            </span>
+            finstats<span className="fs-brand-dot">.</span>
+          </a>
+          <nav aria-label="Main navigation">
+            <a href="#overview">Overview</a>
+            <a href="#everyday">Everyday life</a>
+            <a href="#decisions">MPC & Budgets</a>
+            <a href="#sources">Sources</a>
+          </nav>
           <button
-            onClick={() => window.location.reload()}
-            className="inline-flex items-center gap-2 text-sm px-5 py-2.5 rounded-lg border transition-colors"
-            style={{ color: 'var(--dash-blue)', borderColor: 'var(--dash-blue)', background: 'var(--dash-blue-bg)' }}
+            className="fs-icon-button"
+            onClick={() => setDark(!dark)}
+            aria-label={dark ? "Use light theme" : "Use dark theme"}
           >
-            <RefreshCw className="h-4 w-4" /> Try again
+            {dark ? <Sun size={19} /> : <Moon size={19} />}
           </button>
         </div>
-      </div>
-    );
-  }
-
-  const toTrendPoints = (entries: Array<{ value: string; publication_date: string }> | undefined) => {
-    if (!entries) return [];
-    return entries
-      .map((e) => ({ date: e.publication_date, value: Number(e.value.replace('%', '')) }))
-      .filter((p) => Number.isFinite(p.value));
-  };
-
-  // Returns { previousValue, previousLabel } for a given indicator from history
-  const getPrevious = (key: 'interest_rate' | 'cpih' | 'gdp') => {
-    const entries = historyData?.history?.economic_indicators?.[key];
-    if (!entries || entries.length < 2) return { previousValue: undefined, previousLabel: undefined };
-    const sorted = [...entries].sort((a, b) => a.publication_date.localeCompare(b.publication_date));
-    const prev = sorted[sorted.length - 2];
-    const d = new Date(prev.publication_date);
-    const label = isNaN(d.getTime()) ? prev.publication_date : d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
-    return { previousValue: prev.value, previousLabel: label };
-  };
-
-  // Returns a context badge string based on historical position
-  const getContextBadge = (key: 'interest_rate' | 'cpih' | 'gdp', currentVal: string, extraBadge?: string): string | undefined => {
-    if (extraBadge) return extraBadge;
-    const entries = historyData?.history?.economic_indicators?.[key];
-    if (!entries || entries.length < 3) return undefined;
-    const current = parseFloat(currentVal.replace('%', ''));
-    if (!Number.isFinite(current)) return undefined;
-    const sorted = [...entries].sort((a, b) => a.publication_date.localeCompare(b.publication_date));
-    const history = sorted.slice(0, -1); // exclude current
-    const prevHigher = [...history].reverse().find(e => parseFloat(e.value.replace('%', '')) > current);
-    const prevLower = [...history].reverse().find(e => parseFloat(e.value.replace('%', '')) < current);
-    // "Highest in 5Y" if nothing higher found in history
-    const allVals = history.map(e => parseFloat(e.value.replace('%', ''))).filter(Number.isFinite);
-    if (allVals.length === 0) return undefined;
-    if (current >= Math.max(...allVals)) return 'Highest in 5 years';
-    if (current <= Math.min(...allVals)) return 'Lowest in 5 years';
-    if (!prevHigher) return undefined;
-    const d = new Date(prevHigher.publication_date);
-    const monthLabel = isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
-    return monthLabel ? `Last higher: ${monthLabel}` : undefined;
-  };
-
-  const cpihNum = parseFloat(data.current_economic_indicators.cpih.value.replace('%', ''));
-  const cpihBadge = Number.isFinite(cpihNum) && cpihNum > 2 ? 'Above 2% target' : Number.isFinite(cpihNum) ? 'At or below 2% target' : undefined;
-
-  const indicators = [
-    {
-      key: 'interest_rate' as const, label: 'Bank Rate', title: 'Bank of England Base Rate',
-      description: 'The interest rate set by the Bank of England. It directly influences mortgage rates, savings rates, and the cost of borrowing across the UK.',
-      measurement: 'Current rate',
-      sentimentMode: 'neutral' as const,
-      contextBadge: getContextBadge('interest_rate', data.current_economic_indicators.interest_rate.value),
-      ...getPrevious('interest_rate'),
-      ...data.current_economic_indicators.interest_rate,
-    },
-    {
-      key: 'cpih' as const, label: 'CPIH', title: 'Inflation — Year on Year',
-      description: 'How much prices have risen over the past 12 months, measured by the Consumer Price Index including Housing costs. This is the headline inflation figure you hear about in the news.',
-      measurement: 'Year-on-year change',
-      sentimentMode: 'positive-is-bad' as const,
-      contextBadge: cpihBadge,
-      ...getPrevious('cpih'),
-      ...data.current_economic_indicators.cpih,
-    },
-    {
-      key: 'gdp' as const, label: 'GDP', title: 'Economic Growth — Monthly',
-      description: "The change in the UK's total economic output compared to the previous month. A positive number means the economy grew; negative means it shrank.",
-      measurement: 'Month-on-month change',
-      sentimentMode: 'positive-is-good' as const,
-      contextBadge: getContextBadge('gdp', data.current_economic_indicators.gdp.value),
-      ...getPrevious('gdp'),
-      ...data.current_economic_indicators.gdp,
-    },
-  ];
-
-  const reports = [
-    {
-      key: 'monetary_policy', tag: 'Bank of England', title: 'Monetary Policy Report',
-      description: "The Bank of England's assessment of the economy and why they set interest rates where they did.",
-      ...data.current_report_summaries.monetary_policy_report,
-    },
-    {
-      key: 'financial_stability', tag: 'Bank of England', title: 'Financial Stability Report',
-      description: 'An assessment of risks to the UK financial system — banks, borrowing, and economic vulnerabilities.',
-      ...data.current_report_summaries.financial_stability_report,
-    },
-  ];
-
-  const upcomingPublications = [
-    { id: 'interest_rate_next', title: 'Bank of England Interest Rate', nextPublicationDate: data.current_economic_indicators.interest_rate.next_publication_date, source: data.current_economic_indicators.interest_rate.source, category: 'Indicator' as const },
-    { id: 'cpih_next', title: 'CPIH Inflation', nextPublicationDate: data.current_economic_indicators.cpih.next_publication_date, source: data.current_economic_indicators.cpih.source, category: 'Indicator' as const },
-    { id: 'gdp_next', title: 'GDP Growth', nextPublicationDate: data.current_economic_indicators.gdp.next_publication_date, source: data.current_economic_indicators.gdp.source, category: 'Indicator' as const },
-    { id: 'mpr_next', title: 'Monetary Policy Report', nextPublicationDate: data.current_report_summaries.monetary_policy_report.next_publication_date, source: data.current_report_summaries.monetary_policy_report.source, category: 'Report' as const },
-    { id: 'fsr_next', title: 'Financial Stability Report', nextPublicationDate: data.current_report_summaries.financial_stability_report.next_publication_date, source: data.current_report_summaries.financial_stability_report.source, category: 'Report' as const },
-  ];
-
-  const trendCards = [
-    { key: 'interest_rate_trend', label: 'Bank Rate', title: 'Base rate over time', color: '#60a5fa', data: toTrendPoints(historyData?.history?.economic_indicators?.interest_rate), referenceLine: undefined },
-    { key: 'cpih_trend', label: 'CPIH Inflation', title: 'Year-on-year inflation over time', color: '#4ade80', data: toTrendPoints(historyData?.history?.economic_indicators?.cpih), referenceLine: { value: 2, label: '2% target' } },
-    { key: 'gdp_trend', label: 'GDP Growth', title: 'Monthly economic growth over time', color: '#fb923c', data: toTrendPoints(historyData?.history?.economic_indicators?.gdp), referenceLine: undefined },
-  ];
-
-  return (
-    <div className="min-h-screen transition-colors duration-200" style={{ background: 'var(--dash-bg)', color: 'var(--dash-text-1)' }}>
-
-      {/* ── Header ── */}
-      <header className="border-b sticky top-0 z-10 transition-colors duration-200" style={{ background: 'var(--dash-header)', borderColor: 'var(--dash-border)' }}>
-        <div className="h-1" style={{ background: 'var(--dash-header-grad)' }} />
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+      </header>
+      <main>
+        <section className="fs-hero fs-container" id="overview">
+          <div className="fs-hero-copy">
+            <p className="fs-eyebrow">
+              <span className="fs-dot" /> The UK economy, made understandable
+            </p>
+            <h1>
+              Big economic news.
+              <br />
+              <span>Everyday meaning.</span>
+            </h1>
+            <p className="fs-hero-description">
+              Prices, interest rates and the decisions behind them. A calmer way
+              to understand what’s happening — and why it matters to you.
+            </p>
+            <a className="fs-button" href="#figures">
+              Start with the latest figures <ArrowDown size={17} />
+            </a>
+          </div>
+          <aside className="fs-hero-note">
+            <span className="fs-note-icon">
+              <Landmark size={26} />
+            </span>
+            <p className="fs-eyebrow">Your two-minute overview</p>
+            <p>{intro}</p>
             <div>
-              <h1 className="text-xl font-bold tracking-tight" style={{ color: 'var(--dash-text-1)' }}>
-                UK Economy at a Glance
-              </h1>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--dash-text-4)' }}>
-                Data from the Bank of England &amp; ONS · Updated automatically
+              <Check size={15} /> Figures from the ONS & Bank of England
+            </div>
+            <div>
+              <Check size={15} /> Sources and dates you can inspect
+            </div>
+            <a href="#decisions">
+              How do decisions reach my pocket? <ArrowRight size={16} />
+            </a>
+          </aside>
+        </section>
+        <section className="fs-container fs-section" id="figures">
+          <div className="fs-section-heading">
+            <div>
+              <p className="fs-eyebrow">The big picture</p>
+              <h2>Three figures to start with</h2>
+              <p>
+                What they measure, when they apply, and what they leave out.
               </p>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="text-right hidden sm:block">
-                <p className="text-xs" style={{ color: 'var(--dash-text-4)' }}>Last updated</p>
-                <p className="text-sm font-medium" style={{ color: 'var(--dash-text-3)' }}>
-                  {formatDateTime(data.metadata.last_updated)}
+            <button
+              className="fs-text-button"
+              disabled={loading}
+              onClick={() => void refresh()}
+            >
+              <RefreshCw size={15} className={loading ? "fs-spin" : ""} />
+              {loading ? "Checking figures…" : "Check for updates"}
+            </button>
+          </div>
+          {error && (
+            <div className="fs-alert" role="status">
+              {error}.{" "}
+              {data
+                ? "The last successfully loaded figures remain below."
+                : "We’ll show figures once their official export can be verified. The guides below are still available."}
+            </div>
+          )}
+          {data ? (
+            <>
+              <div className="fs-stat-grid">
+                {keys.map((key) => (
+                  <MetricCard key={key} kind={key} metric={data.metrics[key]} />
+                ))}
+              </div>
+              <p className="fs-caption">
+                FinStats export updated {checkedAt(data.published_at)}. Each
+                card shows its own reference period and source check. Figures
+                can be revised.
+              </p>
+            </>
+          ) : (
+            !error && (
+              <div className="fs-loading" role="status">
+                Checking the official-data export…
+              </div>
+            )
+          )}
+        </section>
+        <section className="fs-everyday" id="everyday">
+          <div className="fs-container">
+            <div className="fs-section-heading">
+              <div>
+                <p className="fs-eyebrow">Your everyday economy</p>
+                <h2>From headlines to your household</h2>
+                <p>
+                  Useful context, without pretending everyone is affected in the
+                  same way.
                 </p>
               </div>
-              <button
-                onClick={() => setIsDark(!isDark)}
-                className="p-2 rounded-lg border transition-colors duration-200"
-                style={{ borderColor: 'var(--dash-border)', background: 'var(--dash-card)', color: 'var(--dash-text-3)' }}
-                aria-label="Toggle light/dark mode"
-              >
-                {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              </button>
+            </div>
+            <div className="fs-explainer-grid">
+              <article>
+                <span className="fs-guide-icon fs-peach">
+                  <ShoppingBasket />
+                </span>
+                <h3>At the checkout</h3>
+                <p>
+                  {inflation
+                    ? Number(inflation.value) > 0
+                      ? `Annual CPIH inflation of ${percent(inflation.value)} means average prices were higher than a year before. It says how fast prices changed, not how expensive your own basket is.`
+                      : `Annual CPIH inflation was ${percent(inflation.value)}. This is an average across goods, services and housing costs, not a reading of your own shopping basket.`
+                    : "Inflation measures the change in average prices over time. Your experience depends on your spending."}
+                </p>
+                <p className="fs-takeaway">
+                  When inflation falls but stays above zero, prices are still
+                  rising. Pay growth matters for what you can afford.
+                </p>
+                <OfficialLink href="https://www.ons.gov.uk/economy/inflationandpriceindices">
+                  About the inflation figures
+                </OfficialLink>
+              </article>
+              <article>
+                <span className="fs-guide-icon fs-sage">
+                  <Landmark />
+                </span>
+                <h3>For borrowers and savers</h3>
+                <p>
+                  The Bank’s rate influences mortgages, loans and savings. A
+                  change can reach variable-rate deals sooner than fixed deals.
+                  Fixed mortgage borrowers may feel it most when they refinance.
+                </p>
+                <p className="fs-takeaway">
+                  An MPC decision does not change every household’s payments on
+                  the same day.
+                </p>
+                <OfficialLink href="https://www.bankofengland.co.uk/monetary-policy/the-interest-rate-bank-rate">
+                  How Bank Rate works
+                </OfficialLink>
+              </article>
+              <article>
+                <span className="fs-guide-icon fs-lilac">
+                  <Sprout />
+                </span>
+                <h3>For work and businesses</h3>
+                <p>
+                  Growth can create room for hiring, investment and pay rises.
+                  But GDP is a measure of total output, not a promise about an
+                  individual job or household income.
+                </p>
+                <p className="fs-takeaway">
+                  Look at the trend. One small monthly change cannot tell the
+                  whole story.
+                </p>
+                <OfficialLink href="https://www.ons.gov.uk/economy/grossdomesticproductgdp">
+                  Explore the GDP releases
+                </OfficialLink>
+              </article>
+            </div>
+            <p className="fs-caption">
+              These are general explanations of economic mechanisms, not
+              individual financial recommendations.
+            </p>
+          </div>
+        </section>
+        <section className="fs-container fs-section" id="trends">
+          <div className="fs-section-heading">
+            <div>
+              <p className="fs-eyebrow">A little perspective</p>
+              <h2>The trend matters more than a headline</h2>
+              <p>
+                Latest revised values, plotted by the month or day they
+                describe.
+              </p>
             </div>
           </div>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 space-y-8">
-        <section
-          className="rounded-2xl border px-5 py-5 sm:px-6 sm:py-6"
-          style={{ background: 'var(--dash-section)', borderColor: 'var(--dash-border)' }}
-        >
-          <div className="max-w-4xl space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--dash-blue)' }}>
-              Quick Read
-            </p>
-            <p className="text-lg sm:text-xl leading-8" style={{ color: 'var(--dash-text-2)' }}>
-              This dashboard tracks the main UK economic releases and explains what changed, when it changed, and what is coming next.
-            </p>
-            <p className="text-sm sm:text-base leading-7 max-w-3xl" style={{ color: 'var(--dash-text-3)' }}>
-              Use the top cards for the latest numbers, the report section for the Bank of England view, and the charts for longer-term trends. Tap <strong style={{ color: 'var(--dash-text-2)' }}>ⓘ</strong> on any indicator card for a short explanation.
-            </p>
-          </div>
-        </section>
-
-        {/* ── Key Indicators ── */}
-        <section
-          className="rounded-2xl border px-5 py-6 sm:px-6 sm:py-7"
-          style={{ background: 'var(--dash-section)', borderColor: 'var(--dash-border)' }}
-        >
-          <div className="mb-6 pb-4 border-b" style={{ borderColor: 'var(--dash-border)' }}>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--dash-blue)' }}>Section 1</p>
-            <h2 className="text-2xl mt-2" style={{ color: 'var(--dash-text-1)' }}>Key Indicators</h2>
-            <p className="text-sm sm:text-base mt-2 max-w-2xl leading-7" style={{ color: 'var(--dash-text-3)' }}>
-              The three figures most people look for first: interest rates, inflation, and monthly growth.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-            {indicators.map((ind) => (
-              <EconomicIndicatorCard
-                key={ind.key}
-                label={ind.label}
-                title={ind.title}
-                description={ind.description}
-                measurement={ind.measurement}
-                value={ind.value}
-                previousValue={ind.previousValue}
-                previousLabel={ind.previousLabel}
-                sentimentMode={ind.sentimentMode}
-                contextBadge={ind.contextBadge}
-                publicationDate={ind.publication_date}
-                nextPublicationDate={ind.next_publication_date}
-                source={ind.source}
-              />
-            ))}
-          </div>
-        </section>
-
-        {/* ── Plain English Context ── */}
-        {data.plain_english_context && (
-          <PlainEnglishSection context={data.plain_english_context} />
-        )}
-
-        {/* ── Reports + Calendar ── */}
-        <section
-          className="rounded-2xl border px-5 py-6 sm:px-6 sm:py-7"
-          style={{ background: 'var(--dash-section)', borderColor: 'var(--dash-border)' }}
-        >
-          <div className="mb-6 pb-4 border-b" style={{ borderColor: 'var(--dash-border)' }}>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--dash-blue)' }}>Section 2</p>
-            <h2 className="text-2xl mt-2" style={{ color: 'var(--dash-text-1)' }}>Reports and Upcoming Dates</h2>
-            <p className="text-sm sm:text-base mt-2 max-w-2xl leading-7" style={{ color: 'var(--dash-text-3)' }}>
-              Read the latest Bank of England summaries on the left and scan the next official releases on the right.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 items-start">
-            <div className="lg:col-span-3 space-y-5">
-              {reports.map((r) => (
-                <ReportSummaryCard
-                  key={r.key}
-                  tag={r.tag}
-                  title={r.title}
-                  description={r.description}
-                  summary={r.summary}
-                  reportDate={r.report_date}
-                  nextPublicationDate={r.next_publication_date}
-                  source={r.source}
-                />
-              ))}
-            </div>
-            <div className="lg:col-span-2">
-              <PublicationCalendarCard items={upcomingPublications} />
-            </div>
-          </div>
-        </section>
-
-        {/* ── Historical Trends ── */}
-        <section
-          className="rounded-2xl border px-5 py-6 sm:px-6 sm:py-7"
-          style={{ background: 'var(--dash-section)', borderColor: 'var(--dash-border)' }}
-        >
-          <div className="mb-6 pb-4 border-b" style={{ borderColor: 'var(--dash-border)' }}>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: 'var(--dash-blue)' }}>Section 3</p>
-            <h2 className="text-2xl mt-2" style={{ color: 'var(--dash-text-1)' }}>Historical Trends</h2>
-            <p className="text-sm sm:text-base mt-2 max-w-2xl leading-7" style={{ color: 'var(--dash-text-3)' }}>
-              Use these charts to see whether the latest number is part of a larger move or just a one-off change.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-            {trendCards.map((t) => (
-              <HistoricalTrendCard
-                key={t.key}
-                label={t.label}
-                title={t.title}
-                color={t.color}
-                data={t.data}
-                referenceLine={t.referenceLine}
-              />
-            ))}
-          </div>
-        </section>
-
-      </main>
-
-      <footer className="border-t mt-6 transition-colors duration-200" style={{ borderColor: 'var(--dash-border)' }}>
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <p className="text-sm" style={{ color: 'var(--dash-text-4)' }}>
-            Data sourced from the{' '}
-            <a href="https://www.bankofengland.co.uk" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--dash-blue)' }} className="hover:underline">Bank of England</a>
-            {' '}and the{' '}
-            <a href="https://www.ons.gov.uk" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--dash-blue)' }} className="hover:underline">Office for National Statistics</a>
+          {data ? (
+            <Suspense fallback={<p>Loading charts…</p>}>
+              <div className="fs-chart-grid">
+                {keys.map((key) => (
+                  <HistoricalTrendCard
+                    key={key}
+                    title={topics[key].measurement}
+                    label={topics[key].short}
+                    color={topics[key].color}
+                    data={chartPoints(data.metrics[key])}
+                    curve={key === "bank_rate" ? "stepAfter" : "linear"}
+                  />
+                ))}
+              </div>
+            </Suspense>
+          ) : (
+            <p>Charts will appear when verified figures are available.</p>
+          )}
+          <p className="fs-caption">
+            Cards and charts use the same official source snapshot. Gaps are
+            left visible; Bank Rate is shown as a step line. CPIH is not the CPI
+            measure used for the Bank’s 2% target.
           </p>
-          <p className="text-sm" style={{ color: 'var(--dash-text-4)' }}>Refreshed automatically on each publication date</p>
-        </div>
+        </section>
+        <section className="fs-decisions" id="decisions">
+          <div className="fs-container">
+            <div className="fs-section-heading">
+              <div>
+                <p className="fs-eyebrow">The decisions behind the numbers</p>
+                <h2>Who decides what — and why should I care?</h2>
+                <p>
+                  Two different sets of decisions can affect your household in
+                  different ways.
+                </p>
+              </div>
+            </div>
+            <div className="fs-policy-grid">
+              <article className="fs-policy-card">
+                <div className="fs-policy-top">
+                  <span className="fs-mini-label">Bank of England</span>
+                  <Landmark size={26} />
+                </div>
+                <h3>The MPC: interest rates</h3>
+                <p className="fs-policy-intro">
+                  The Monetary Policy Committee sets Bank Rate to help keep
+                  inflation low and stable.
+                </p>
+                <dl>
+                  <div>
+                    <dt>What to look for</dt>
+                    <dd>
+                      The rate decision, how members voted, their reasons and
+                      what could change their view.
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>How it reaches you</dt>
+                    <dd>
+                      Through borrowing costs, savings returns and spending
+                      across the economy. Effects take time and differ between
+                      households.
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>What remains uncertain</dt>
+                    <dd>
+                      Future rate decisions depend on the evidence. A forecast
+                      or a voting split is not a promise about the next meeting.
+                    </dd>
+                  </div>
+                </dl>
+                <OfficialLink href="https://www.bankofengland.co.uk/monetary-policy/the-interest-rate-bank-rate">
+                  Read the latest official decision
+                </OfficialLink>
+              </article>
+              <article className="fs-policy-card">
+                <div className="fs-policy-top">
+                  <span className="fs-mini-label">Government & Parliament</span>
+                  <span className="fs-budget-icon">£</span>
+                </div>
+                <h3>The Budget: tax & spending</h3>
+                <p className="fs-policy-intro">
+                  The Chancellor sets out tax and spending plans. Parliament
+                  scrutinises the measures; the OBR provides independent
+                  forecasts.
+                </p>
+                <dl>
+                  <div>
+                    <dt>What to look for</dt>
+                    <dd>
+                      Which taxes or services change, who is affected and when
+                      each measure takes effect.
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>How it reaches you</dt>
+                    <dd>
+                      Through take-home pay, benefits, public services and
+                      business costs. An announcement date may differ from its
+                      start date.
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>What remains uncertain</dt>
+                    <dd>
+                      Plans, legislation and forecasts are different things.
+                      Economic forecasts depend on assumptions and can be
+                      revised.
+                    </dd>
+                  </div>
+                </dl>
+                <OfficialLink href="https://www.parliament.uk/about/how/role/check-and-approve-government-spending-and-taxation/the-budget-and-parliament/">
+                  How the Budget works
+                </OfficialLink>
+              </article>
+            </div>
+            <p className="fs-caption">
+              This is a guide to understanding announcements. It is not a
+              summary of a newly released Budget or MPC meeting.
+            </p>
+          </div>
+        </section>
+        <section className="fs-container fs-section" id="reports">
+          <div className="fs-section-heading">
+            <div>
+              <p className="fs-eyebrow">Read a little deeper</p>
+              <h2>Official publications & earlier commentary</h2>
+              <p>
+                Follow the original publications, or browse the AI summaries
+                retained from the earlier dashboard.
+              </p>
+            </div>
+          </div>
+          <div className="fs-report-links">
+            <OfficialLink href="https://www.bankofengland.co.uk/monetary-policy-report">
+              Monetary Policy Reports
+            </OfficialLink>
+            <OfficialLink href="https://www.bankofengland.co.uk/financial-stability-report">
+              Financial Stability Reports
+            </OfficialLink>
+            <OfficialLink href="https://obr.uk/">
+              OBR forecasts & analysis
+            </OfficialLink>
+          </div>
+          <details className="fs-archive">
+            <summary>
+              Earlier AI report summaries{" "}
+              <span>
+                {reports.length
+                  ? `${reports.length} saved summaries`
+                  : "Currently unavailable"}
+              </span>
+              <ChevronDown size={18} />
+            </summary>
+            <div className="fs-archive-body">
+              <p className="fs-alert">
+                Archived AI commentary
+                {reportTime ? `, generated ${checkedAt(reportTime)}` : ""}.
+                These summaries have not been checked against the verified
+                figures above. Use the official publication to confirm facts,
+                dates and forecasts.
+              </p>
+              {reports.map((report) => (
+                <article key={report.key}>
+                  <p className="fs-eyebrow">
+                    Earlier AI summary · {formatPeriod(report.report_date)}
+                  </p>
+                  <h3>
+                    {report.key === "financial_stability_report"
+                      ? "Financial stability commentary"
+                      : report.source.includes("/monetary-policy-report/")
+                        ? "Monetary Policy Report commentary"
+                        : "MPC / monetary policy commentary"}
+                  </h3>
+                  <p>{report.summary}</p>
+                  <OfficialLink href={report.source}>
+                    Original source
+                  </OfficialLink>
+                </article>
+              ))}
+              {!reports.length && (
+                <p>
+                  Earlier summaries could not be loaded. The verified statistics
+                  and official links remain available.
+                </p>
+              )}
+            </div>
+          </details>
+        </section>
+        <section className="fs-container fs-method" id="sources">
+          <div>
+            <ShieldCheck size={27} />
+            <h2>Know what you’re looking at</h2>
+            <p>
+              Official statistics supply the numbers. FinStats checks their
+              definitions, keeps source snapshots and publishes the figures
+              independently of AI commentary.
+            </p>
+          </div>
+          <div className="fs-method-list">
+            <p>
+              <strong>Observed facts</strong> Figures with a named series,
+              reference period and source.
+            </p>
+            <p>
+              <strong>Forecasts</strong> Expectations about the future, not
+              outcomes already observed.
+            </p>
+            <p>
+              <strong>Interpretation</strong> An explanation of possible
+              meaning, with uncertainty kept in view.
+            </p>
+            <OfficialLink href="https://github.com/Fabio-RibeiroB/macro-crew/blob/main/docs/architecture-assessment.md">
+              Read the methodology
+            </OfficialLink>
+          </div>
+        </section>
+      </main>
+      <footer className="fs-footer fs-container">
+        <a className="fs-brand" href="#">
+          finstats<span className="fs-brand-dot">.</span>
+        </a>
+        <p>The UK economy, explained.</p>
+        <span>Official sources. Human questions.</span>
       </footer>
     </div>
   );
