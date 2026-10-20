@@ -236,3 +236,21 @@ uk-macro-tracker/          # Project root
 │   └── main.py          # CLI entry points
 └── tests/               # Test suite
 ```
+
+### Model-policy boundaries
+
+Reasoning profiles match exact model identities after removing a provider prefix
+and dated snapshot suffix. Unknown variants do not inherit a parent's settings:
+without an override the parameter is omitted, and an explicit unverified override
+is rejected. Fine-tuned IDs use the base model after `ft:`, before the organisation.
+The verified `o3` profile supports `low`, `medium`, and `high` (default `medium`).
+`gpt-5.4-pro` uses `medium`, `high`, or `xhigh`; its policy does not imply transport
+compatibility: it requires the Responses API, while the existing crew uses Chat
+Completions. This PR does not introduce Responses transport support.
+
+CI runs the offline core and pure model-policy tests on Python 3.10, 3.12 and
+3.13 with placeholder keys. CrewAI construction/SDK integration tests are excluded
+from this lightweight job: the existing `crewai[tools]==1.7.2` dependency graph
+currently cannot resolve its `lancedb>=0.5.4,<0.6.dev0` requirement in the available
+package index. Those integration tests remain in the repository and require a
+working legacy environment. CI does not run the research crew or use real keys.

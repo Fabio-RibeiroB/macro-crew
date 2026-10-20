@@ -143,9 +143,9 @@ def test_explicit_valid_override_is_sent(monkeypatch, openai_key):
 
 
 def test_unverified_model_omits_effort_and_rejects_a_guess():
-    assert resolve_reasoning_effort("o3", None) == ""
+    assert resolve_reasoning_effort("unknown-model", None) == ""
     with pytest.raises(ReasoningEffortError, match="No verified reasoning_effort"):
-        resolve_reasoning_effort("o3", "none")
+        resolve_reasoning_effort("unknown-model", "none")
 
 
 def test_empty_reasoning_effort_is_omitted(monkeypatch, openai_key):
@@ -177,3 +177,14 @@ def test_both_agents_and_crew_use_configured_model(monkeypatch, openai_key):
             messages=[{"role": "user", "content": "hi"}]
         )
         assert params["reasoning_effort"] == "none"
+
+
+def test_o3_override_reaches_chat_completion_parameters(monkeypatch, openai_key):
+    monkeypatch.setenv('MODEL', 'o3')
+    monkeypatch.setenv('OPENAI_REASONING_EFFORT', 'high')
+    llm = build_agent_llm()
+    params = llm._prepare_completion_params(
+        messages=[{'role': 'user', 'content': 'hi'}]
+    )
+    assert params['model'] == 'o3'
+    assert params['reasoning_effort'] == 'high'
