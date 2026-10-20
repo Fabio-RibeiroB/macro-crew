@@ -116,3 +116,14 @@ def test_both_agents_and_crew_use_configured_model(monkeypatch, openai_key):
             messages=[{"role": "user", "content": "hi"}]
         )
         assert params["reasoning_effort"] == "none"
+
+
+def test_paid_calls_have_output_timeout_and_retry_limits(monkeypatch, openai_key):
+    monkeypatch.setenv("FINSTATS_AI_MAX_OUTPUT_TOKENS", "2048")
+    llm = build_agent_llm()
+    params = llm._prepare_completion_params(messages=[{"role": "user", "content": "hi"}])
+    assert params["max_tokens"] == 2048
+    assert llm.client.max_retries == 0
+    assert llm.timeout == 60
+    monkeypatch.setenv("FINSTATS_AI_MAX_OUTPUT_TOKENS", "8193")
+    with pytest.raises(ValueError): build_agent_llm()

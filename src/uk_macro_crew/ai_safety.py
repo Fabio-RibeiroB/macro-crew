@@ -1,6 +1,6 @@
 """Local admission controls for paid CLI jobs, independent of provider billing."""
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import fcntl
 from functools import wraps
 import json
@@ -45,10 +45,17 @@ def admitted_run():
         if ledger.is_symlink():
             raise ValueError('AI ledger must not be a symlink')
         day = datetime.now(timezone.utc).date().isoformat()
-        previous = json.loads(ledger.read_text()) if ledger.exists() else {}
-        count = previous.get('attempts', 0) if previous.get('day') == day else 0
-        if type(count) is not int or count < 0:
-            raise ValueError('Invalid AI admission ledger; operator review required')
+        count = 0
+        if ledger.exists():
+            previous = json.loads(ledger.read_text())
+            if (not isinstance(previous, dict) or set(previous) != {'day', 'attempts'}
+                    or not isinstance(previous['day'], str)
+                    or date.fromisoformat(previous['day']).isoformat() != previous['day']
+                    or previous['day'] > day
+                    or type(previous['attempts']) is not int or previous['attempts'] < 0):
+                raise ValueError('Invalid AI admission ledger; operator review required')
+            if previous['day'] == day:
+                count = previous['attempts']
         if count >= limit:
             raise RuntimeError('Daily AI attempt limit reached; statistics continue independently')
         # Charge attempts before execution, including failed/killed jobs. Never auto-refund.
