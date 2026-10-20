@@ -1,5 +1,7 @@
 # UK Macro Crew
 
+The proposed move to an official-data, revision-aware FinStats platform is documented in the [architecture assessment and migration plan](docs/architecture-assessment.md). It audits the current implementation and defines a staged migration for Bank Rate, annual CPIH and monthly GDP. The proposal does not change the running pipeline described below.
+
 UK Macro Crew is a multi-agent AI system built with [crewAI](https://crewai.com) that automates collection and reporting of UK macroeconomic data. The system uses specialized agents to research and produce a validated current snapshot JSON report of key UK economic indicators.
 
 ## Installation
