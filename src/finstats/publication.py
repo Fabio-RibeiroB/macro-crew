@@ -50,6 +50,7 @@ def publish(store, when):
                 member.update({
                     'validation_status': 'verified',
                     'snapshot_id': selected['id'],
+                    'source_receipt_id': selected['receipt_id'],
                     'source_published_date': payload['published_date'],
                     'publication_time_precision': 'date' if payload['published_date'] else 'unknown',
                     'source_published_at': None,

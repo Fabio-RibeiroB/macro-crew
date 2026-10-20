@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 from contextlib import contextmanager
 import fcntl
+from http.client import HTTPException
 import json
 from pathlib import Path
 import sqlite3
@@ -47,8 +48,13 @@ def collect(directory, transport=fetch, clock=utc_now, fixtures=None):
                         url = DEFINITIONS[key].download_url
                     when = clock()
                     store.ingest(key, body, when, source_url=url, evidence_kind=kind)
-                except (ValueError, OSError) as exc:
+                except (ValueError, OSError, HTTPException, sqlite3.Error) as exc:
                     failures.append(key)
+                    if isinstance(exc, sqlite3.Error):
+                        # A failed statement must not leak a transaction into
+                        # another metric. If rollback or failure recording also
+                        # fails, the shared store is unusable: stop before export.
+                        store.db.rollback()
                     if body is None or not isinstance(exc, ValueError):
                         store.failed(key, when, type(exc).__name__,
                                      evidence_kind='recorded_fixture' if fixtures else 'official_download')
@@ -69,9 +75,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     directory = args.data_dir.resolve()
     project = Path(__file__).resolve().parents[2]
-    forbidden = (project, project / 'public', project / 'dist')
-    if directory == project or any(path == directory or path in directory.parents for path in forbidden[1:]):
-        parser.error('Choose a private shadow data directory outside public/, dist/ and the project root')
+    if directory == project or project in directory.parents:
+        parser.error('Choose a private shadow data directory outside the project tree')
     try:
         result = collect(directory, fixtures=args.fixtures_dir)
     except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:

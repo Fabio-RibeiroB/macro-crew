@@ -81,8 +81,8 @@ PYTHONPATH=src python -m finstats --data-dir /tmp/finstats-replay \
   --fixtures-dir tests/fixtures/official
 ```
 
-The CLI requires a directory and refuses this repository's `public/`, `dist/` and
-project root. It writes only `statistics.sqlite3`, `raw/`, a lock and `shadow/`
+The CLI requires a directory outside the entire project tree, including all
+subdirectories and symlink aliases resolving inside it. It writes only `statistics.sqlite3`, `raw/`, a lock and `shadow/`
 under that directory. Choose a different private path on the actual host; the CLI
 cannot discover every possible production web root. Files default to private
 permissions. This is **not** a production web export or a deployment command.
@@ -144,3 +144,26 @@ The lightweight GitHub Actions job runs all core tests on Python 3.10/3.12/3.13,
 excluding the two CrewAI SDK/construction suites. Those legacy integration tests
 need the existing full dependency environment; this job does not claim to cover
 it. There are no real API keys or live research runs in CI.
+
+## Review hardening: source failures and safe paths
+
+Partial HTTP responses and protocol errors are handled per source, including
+`IncompleteRead`, `RemoteDisconnected` and `BadStatusLine`. A failed SQLite
+statement rolls back before another metric runs. If the database can record the
+failure and continue, other valid metrics publish with the failed metric's last
+verified data. If rollback or failure recording cannot use the shared database,
+the run stops before export and the old manifest remains active. This is deliberate
+failure handling, not blanket suppression of database errors.
+
+Exports include both the deduplicated content `snapshot_id` and the current
+`source_receipt_id`; A → B → A therefore shows A with the correct latest receipt.
+The path check rejects every descendant of the detected project tree after
+resolving symlinks. It still cannot discover unrelated production document roots,
+so operators must choose a private directory outside their web server roots.
+
+Review regression validation: 70 core tests passed locally on each of Python
+3.10, 3.12 and 3.13. Coverage now includes A → B → A, v1 receipt migration,
+subsecond historical cutoffs, incomplete HTTP responses, isolated SQLite statement
+failure, unusable-store publication prevention, descendant/symlink path rejection
+and receipt-aware exports. These results exclude the two legacy CrewAI integration
+suites, as does the CI job; no production collector or website was changed.

@@ -1,4 +1,5 @@
 from datetime import timedelta
+import http.client
 import hashlib
 import json
 from pathlib import Path
@@ -108,3 +109,88 @@ def test_cli_returns_failure_for_partial_collection_and_rejects_production_paths
     for directory in (project, project / 'public', project / 'dist' / 'data'):
         with pytest.raises(SystemExit):
             main(['--data-dir', str(directory)])
+
+
+@pytest.mark.parametrize('error_factory', [
+    lambda: http.client.IncompleteRead(b'partial CSV'),
+    lambda: http.client.RemoteDisconnected('closed'),
+    lambda: http.client.BadStatusLine('invalid response'),
+])
+def test_http_protocol_failure_is_isolated_and_last_verified_data_survives(tmp_path, error_factory):
+    collect(tmp_path, fixtures=FIXTURES, clock=lambda: WHEN)
+    def transport(key):
+        if key == 'cpih':
+            raise error_factory()
+        return fixture(key)
+    result = collect(tmp_path, transport=transport, clock=lambda: WHEN + timedelta(hours=1))
+    assert result['failed_metrics'] == ['cpih']
+    data = read_generation(tmp_path)
+    assert data['metrics']['cpih']['latest']['value'] == '3.3'
+    assert data['metrics']['cpih']['collection_status'] == 'degraded'
+    assert data['metrics']['gdp']['collection_status'] == 'ok'
+
+
+def test_sqlite_statement_failure_rolls_back_one_metric_and_others_publish(tmp_path):
+    collect(tmp_path, fixtures=FIXTURES, clock=lambda: WHEN)
+    instance = Store(tmp_path)
+    instance.db.executescript("""
+        CREATE TRIGGER reject_cpih BEFORE INSERT ON observation
+        WHEN (SELECT key FROM snapshot WHERE id=NEW.snapshot_id)='cpih'
+        BEGIN SELECT RAISE(ABORT,'injected source statement failure'); END;
+    """)
+    instance.close()
+    def transport(key):
+        body = fixture(key)
+        return body.replace(b'"2026 AUG","3.3"', b'"2026 AUG","3.4"') if key == 'cpih' else body
+    result = collect(tmp_path, transport=transport, clock=lambda: WHEN + timedelta(hours=1))
+    assert result['failed_metrics'] == ['cpih']
+    data = read_generation(tmp_path)
+    assert data['metrics']['cpih']['latest']['value'] == '3.3'
+    assert data['metrics']['cpih']['collection_status'] == 'degraded'
+    assert data['metrics']['gdp']['collection_status'] == 'ok'
+    instance = Store(tmp_path)
+    try:
+        assert instance.db.execute('SELECT count(*) FROM snapshot').fetchone()[0] == 3
+        assert not instance.db.in_transaction
+    finally:
+        instance.close()
+
+
+def test_unusable_database_stops_without_publishing_and_cli_reports_failure(tmp_path, capsys):
+    import sqlite3
+    collect(tmp_path, fixtures=FIXTURES, clock=lambda: WHEN)
+    before = read_generation(tmp_path)
+    with patch('finstats.__main__.Store.ingest', side_effect=sqlite3.OperationalError('private detail')), \
+         patch('finstats.__main__.Store.failed', side_effect=sqlite3.OperationalError('private detail')), \
+         patch('finstats.__main__.publish') as publication:
+        assert main(['--data-dir', str(tmp_path), '--fixtures-dir', str(FIXTURES)]) == 1
+        publication.assert_not_called()
+    assert read_generation(tmp_path) == before
+    assert 'private detail' not in capsys.readouterr().err
+
+
+def test_cli_rejects_all_project_descendants_and_symlink_aliases(tmp_path):
+    project = Path(__file__).resolve().parents[1]
+    alias = tmp_path / 'repository-link'
+    alias.symlink_to(project, target_is_directory=True)
+    for directory in (project / 'private-shadow', project / 'src' / 'state', alias / 'private-shadow'):
+        with pytest.raises(SystemExit):
+            main(['--data-dir', str(directory)])
+    with patch('finstats.__main__.collect', return_value={'failed_metrics': []}) as collection:
+        assert main(['--data-dir', str(tmp_path / 'outside')]) == 0
+        collection.assert_called_once()
+
+
+def test_a_b_a_export_uses_current_receipt_with_deduplicated_content(tmp_path):
+    collect(tmp_path, fixtures=FIXTURES, clock=lambda: WHEN)
+    first = read_generation(tmp_path)['metrics']['gdp']
+    def revised(key):
+        body = fixture(key)
+        return body.replace(b'"2026 AUG","0.1"', b'"2026 AUG","0.2"') if key == 'gdp' else body
+    collect(tmp_path, transport=revised, clock=lambda: WHEN + timedelta(minutes=1))
+    collect(tmp_path, fixtures=FIXTURES, clock=lambda: WHEN + timedelta(minutes=2))
+    current = read_generation(tmp_path)['metrics']['gdp']
+    assert current['latest']['value'] == '0.1'
+    assert current['snapshot_id'] == first['snapshot_id']
+    assert current['source_receipt_id'] != first['source_receipt_id']
+    assert current['retrieved_at'] != first['retrieved_at']
