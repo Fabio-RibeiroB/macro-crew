@@ -43,7 +43,9 @@ Page titles and current-navigation indicators update after app load.
 Old homepage anchors `#overview`, `#figures` and `#everyday` still work. `#decisions`
 replaces to `/economy#interest-rates`, `#reports` to `/economy#publications`,
 `#trends` to `/economy#trends`, and `#sources` to `/sources`. Replacement avoids an
-extra dead history step. Direct topic anchors remain native. No production URL
+extra dead history step. Fragment targets are followed after React renders, and once initial data arrives,
+so late-mounted sections and changed card heights do not strand an old link at the
+top of the page. Same-page fragment links still use browser history. No production URL
 configuration is changed by this PR.
 
 ## Accessibility and checks

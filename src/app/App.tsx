@@ -852,6 +852,28 @@ export default function App({
       .catch(() => {});
     return () => controller.abort();
   }, [page.id]);
+  useEffect(() => {
+    // Fragment targets appear after React mounts, and data can change their position.
+    let frame = 0;
+    const followFragment = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        try {
+          const id = decodeURIComponent(window.location.hash.slice(1));
+          if (id)
+            document.getElementById(id)?.scrollIntoView({ block: "start" });
+        } catch {
+          /* An invalid URL fragment must not break the page. */
+        }
+      });
+    };
+    followFragment();
+    window.addEventListener("hashchange", followFragment);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("hashchange", followFragment);
+    };
+  }, [page.id, Boolean(data)]);
   const stats = { data, error, loading, refresh };
   return (
     <div className="fs-root">
