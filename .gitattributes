@@ -1,0 +1,2 @@
+# Preserve recorded official response bytes, including Bank of England CRLF.
+tests/fixtures/official/*.csv -text whitespace=cr-at-eol

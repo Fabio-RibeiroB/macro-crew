@@ -1,0 +1,20 @@
+{
+  "bank_rate.csv": {
+    "url": "https://www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=01/Jan/2026&Dateto=now&SeriesCodes=IUDBEDR&CSVF=CN&UsingCodes=Y",
+    "retrieved_at": "2026-10-20T21:49:21.171479+00:00",
+    "sha256": "bceb915ab959268f4a67040d9b4939a5cdf1216303add51aaf69e13cc45459ee",
+    "content_type": "application/csv"
+  },
+  "cpih.csv": {
+    "url": "https://www.ons.gov.uk/generator?format=csv&uri=%2Feconomy%2Finflationandpriceindices%2Ftimeseries%2Fl55o%2Fmm23",
+    "retrieved_at": "2026-10-20T21:49:21.211779+00:00",
+    "sha256": "6753626a7e64d46f1104080376fbb814bc759f5fda1014325a702b841410aaf2",
+    "content_type": "application/octet-stream;charset=utf-8"
+  },
+  "gdp.csv": {
+    "url": "https://www.ons.gov.uk/generator?format=csv&uri=%2Feconomy%2Fgrossdomesticproductgdp%2Ftimeseries%2Fecyx%2Fmgdp",
+    "retrieved_at": "2026-10-20T21:49:21.257925+00:00",
+    "sha256": "1de136d448d7c1bff7fe28fd2074899847a8ef1b04cbee7c11d78781f97a81ff",
+    "content_type": "application/octet-stream;charset=utf-8"
+  }
+}
