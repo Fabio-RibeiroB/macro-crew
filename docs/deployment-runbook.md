@@ -58,6 +58,12 @@ code. No automatic Git pull/build is installed. A failed run is visible in
 `journalctl -u finstats-shadow.service`; no email/remote alert transport is yet
 configured. Confirm `systemctl list-timers finstats-shadow.timer` after installation.
 
+The actual installed service completed with `Result=success` and exit status 0;
+the timer was enabled and its next execution confirmed. The new shadow DB was
+backed up using SQLite's backup API alongside the raw archive, reopened from the
+backup and compared by semantic hashes; raw file hashes were also verified. The
+private deployment receipt is stored with the pre-deploy backup as `deployment.json`.
+
 Inspect the active shadow manifest and its hash as `finstats`; verify all three
 metrics and their source/reference dates. A first live run produced Bank Rate
 3.75% observed 19 October, annual CPIH 3.3% for August (released 16 September), and
