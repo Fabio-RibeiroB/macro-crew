@@ -98,3 +98,60 @@ def test_transaction_rolls_back_partial_observation_insert(store):
     assert store.latest('gdp') is None
     assert store.db.execute('SELECT count(*) FROM observation').fetchone()[0] == 0
     assert store.db.execute('SELECT status FROM attempt').fetchone()[0] == 'rejected'
+
+
+def test_same_date_a_b_a_reappearance_selects_latest_receipt(store):
+    first = store.ingest('gdp', fixture('gdp'), WHEN)
+    changed = fixture('gdp').replace(b'"2026 AUG","0.1"', b'"2026 AUG","0.2"')
+    second = store.ingest('gdp', changed, WHEN + timedelta(minutes=1))
+    repeated = store.ingest('gdp', fixture('gdp'), WHEN + timedelta(minutes=2))
+    assert repeated == first  # Content deduplicates; receipt chronology does not.
+    assert store.latest('gdp')['id'] == first
+    assert store.latest('gdp')['receipt_id'] == 3
+    assert store.latest('gdp')['collected_at'].startswith('2026-10-20T12:02')
+    assert store.latest('gdp', known_at=WHEN + timedelta(minutes=1))['id'] == second
+    assert store.latest('gdp', known_at=WHEN)['receipt_id'] == 1
+    assert store.revisions(second, repeated) == {'2026-08': '-0.1'}
+    assert store.db.execute('SELECT count(*) FROM snapshot').fetchone()[0] == 2
+    assert store.db.execute('SELECT count(*) FROM receipt').fetchone()[0] == 3
+
+
+def test_as_known_cutoff_excludes_later_fractional_second(store):
+    store.ingest('gdp', fixture('gdp'), WHEN + timedelta(microseconds=1))
+    assert store.latest('gdp', known_at=WHEN) is None
+
+
+def test_v1_migration_recovers_repeated_receipts_and_is_idempotent(tmp_path):
+    directory = tmp_path / 'legacy'
+    instance = Store(directory)
+    first = instance.ingest('gdp', fixture('gdp'), WHEN)
+    instance.ingest('gdp', fixture('gdp').replace(b'"2026 AUG","0.1"', b'"2026 AUG","0.2"'),
+                    WHEN + timedelta(minutes=1))
+    instance.ingest('gdp', fixture('gdp'), WHEN + timedelta(minutes=2))
+    instance.db.executescript('DROP TABLE receipt; PRAGMA user_version=1;')
+    instance.close()
+    for _ in range(2):
+        instance = Store(directory)
+        try:
+            assert instance.db.execute('PRAGMA user_version').fetchone()[0] == 2
+            assert instance.latest('gdp')['id'] == first
+            assert instance.latest('gdp')['receipt_id'] == 3
+            assert instance.latest('gdp', known_at=WHEN)['receipt_id'] == 1
+        finally:
+            instance.close()
+
+
+def test_v1_migration_missing_archive_fails_without_partial_receipts(tmp_path):
+    directory = tmp_path / 'legacy'
+    instance = Store(directory)
+    instance.ingest('gdp', fixture('gdp'), WHEN)
+    instance.db.executescript('DROP TABLE receipt; PRAGMA user_version=1;')
+    instance.close()
+    for raw in (directory / 'raw').iterdir():
+        raw.unlink()
+    with pytest.raises(OSError):
+        Store(directory)
+    import sqlite3
+    with sqlite3.connect(directory / 'statistics.sqlite3') as db:
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 1
+        assert db.execute('SELECT count(*) FROM receipt').fetchone()[0] == 0

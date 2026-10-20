@@ -21,7 +21,7 @@ def utc_now():
 def timestamp(value):
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError('A timezone-aware collection time is required')
-    return value.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
+    return value.astimezone(timezone.utc).isoformat(timespec='microseconds').replace('+00:00', 'Z')
 
 
 def encode(value):
@@ -57,7 +57,7 @@ class Store:
         self.db.execute('PRAGMA foreign_keys=ON')
         self.db.execute('PRAGMA journal_mode=WAL')
         version = self.db.execute('PRAGMA user_version').fetchone()[0]
-        if version not in (0, 1):
+        if version not in (0, 1, 2):
             self.db.close()
             raise ValueError('Unsupported statistics database version')
         self.db.executescript('''
@@ -87,7 +87,10 @@ class Store:
                 PRIMARY KEY(snapshot_id,period)
             );
             CREATE INDEX IF NOT EXISTS snapshot_vintage ON snapshot(key,vintage,id);
-            PRAGMA user_version=1;
+            CREATE TABLE IF NOT EXISTS receipt (
+                attempt_id INTEGER PRIMARY KEY REFERENCES attempt(id),
+                snapshot_id INTEGER NOT NULL REFERENCES snapshot(id)
+            );
         ''')
         with self.db:
             for key, definition in DEFINITIONS.items():
@@ -96,6 +99,33 @@ class Store:
                 if existing and existing['content'] != content:
                     raise ValueError('Metric definition changed: explicit migration required')
                 self.db.execute('INSERT OR IGNORE INTO definition VALUES (?,?)', (key, content))
+        if version < 2:
+            try:
+                with self.db:
+                    # Recover every accepted receipt, including A -> B -> A replays,
+                    # from the original archive. Do not infer chronology from content IDs.
+                    for attempt in self.db.execute('SELECT * FROM attempt').fetchall():
+                        when = datetime.fromisoformat(attempt['collected_at'].replace('Z', '+00:00'))
+                        self.db.execute('UPDATE attempt SET collected_at=? WHERE id=?',
+                                        (timestamp(when), attempt['id']))
+                        if attempt['status'] != 'accepted':
+                            continue
+                        body = (self.directory / 'raw' / (attempt['raw_hash'] + '.bin')).read_bytes()
+                        if hashlib.sha256(body).hexdigest() != attempt['raw_hash']:
+                            raise ValueError('Cannot migrate corrupted source evidence')
+                        candidate = parse(attempt['key'], body, when.date())
+                        digest = hashlib.sha256(encode(candidate.semantic_content())).hexdigest()
+                        snapshot = self.db.execute(
+                            'SELECT id FROM snapshot WHERE key=? AND semantic_hash=?',
+                            (attempt['key'], digest)).fetchone()
+                        if snapshot is None:
+                            raise ValueError('Cannot recover accepted source receipt')
+                        self.db.execute('INSERT INTO receipt VALUES (?,?)',
+                                        (attempt['id'], snapshot['id']))
+                    self.db.execute('PRAGMA user_version=2')
+            except Exception:
+                self.db.close()
+                raise
 
     def close(self):
         self.db.close()
@@ -111,9 +141,10 @@ class Store:
     def latest(self, key, known_at=None):
         cutoff = '' if known_at is None else ' AND a.collected_at <= ?'
         params = [key] if known_at is None else [key, timestamp(known_at)]
-        row = self.db.execute('''SELECT s.*, a.collected_at, a.raw_hash,
-            a.source_url, a.evidence_kind FROM snapshot s JOIN attempt a ON a.id=s.attempt_id
-            WHERE s.key=?''' + cutoff + ' ORDER BY s.vintage DESC,s.id DESC LIMIT 1', params).fetchone()
+        row = self.db.execute('''SELECT s.*, a.id AS receipt_id, a.collected_at, a.raw_hash,
+            a.source_url, a.evidence_kind FROM snapshot s
+            JOIN receipt r ON r.snapshot_id=s.id JOIN attempt a ON a.id=r.attempt_id
+            WHERE s.key=?''' + cutoff + ' ORDER BY s.vintage DESC,a.id DESC LIMIT 1', params).fetchone()
         return dict(row) if row else None
 
     def ingest(self, key, body, when, source_url=None, evidence_kind='official_download'):
@@ -152,6 +183,7 @@ class Store:
                     snapshot_id = cursor.lastrowid
                     self.db.executemany('INSERT INTO observation VALUES (?,?,?,?,?)', [
                         (snapshot_id, o.period, o.value, o.status, o.row) for o in candidate.observations])
+                self.db.execute('INSERT INTO receipt VALUES (?,?)', (attempt_id, snapshot_id))
                 self.db.execute("UPDATE attempt SET status='accepted' WHERE id=?", (attempt_id,))
             return snapshot_id
         except (ValueError, sqlite3.Error) as exc:
