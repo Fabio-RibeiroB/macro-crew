@@ -1,0 +1,110 @@
+from datetime import timedelta
+import hashlib
+import json
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+
+from finstats.__main__ import collect, collector_lock, main
+from finstats.publication import publish
+from finstats.storage import Store
+from tests.test_finstats_sources import FIXTURES, fixture
+from tests.test_finstats_storage import WHEN
+
+
+def read_generation(directory):
+    root = directory / 'shadow'
+    manifest = json.loads((root / 'current.json').read_text())
+    body = (root / manifest['data_url']).read_bytes()
+    assert hashlib.sha256(body).hexdigest() == manifest['sha256']
+    data = json.loads(body)
+    assert data['generation_id'] == manifest['generation_id']
+    return data
+
+
+def test_offline_cli_publishes_three_consistent_metrics_without_ai(tmp_path):
+    with patch.dict('os.environ', {'OPENAI_API_KEY': '', 'EXA_API_KEY': ''}):
+        result = collect(tmp_path, fixtures=FIXTURES, clock=lambda: WHEN)
+    assert not result['failed_metrics']
+    data = read_generation(tmp_path)
+    assert data['mode'] == 'shadow'
+    for member in data['metrics'].values():
+        assert member['snapshot_evidence_kind'] == 'recorded_fixture'
+        assert member['last_successful_check_at'] is None  # Not a live freshness claim.
+        assert member['latest'] == member['history'][-1]
+    assert not (tmp_path / 'research_report.json').exists()
+    assert not (tmp_path / 'history_report.json').exists()
+
+
+def test_failed_source_keeps_last_verified_figures_and_other_sources_publish(tmp_path):
+    collect(tmp_path, transport=lambda key: fixture(key), clock=lambda: WHEN)
+    def broken(key):
+        if key == 'cpih':
+            raise TimeoutError('do not publish sensitive error detail')
+        return fixture(key)
+    result = collect(tmp_path, transport=broken, clock=lambda: WHEN + timedelta(days=2))
+    assert result['failed_metrics'] == ['cpih']
+    data = read_generation(tmp_path)
+    assert data['metrics']['cpih']['latest']['value'] == '3.3'
+    assert data['metrics']['cpih']['collection_status'] == 'degraded'
+    assert data['metrics']['cpih']['release_status'] == 'delayed'
+    assert data['metrics']['gdp']['collection_status'] == 'ok'
+    assert 'sensitive error' not in json.dumps(data)
+
+
+def test_first_run_missing_source_is_unavailable_not_zero(tmp_path):
+    def broken(key):
+        return b'<html>access denied</html>' if key == 'gdp' else fixture(key)
+    result = collect(tmp_path, transport=broken, clock=lambda: WHEN)
+    assert result['failed_metrics'] == ['gdp']
+    member = read_generation(tmp_path)['metrics']['gdp']
+    assert member['latest'] is None
+    assert member['history'] == []
+    assert member['validation_status'] == 'unavailable'
+
+
+def test_activation_failure_preserves_previous_complete_generation(tmp_path):
+    collect(tmp_path, fixtures=FIXTURES, clock=lambda: WHEN)
+    original = read_generation(tmp_path)
+    from finstats.storage import atomic_write
+    def fail_manifest(path, body):
+        if path.name == 'current.json':
+            raise OSError('injected activation failure')
+        atomic_write(path, body)
+    store = Store(tmp_path)
+    try:
+        with patch('finstats.publication.atomic_write', side_effect=fail_manifest):
+            with pytest.raises(OSError):
+                publish(store, WHEN + timedelta(hours=1))
+        assert read_generation(tmp_path) == original
+        assert json.loads((tmp_path / 'shadow' / 'health.json').read_text())['checked_at'].startswith('2026-10-20T13')
+        publish(store, WHEN + timedelta(hours=2))
+        assert read_generation(tmp_path)['generation_id'] != original['generation_id']
+    finally:
+        store.close()
+
+
+def test_incomplete_generation_never_activates(tmp_path):
+    collect(tmp_path, fixtures=FIXTURES, clock=lambda: WHEN)
+    original = read_generation(tmp_path)
+    with patch('finstats.publication.atomic_write', side_effect=OSError('disk full')):
+        with pytest.raises(OSError):
+            collect(tmp_path, fixtures=FIXTURES, clock=lambda: WHEN)
+    assert read_generation(tmp_path) == original
+
+
+def test_overlapping_collectors_fail_without_mutating_state(tmp_path):
+    with collector_lock(tmp_path):
+        with pytest.raises(RuntimeError, match='Another shadow collector'):
+            collect(tmp_path, fixtures=FIXTURES, clock=lambda: WHEN)
+    assert not (tmp_path / 'statistics.sqlite3').exists()
+
+
+def test_cli_returns_failure_for_partial_collection_and_rejects_production_paths(tmp_path):
+    with patch('finstats.__main__.collect', return_value={'failed_metrics': ['gdp']}):
+        assert main(['--data-dir', str(tmp_path)]) == 1
+    project = Path(__file__).resolve().parents[1]
+    for directory in (project, project / 'public', project / 'dist' / 'data'):
+        with pytest.raises(SystemExit):
+            main(['--data-dir', str(directory)])

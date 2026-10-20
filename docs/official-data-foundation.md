@@ -66,3 +66,61 @@ Validation: 26 source/storage tests passed on Python 3.12, including synthetic
 same-date revisions, unchanged new releases, historic backfill, truncated history,
 transaction rollback and SQLite backup/restore. Synthetic changes are confined to
 tests. No collection run invokes AI.
+
+## Run the shadow collector
+
+From the repository root, with Python 3.10–3.13 (no AI or runtime package install
+is required for this path):
+
+```sh
+# Read official feeds; explicitly choose a private directory outside the website.
+PYTHONPATH=src python -m finstats --data-dir /tmp/finstats-shadow
+
+# Offline rehearsal; recorded values are labelled as fixtures, never fresh checks.
+PYTHONPATH=src python -m finstats --data-dir /tmp/finstats-replay \
+  --fixtures-dir tests/fixtures/official
+```
+
+The CLI requires a directory and refuses this repository's `public/`, `dist/` and
+project root. It writes only `statistics.sqlite3`, `raw/`, a lock and `shadow/`
+under that directory. Choose a different private path on the actual host; the CLI
+cannot discover every possible production web root. Files default to private
+permissions. This is **not** a production web export or a deployment command.
+
+`shadow/current.json` points to a unique `generations/<id>/data.json` with its
+SHA-256 hash. That document contains all current figures and history from one DB
+read transaction, definitions, source URLs, receipt hashes, release dates and
+per-metric collection status. Fetch a manifest once and follow its generation path;
+do not mix generation files. Fixtures have no live `last_successful_check_at`.
+Read `shadow/health.json` independently for collection health. Errors are retained
+privately; public-shaped exports contain statuses, not exception text or DB paths.
+
+An exclusive lock rejects overlapping collection into the same directory. A
+source failure does not stop other sources. The process returns nonzero on partial
+collection or failed export, while preserving the last activated complete export.
+Rerunning retries failed sources and can export data committed before a crash.
+The CLI makes one bounded request per feed per invocation; persistent expectations,
+backoff/Retry-After, operational alerts and a supported systemd schedule remain
+unfinished. Do not replace the production cron with this shadow command yet.
+
+`health.json` is attempted before generation writing, so numerical export failure
+can still leave a health update. Disk failure can also prevent that health write;
+external monitoring remains necessary. The generation manifest is replaced only
+after its payload is complete. No activation audit log, pruning, alternate-format
+fallback or complete archived-vintage importer is implemented. Source date plus
+local first-seen order is still provisional for same-day changes.
+
+Validation on Python 3.12: 59 selected tests passed (33 new source/storage/export
+checks plus 26 existing schema/history/scheduler/utils tests). Fault tests include
+partial collection, first-run absence, generation write failure, activation failure,
+concurrent collection and unchanged legacy filenames. The live smoke collection
+completed all three sources into `/tmp/finstats-shadow-live-audit`, including 13,094
+Bank Rate observations, 452 CPIH monthly observations and 355 GDP monthly readings.
+These are point-in-time counts, not configured coverage guarantees. The complete
+CrewAI/model integration suite and live browser layout were not run.
+
+Compatibility checks: all 33 new tests also passed on Python 3.10.18. The project
+wheel built successfully; inspection confirmed it contains both `finstats` and
+`uk_macro_crew`. Repeating the live shadow collection recorded six attempts and
+only three source snapshots, demonstrating idempotent ingestion against unchanged
+live data. All these runs used isolated `/tmp` paths. No scheduler was installed.
