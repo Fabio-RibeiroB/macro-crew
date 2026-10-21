@@ -38,6 +38,10 @@ class Definition:
 
 ONS = 'https://www.ons.gov.uk'
 BOE = 'https://www.bankofengland.co.uk'
+UNEMPLOYMENT_QUALITY = {
+    'quality_note': "The Labour Force Survey unemployment rate's 95% confidence intervals remain wider than before the pandemic.",
+    'quality_source_url': ONS + '/employmentandlabourmarket/peopleinwork/employmentandemployeetypes/articles/labourforcesurveyqualityupdate/october2026',
+}
 
 
 def ons_definition(metric_id, series, dataset, title, path, adjustment, comparison):
@@ -78,6 +82,12 @@ DEFINITIONS = {
         'monthly', 'seasonally_adjusted', 'year_on_year',
         ONS + '/employmentandlabourmarket/peopleinwork/earningsandworkinghours/timeseries/a2fa/lms',
         ONS + '/employmentandlabourmarket/peopleinwork/earningsandworkinghours/timeseries/a2fa/lms/data'),
+    'unemployment': Definition(
+        'uk.unemployment.rate', 'MGSX', 'LMS',
+        'Unemployment rate (aged 16 and over, seasonally adjusted): %',
+        'monthly', 'seasonally_adjusted', 'previous_published_window',
+        ONS + '/employmentandlabourmarket/peoplenotinwork/unemployment/timeseries/mgsx/lms',
+        ONS + '/employmentandlabourmarket/peoplenotinwork/unemployment/timeseries/mgsx/lms/data'),
 }
 
 # Optional metric members: registered public-definition fields the writer is
@@ -87,11 +97,12 @@ OPTIONAL_METRICS = {
     'cpi': {'geography': 'United Kingdom'},
     'regular_pay_nominal_growth': {'geography': 'Great Britain', 'window_months': 3},
     'regular_pay_real_growth': {'geography': 'Great Britain', 'window_months': 3, 'deflator': 'CPIH'},
+    'unemployment': {'geography': 'United Kingdom', 'age_group': '16 and over', 'window_months': 3},
 }
 
 # Keys whose official endpoint is the structured ONS JSON timeseries response
 # rather than the CSV generator. Recorded-fixture naming follows the same split.
-JSON_TIMESERIES = {'cpi', 'regular_pay_nominal_growth', 'regular_pay_real_growth'}
+JSON_TIMESERIES = {'cpi', 'regular_pay_nominal_growth', 'regular_pay_real_growth', 'unemployment'}
 
 
 def public_definition(key):
@@ -108,6 +119,8 @@ def fixture_file(key):
         return 'regular_pay_nominal_kai9_lms.json'
     if key == 'regular_pay_real_growth':
         return 'regular_pay_real_a2fa_lms.json'
+    if key == 'unemployment':
+        return 'unemployment_mgsx_lms.json'
     if key in JSON_TIMESERIES:
         return f'{key}_{definition.series.lower()}_{definition.dataset.lower()}.json'
     return f'{key}.csv'
@@ -129,6 +142,8 @@ class Snapshot:
     next_release: str | None
     observations: tuple[Observation, ...]
     parser_version: int = PARSER_VERSION
+    quality_note: str | None = None
+    quality_source_url: str | None = None
 
     def semantic_content(self):
         result = asdict(self)
@@ -137,6 +152,9 @@ class Snapshot:
             {'period': o.period, 'value': o.value, 'status': o.status,
              **({'reference': o.reference} if o.reference else {})}
             for o in self.observations]
+        for field in ('quality_note', 'quality_source_url'):
+            if result[field] is None:
+                del result[field]
         return result
 
 
@@ -202,6 +220,32 @@ def month_period(raw):
     return date(int(match[1]), MONTHS[match[2]], 1).strftime('%Y-%m')
 
 
+def unemployment_window(entry):
+    """ONS MGSX date is the middle month; its label defines the full window."""
+    label = entry.get('label')
+    match = re.fullmatch(r'(\d{4}) ([A-Z]{3})-([A-Z]{3})', label) if isinstance(label, str) else None
+    if not match or match[2] not in MONTHS or match[3] not in MONTHS:
+        raise ValidationError('Unrecognised unemployment reference window')
+    start_year, start_month = int(match[1]), MONTHS[match[2]]
+    end_month = MONTHS[match[3]]
+    end_year = start_year + (1 if end_month < start_month else 0)
+    start_index = start_year * 12 + start_month - 1
+    end_index = end_year * 12 + end_month - 1
+    if end_index - start_index != 2:
+        raise ValidationError('Unemployment label is not a three-month window')
+    period = month_period(entry.get('date'))
+    year, month = map(int, period.split('-'))
+    if year * 12 + month - 1 != start_index + 1:
+        raise ValidationError('Unemployment date conflicts with labelled window')
+    if (entry.get('year') != str(year) or
+            entry.get('month') != date(year, month, 1).strftime('%B') or
+            entry.get('quarter') not in ('', None)):
+        raise ValidationError('Unemployment period metadata conflicts with label')
+    start = date(start_year, start_month, 1).strftime('%Y-%m')
+    end = date(end_year, end_month, 1).strftime('%Y-%m')
+    return end, {'kind': 'rolling_months', 'start_month': start, 'end_month': end}
+
+
 def json_number(raw):
     """Missing/unknown value tokens quarantine the feed; they never become zero."""
     if not isinstance(raw, str) or not raw.strip():
@@ -231,6 +275,10 @@ def parse_ons_json(definition, body, today):
     expected_unit = '' if definition.series == 'A2FA' else '%'
     if description.get('unit') != expected_unit or description.get('preUnit') not in ('', None):
         raise ValidationError('Unexpected unit')
+    if definition.series == 'MGSX':
+        if (description.get('monthLabelStyle') != 'three month average' or
+                description.get('keyNote', '').strip() != 'UK: Aged 16 and over'):
+            raise ValidationError('Unexpected unemployment population or period metadata')
     published = release_date_london(description.get('releaseDate'))
     next_release = next_release_date(description.get('nextRelease'))
     months = payload.get('months')
@@ -240,7 +288,11 @@ def parse_ons_json(definition, body, today):
     for index, entry in enumerate(months, 1):
         if not isinstance(entry, dict):
             raise ValidationError('Unrecognised monthly row')
-        if definition.series in {'KAI9', 'A2FA'}:
+        if definition.series == 'MGSX' and entry.get('sourceDataset') != definition.dataset:
+            raise ValidationError('Unexpected unemployment source dataset')
+        if definition.series == 'MGSX':
+            period, reference = unemployment_window(entry)
+        elif definition.series in {'KAI9', 'A2FA'}:
             period = month_period(entry.get('date'))
             end_year, end_month = map(int, period.split('-'))
             start_index = end_year * 12 + end_month - 1 - 2
@@ -334,7 +386,8 @@ def parse(key: str, body: bytes, today: date) -> Snapshot:
         raise ValidationError('Reference month follows release')
     if observations[-1].value is None:
         raise ValidationError('Latest observation unavailable')
-    return Snapshot(definition, published, next_release, tuple(observations))
+    quality = UNEMPLOYMENT_QUALITY if key == 'unemployment' else {}
+    return Snapshot(definition, published, next_release, tuple(observations), **quality)
 
 
 def fetch(key: str) -> bytes:

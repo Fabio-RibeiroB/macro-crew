@@ -11,7 +11,7 @@ import time
 from urllib.parse import urlsplit
 
 from finstats.__main__ import collect
-from finstats.sources import DEFINITIONS, public_definition
+from finstats.sources import DEFINITIONS, UNEMPLOYMENT_QUALITY, public_definition
 from finstats.storage import atomic_write, encode
 
 PUBLIC_FIELDS = (
@@ -20,6 +20,7 @@ PUBLIC_FIELDS = (
     'publication_time_precision', 'source_published_at', 'next_release_date',
     'release_status', 'retrieved_at', 'source_download_url', 'source_sha256',
     'parser_version', 'vintage_ordering', 'snapshot_evidence_kind',
+    'quality_note', 'quality_source_url',
 )
 
 
@@ -49,6 +50,9 @@ def deliver(state_dir, output_dir):
         metric = data['metrics'][key]
         if metric['definition'] != public_definition(key):
             raise ValueError('Source definition mismatch')
+        if key == 'unemployment' and metric['validation_status'] == 'verified' and any(
+                metric.get(field) != expected for field, expected in UNEMPLOYMENT_QUALITY.items()):
+            raise ValueError('Unemployment quality evidence mismatch')
         member = {name: metric[name] for name in PUBLIC_FIELDS if name in metric}
         member['definition'] = public_definition(key)
         if metric['validation_status'] == 'unavailable':

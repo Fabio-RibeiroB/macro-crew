@@ -105,6 +105,15 @@ const topics = {
   caution:
     "This is a three-month average compared with the same period a year earlier; adjacent published windows overlap.",
   },
+  unemployment: {
+    short: "Unemployment",
+    Icon: TrendingUp,
+    measurement: "UK · people aged 16+ · seasonally adjusted",
+    color: "#865c82",
+    detailHref: "/jobs-pay#unemployment",
+    meaning: "The share of the economically active population aged 16 and over who are unemployed, measured by the Labour Force Survey.",
+    caution: "This Labour Force Survey estimate has greater sampling uncertainty than before the pandemic.",
+  },
 };
 // CPI headlines the inflation card once a verified reading exists; CPIH stays
 // the labelled fallback and the supporting measure on the Prices page.
@@ -173,8 +182,8 @@ function MetricCard({
         <p className="fs-number">Not available</p>
         <p className="fs-measure">{topic.measurement}</p>
         <p className="fs-period">A verified reading is not available yet.</p>
-        <a className="fs-stat-link" href={topic.detailHref}>
-          See pay details <ArrowRight size={15} aria-hidden="true" />
+    <a className="fs-stat-link" href={topic.detailHref}>
+        See {topic.short.toLowerCase()} details <ArrowRight size={15} aria-hidden="true" />
         </a>
       </article>
     );
@@ -182,11 +191,12 @@ function MetricCard({
   const status = freshness(metric);
   const previous = previousReading(metric);
   const isPay = kind === "regular_pay_nominal_growth";
-  const payPrevious = isPay ? previousPublishedWindow(metric) : null;
-  const comparisonPoint = isPay ? payPrevious : previous;
-  const currentWindow = isPay ? referenceWindow(metric.latest) : null;
+  const isRolling = isPay || kind === "unemployment";
+  const payPrevious = isRolling ? previousPublishedWindow(metric) : null;
+  const comparisonPoint = isRolling ? payPrevious : previous;
+  const currentWindow = isRolling ? referenceWindow(metric.latest) : null;
   const secondaryWindow = isPay ? referenceWindow(secondaryMetric?.latest) : null;
-  const oldWindow = isPay ? referenceWindow(payPrevious) : null;
+  const oldWindow = isRolling ? referenceWindow(payPrevious) : null;
   const rateChange = kind === "bank_rate" ? lastRateChange(metric) : null;
   const delta = comparisonPoint
     ? Number(metric.latest.value) - Number(comparisonPoint.value)
@@ -254,7 +264,7 @@ function MetricCard({
             compared with {oldWindow
               ? `${formatPeriod(oldWindow.start_month)} to ${formatPeriod(oldWindow.end_month)}`
               : formatPeriod(comparisonPoint.period)}
-            {isPay ? "; these published three-month windows overlap" : ""}
+            {isRolling ? "; these published three-month windows overlap" : ""}
           </>
         ) : (
           "A directly comparable previous reading is not available."
@@ -381,6 +391,41 @@ function Wages({ data, loading, error, refresh }: any) {
           <p><OfficialLink href="https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/employmentandemployeetypes/bulletins/averageweeklyearningsingreatbritain/october2026">ONS Average weekly earnings in Great Britain bulletin</OfficialLink> confirms the June–August reference window and CPIH treatment. The source publishes provisional estimates that can later be revised.</p>
         </details>
         </div>
+    </Statistics>
+  );
+}
+
+function Unemployment({ data, loading, error, refresh }: any) {
+  const metric = data?.metrics?.unemployment;
+  const previous = metric?.latest ? previousPublishedWindow(metric) : null;
+  const currentWindow = referenceWindow(metric?.latest);
+  const previousWindow = referenceWindow(previous);
+  const delta = previous && metric?.latest
+    ? Number(metric.latest.value) - Number(previous.value)
+    : null;
+  return (
+    <Statistics data={data} kinds={["unemployment"]} loading={loading} error={error} refresh={refresh} sectionId="unemployment" title="Unemployment rate" eyebrow="Labour Force Survey estimate">
+      <p className="fs-caption">UK residents aged 16 and over · seasonally adjusted · Labour Force Survey</p>
+      {metric?.latest ? (
+        <p className="fs-comparison">
+          Reference window: <strong>{formatPeriod(currentWindow?.start_month)} to {formatPeriod(currentWindow?.end_month)}</strong>.
+          {delta !== null && previousWindow ? <> Change: {Math.abs(delta) < 0.00001 ? "unchanged (0 percentage points)" : `${delta > 0 ? "+" : "−"}${Math.abs(delta).toFixed(2).replace(/0$/, "")} percentage points`} compared with {formatPeriod(previousWindow.start_month)} to {formatPeriod(previousWindow.end_month)}. These published windows overlap.</> : " A previous consecutive published window is not available for comparison."}
+        </p>
+      ) : null}
+      <Suspense fallback={<p role="status">Loading chart…</p>}>
+        {metric && <div className="fs-chart-grid fs-chart-count-1"><HistoricalTrendCard title="UK unemployment rate, aged 16 and over" label="Unemployment rate · seasonally adjusted" color="#865c82" data={chartPoints(metric)} /></div>}
+      </Suspense>
+      <p className="fs-caption">Chart points are located by the ending month. Exact values show the full rolling three-month window.</p>
+      <aside className="fs-context-card">
+        <h3>Labour Force Survey quality</h3>
+        <p>{metric?.quality_note ?? "The Labour Force Survey unemployment rate's 95% confidence intervals remain wider than before the pandemic."} Treat small movements with care.</p>
+        <OfficialLink href={metric?.quality_source_url ?? "https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/employmentandemployeetypes/articles/labourforcesurveyqualityupdate/october2026"}>ONS Labour Force Survey quality update, October 2026</OfficialLink>
+      </aside>
+      <details className="fs-details fs-info"><summary>Sources and method <ChevronDown size={15} aria-hidden="true" /></summary>
+        <p>ONS MGSX / LMS · UK residents aged 16 and over · seasonally adjusted unemployment rate. The source date identifies the middle month; the full reference window comes from the ONS period label.</p>
+        {metric && <OfficialLink href={metric.definition.source_url}>ONS unemployment rate series, MGSX / LMS</OfficialLink>}
+        <p><OfficialLink href="https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/employmentandemployeetypes/bulletins/uklabourmarket/october2026">ONS Labour market overview, October 2026</OfficialLink> · provisional survey estimates may be revised.</p>
+      </details>
     </Statistics>
   );
 }
@@ -850,8 +895,9 @@ function About() {
           checked a feed is not a new official release.
         </p>
         <p>
-          Wages, unemployment, housing, energy and other measures stay off the
-          site until their official series are part of the verified feed. If a
+          Wages and unemployment are published from verified official series.
+          Housing, energy and other measures stay off the site until their feeds
+          are ready. If a
           statistic covers a smaller area than the UK, such as Great Britain,
           that geography is named with the figure.
         </p>
@@ -1148,7 +1194,7 @@ export default function App({
           <>
             <Statistics
               {...stats}
-              kinds={[inflationKind(data), "bank_rate", "regular_pay_nominal_growth", "gdp"]}
+              kinds={[inflationKind(data), "bank_rate", "regular_pay_nominal_growth", "unemployment", "gdp"]}
               compact
               overview
             />
@@ -1180,9 +1226,10 @@ export default function App({
         {page.id === "jobs-pay" && (
           <>
             <PageHeading eyebrow="Jobs & Pay" title={page.title}>
-              What official earnings figures say about regular pay growth.
+              Official figures on pay and unemployment.
             </PageHeading>
             <Wages {...stats} />
+            <Unemployment {...stats} />
           </>
         )}
         {page.id === "government" && (

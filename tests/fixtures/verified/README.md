@@ -14,8 +14,8 @@ the unchanged three core metric members plus reviewed optional metric members.
   `tests/fixtures/official/`, but are synthetic test data. Labour members carry
   explicit `window_months: 3` definitions, rolling `reference` windows on every
   point and `geography` (`Great Britain` for pay, `United Kingdom` for CPI and
-  unemployment); real pay declares `deflator: "CPIH"`. The unemployment history
-  includes a year-boundary window (`2026-01` covering `2025-11` to `2026-01`).
+  unemployment); real pay declares `deflator: "CPIH"`. Unemployment observations
+  use the full MGSX rolling-window label, independently of the source date.
 - `producer-cpi-v1.json` + `producer-cpi-v1.manifest.json`: earlier CPI-only
   candidate producer output, retained as the #27 integration artifact.
 - `producer-pay-v1.json` + `producer-pay-v1.manifest.json`: actual current

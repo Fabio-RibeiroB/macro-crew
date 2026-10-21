@@ -65,6 +65,9 @@ def publish(store, when):
                     'latest': payload['observations'][-1],
                     'history': payload['observations'],
                 })
+                for field in ('quality_note', 'quality_source_url'):
+                    if payload.get(field) is not None:
+                        member[field] = payload[field]
             output['metrics'][key] = member
     finally:
         store.db.rollback()  # End read transaction, including if selection failed.

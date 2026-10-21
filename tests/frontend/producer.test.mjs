@@ -37,8 +37,23 @@ test("producer output passes the manifest checksum and the full reader contract"
   const data = await loadVerified("/", fileFetcher(bytes));
   assert.deepEqual(
     Object.keys(data.metrics).sort(),
-    ["bank_rate", "cpi", "cpih", "gdp", "regular_pay_nominal_growth", "regular_pay_real_growth"],
+    ["bank_rate", "cpi", "cpih", "gdp", "regular_pay_nominal_growth", "regular_pay_real_growth", "unemployment"],
   );
+});
+
+test("producer output carries MGSX's labelled window through to the verified reader", async () => {
+  const data = await loadVerified("/", fileFetcher(bytes));
+  const metric = data.metrics.unemployment;
+  assert.equal(metric.latest.period, "2026-08");
+  assert.equal(metric.latest.value, "4.7");
+  assert.equal(metric.definition.geography, "United Kingdom");
+  assert.equal(metric.definition.age_group, "16 and over");
+  assert.equal(metric.definition.adjustment, "seasonally_adjusted");
+  assert.match(metric.quality_note, /95% confidence intervals remain wider than before the pandemic/);
+  assert.equal(metric.quality_source_url, "https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/employmentandemployeetypes/articles/labourforcesurveyqualityupdate/october2026");
+  assert.deepEqual(metric.latest.reference, {
+    kind: "rolling_months", start_month: "2026-06", end_month: "2026-08",
+  });
 });
 
 test("producer pay measures preserve exact official identities and full rolling windows", async () => {

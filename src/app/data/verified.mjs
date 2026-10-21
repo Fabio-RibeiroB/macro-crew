@@ -85,17 +85,23 @@ export const OPTIONAL_METRICS = {
     metric_id: "uk.unemployment.rate",
     series: "MGSX",
     dataset: "LMS",
+    title: "Unemployment rate (aged 16 and over, seasonally adjusted): %",
     frequency: "monthly",
-    comparison: "level",
+    comparison: "previous_published_window",
     adjustment: "seasonally_adjusted",
     unit: "percent",
     version: 1,
     geography: "United Kingdom",
+    age_group: "16 and over",
     window_months: 3,
     source_url:
       "https://www.ons.gov.uk/employmentandlabourmarket/peoplenotinwork/unemployment/timeseries/mgsx/lms",
     download_url:
       "https://www.ons.gov.uk/employmentandlabourmarket/peoplenotinwork/unemployment/timeseries/mgsx/lms/data",
+    quality_note:
+      "The Labour Force Survey unemployment rate's 95% confidence intervals remain wider than before the pandemic.",
+    quality_source_url:
+      "https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/employmentandemployeetypes/articles/labourforcesurveyqualityupdate/october2026",
   },
 };
 const fail = (message) => {
@@ -182,11 +188,19 @@ function validateDefinition(definition, spec) {
     definition.download_url !== spec.download_url
   )
     fail("Unexpected optional metric definition");
+  if (spec.title !== undefined && definition.title !== spec.title)
+    fail("Unexpected optional metric title");
   if (spec.window_months !== undefined) {
     if (definition.window_months !== spec.window_months)
       fail("Unexpected optional metric window");
   } else if (definition.window_months !== undefined) {
     fail("Unexpected optional metric window");
+  }
+  if (spec.age_group !== undefined) {
+    if (definition.age_group !== spec.age_group)
+      fail("Unexpected optional metric population");
+  } else if (definition.age_group !== undefined) {
+    fail("Unexpected optional metric population");
   }
   if (spec.deflator !== undefined) {
     if (definition.deflator !== spec.deflator)
@@ -242,6 +256,10 @@ function validateOptionalMetric(metric, spec) {
     !instant(metric.retrieved_at)
   )
     fail("Missing official provenance");
+  if (spec.quality_note !== undefined &&
+      (metric.quality_note !== spec.quality_note ||
+       metric.quality_source_url !== spec.quality_source_url))
+    fail("Missing or unexpected unemployment quality evidence");
   if (
     metric.source_published_date !== null &&
     !isoDate(metric.source_published_date)
