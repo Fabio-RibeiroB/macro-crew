@@ -25,6 +25,79 @@ export const METRICS = {
     "seasonally_adjusted",
   ],
 };
+/**
+ * Reviewed optional metric members. Absent members stay absent; a present
+ * member must match its registered statistical definition exactly, including
+ * unit, geography, window metadata and its exact qualified source and
+ * download URLs, or the whole generation is rejected. Registry entries are
+ * code-owned contracts, not payload-supplied rules.
+ */
+export const OPTIONAL_METRICS = {
+  cpi: {
+    metric_id: "uk.cpi.annual_rate",
+    series: "D7G7",
+    dataset: "MM23",
+    frequency: "monthly",
+    comparison: "year_on_year",
+    adjustment: "not_seasonally_adjusted",
+    unit: "percent",
+    version: 1,
+    geography: "United Kingdom",
+    source_url:
+      "https://www.ons.gov.uk/economy/inflationandpriceindices/timeseries/d7g7/mm23",
+    download_url:
+      "https://www.ons.gov.uk/economy/inflationandpriceindices/timeseries/d7g7/mm23/data",
+  },
+  regular_pay_nominal_growth: {
+    metric_id: "uk.regular_pay.nominal_annual_growth",
+    series: "KAI9",
+    dataset: "LMS",
+    frequency: "monthly",
+    comparison: "year_on_year",
+    adjustment: "seasonally_adjusted",
+    unit: "percent",
+    version: 1,
+    geography: "Great Britain",
+    window_months: 3,
+    source_url:
+      "https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/earningsandworkinghours/timeseries/kai9/lms",
+    download_url:
+      "https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/earningsandworkinghours/timeseries/kai9/lms/data",
+  },
+  regular_pay_real_growth: {
+    metric_id: "uk.regular_pay.real_annual_growth",
+    series: "A2FA",
+    dataset: "LMS",
+    frequency: "monthly",
+    comparison: "year_on_year",
+    adjustment: "seasonally_adjusted",
+    unit: "percent",
+    version: 1,
+    geography: "Great Britain",
+    window_months: 3,
+    deflator: "CPIH",
+    source_url:
+      "https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/earningsandworkinghours/timeseries/a2fa/lms",
+    download_url:
+      "https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/earningsandworkinghours/timeseries/a2fa/lms/data",
+  },
+  unemployment: {
+    metric_id: "uk.unemployment.rate",
+    series: "MGSX",
+    dataset: "LMS",
+    frequency: "monthly",
+    comparison: "level",
+    adjustment: "seasonally_adjusted",
+    unit: "percent",
+    version: 1,
+    geography: "United Kingdom",
+    window_months: 3,
+    source_url:
+      "https://www.ons.gov.uk/employmentandlabourmarket/peoplenotinwork/unemployment/timeseries/mgsx/lms",
+    download_url:
+      "https://www.ons.gov.uk/employmentandlabourmarket/peoplenotinwork/unemployment/timeseries/mgsx/lms/data",
+  },
+};
 const fail = (message) => {
   throw new Error(message);
 };
@@ -83,6 +156,117 @@ function validatePoint(point, frequency) {
     )
   )
     fail("Invalid statistical observation");
+}
+const isoMonth = (value) =>
+  typeof value === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
+function addMonths(month, count) {
+  const [year, index] = month.split("-").map(Number);
+  const date = new Date(Date.UTC(year, index - 1 + count, 1));
+  return date.toISOString().slice(0, 7);
+}
+function validateDefinition(definition, spec) {
+  const identity = [
+    "metric_id",
+    "series",
+    "dataset",
+    "frequency",
+    "comparison",
+    "adjustment",
+  ];
+  if (
+    identity.some((field) => definition[field] !== spec[field]) ||
+    definition.unit !== spec.unit ||
+    definition.version !== spec.version ||
+    definition.geography !== spec.geography ||
+    definition.source_url !== spec.source_url
+  )
+    fail("Unexpected optional metric definition");
+  if (spec.window_months !== undefined) {
+    if (definition.window_months !== spec.window_months)
+      fail("Unexpected optional metric window");
+  } else if (definition.window_months !== undefined) {
+    fail("Unexpected optional metric window");
+  }
+  if (spec.deflator !== undefined) {
+    if (definition.deflator !== spec.deflator)
+      fail("Unexpected optional metric deflator");
+  } else if (definition.deflator !== undefined) {
+    fail("Unexpected optional metric deflator");
+  }
+}
+function validateReference(point, spec) {
+  if (spec.window_months === undefined) {
+    if (point.reference !== undefined)
+      fail("Unexpected reference metadata");
+    return;
+  }
+  const reference = point.reference;
+  if (
+    !object(reference) ||
+    reference.kind !== "rolling_months" ||
+    !isoMonth(reference.start_month) ||
+    !isoMonth(reference.end_month) ||
+    reference.end_month !== point.period
+  )
+    fail("Invalid rolling reference window");
+  let month = reference.start_month;
+  for (let index = 1; index < spec.window_months; index++)
+    month = addMonths(month, 1);
+  if (month !== reference.end_month)
+    fail("Reference window does not match its definition");
+}
+function validateOptionalMetric(key, metric, spec) {
+  if (!object(metric) || !object(metric.definition))
+    fail("Missing optional metric definition");
+  validateDefinition(metric.definition, spec);
+  if (!["ok", "degraded", "unavailable"].includes(metric.collection_status))
+    fail("Invalid collection state");
+  if (
+    metric.last_successful_check_at !== null &&
+    !instant(metric.last_successful_check_at)
+  )
+    fail("Invalid check timestamp");
+  if (!Array.isArray(metric.history)) fail("Invalid history");
+  if (metric.validation_status === "unavailable") {
+    if (metric.latest !== null || metric.history.length)
+      fail("Unavailable metric has values");
+    return;
+  }
+  if (
+    metric.validation_status !== "verified" ||
+    metric.snapshot_evidence_kind !== "official_download" ||
+    metric.source_download_url !== spec.download_url ||
+    !/^[a-f0-9]{64}$/.test(metric.source_sha256) ||
+    !instant(metric.retrieved_at)
+  )
+    fail("Missing official provenance");
+  if (
+    metric.source_published_date !== null &&
+    !isoDate(metric.source_published_date)
+  )
+    fail("Invalid release date");
+  if (metric.next_release_date !== null && !isoDate(metric.next_release_date))
+    fail("Invalid expected release date");
+  if (!metric.history.length) fail("Empty verified history");
+  metric.history.forEach((point) => {
+    validatePoint(point, spec.frequency);
+    validateReference(point, spec);
+  });
+  if (
+    metric.history.some(
+      (point, index, arr) => index > 0 && point.period <= arr[index - 1].period,
+    )
+  )
+    fail("History is not ordered and unique");
+  validatePoint(metric.latest, spec.frequency);
+  validateReference(metric.latest, spec);
+  const end = metric.history.at(-1);
+  if (
+    metric.latest.value === null ||
+    metric.latest.period !== end.period ||
+    metric.latest.value !== end.value
+  )
+    fail("Card and chart disagree");
 }
 export function parseDataset(value, manifest) {
   if (
@@ -156,6 +340,12 @@ export function parseDataset(value, manifest) {
       metric.latest.value !== end.value
     )
       fail("Card and chart disagree");
+  }
+  for (const [key, metric] of Object.entries(value.metrics)) {
+    if (key in METRICS) continue;
+    const spec = OPTIONAL_METRICS[key];
+    if (!spec) fail("Unknown metric");
+    validateOptionalMetric(key, metric, spec);
   }
   return value;
 }
@@ -255,9 +445,26 @@ export function chartPoints(metric) {
     points.push({
       date: point.period,
       value: point.value === null ? null : Number(point.value),
+      ...(point.reference ? { reference: point.reference } : {}),
     });
   }
   return points;
+}
+/**
+ * Full rolling reference window for a point, or null for ordinary periods.
+ * A rolling chart locates the point at its end month, but its tooltip,
+ * exact-value table and comparison must show this complete window.
+ */
+export function referenceWindow(point) {
+  const reference = point?.reference;
+  if (
+    !object(reference) ||
+    reference.kind !== "rolling_months" ||
+    !isoMonth(reference.start_month) ||
+    !isoMonth(reference.end_month)
+  )
+    return null;
+  return { start_month: reference.start_month, end_month: reference.end_month };
 }
 export function freshness(metric, now = new Date()) {
   if (!metric.latest) return { label: "Unavailable", kind: "warning" };
