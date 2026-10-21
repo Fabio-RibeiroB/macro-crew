@@ -1,23 +1,44 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   PAGES,
+  NAV_PAGES,
+  FOOTER_PAGES,
+  UNPUBLISHED_PATHS,
+  documentTitle,
   resolvePage,
   legacyDestination,
   canonicalDestination,
 } from "../../src/app/data/pages.mjs";
+import { NAV_COLLAPSE_QUERY } from "../../src/app/data/interactions.mjs";
 
 test("plain-English pages have stable direct URLs and unique navigation identities", () => {
   assert.equal(new Set(PAGES.map((p) => p.path)).size, PAGES.length);
   assert.deepEqual(
-    PAGES.map((p) => p.label),
-    ["Overview", "Prices", "The Economy", "Government & Budget", "Sources"],
+    NAV_PAGES.map((p) => p.label),
+    ["Overview", "Prices", "Economy", "Government"],
+  );
+  assert.deepEqual(
+    FOOTER_PAGES.map((p) => [p.path, p.label]),
+    [
+      ["/about", "About"],
+      ["/sources", "Sources"],
+    ],
+  );
+  assert.deepEqual(
+    PAGES.map((p) => p.path),
+    ["/", "/prices", "/economy", "/government-budget", "/about", "/sources"],
   );
   for (const page of PAGES) {
     assert.equal(resolvePage(page.path).id, page.id);
     if (page.path !== "/")
       assert.equal(resolvePage(page.path + "/").id, page.id);
+    assert.equal(documentTitle(page), `${page.title} | finstats UK`);
   }
+  assert.equal(resolvePage("/about").id, "about");
+  assert.equal(canonicalDestination("/about/"), "/about");
+  assert.equal(canonicalDestination("/government-budget/"), "/government-budget");
   assert.equal(resolvePage("/unknown-page").id, "missing");
 });
 
@@ -31,6 +52,22 @@ test("old section links preserve access without redirect loops", () => {
   assert.equal(legacyDestination("/", "#trends"), "/economy#trends");
   assert.equal(legacyDestination("/", "#everyday"), null);
   assert.equal(legacyDestination("/economy", "#interest-rates"), null);
+  assert.equal(legacyDestination("/about", "#sources"), null);
+  for (const path of UNPUBLISHED_PATHS) {
+    assert.equal(resolvePage(path).id, "missing");
+    assert.equal(legacyDestination(path, "#trends"), null);
+    assert.equal(canonicalDestination(path + "/"), null);
+  }
+});
+
+test("header collapse breakpoint matches the stylesheet", () => {
+  const css = readFileSync(
+    new URL("../../src/styles/friendly.css", import.meta.url),
+    "utf8",
+  );
+  const html = readFileSync(new URL("../../index.html", import.meta.url), "utf8");
+  assert.match(css, new RegExp(`@media ${NAV_COLLAPSE_QUERY.replace("(", "\\(").replace(")", "\\)")}`));
+  assert.match(html, /<title>[^<]*finstats UK/);
 });
 
 test("every page renders its own heading, navigation and missing-data content", async () => {
@@ -44,14 +81,21 @@ test("every page renders its own heading, navigation and missing-data content", 
   });
   try {
     const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
+    const rendered = new Map();
     for (const page of PAGES) {
       const html = renderToStaticMarkup(
         createElement(App, { pathname: page.path }),
       );
+      rendered.set(page.path, html);
       assert.match(html, /<main id="main-content"/);
       assert.match(html, /aria-current="page"/);
+      assert.match(html, /finstats UK/);
+      assert.match(html, /class="fs-flag"/);
+      assert.doesNotMatch(html, /fs-brand-mark/);
+      assert.doesNotMatch(html, /aria-label="FinStats home"/);
       assert.match(html, /General economic information, not individual financial advice/);
       assert.match(html, /<button type="button" class="fs-menu-button"/);
+      assert.match(html, /aria-controls="main-navigation"/);
       assert.equal((html.match(/<h1>/g) || []).length, 1);
       assert.ok(
         html.includes(
@@ -61,6 +105,25 @@ test("every page renders its own heading, navigation and missing-data content", 
         ),
       );
       assert.doesNotMatch(html, /class="fs-number">0%/);
+      const header = html.match(
+        /<nav[^>]*aria-label="Main navigation"[\s\S]*?<\/nav>/,
+      )[0];
+      const footer = html.match(
+        /<nav[^>]*aria-label="Footer"[\s\S]*?<\/nav>/,
+      )[0];
+      assert.deepEqual(
+        [...header.matchAll(/href="([^"]+)"/g)].map((match) => match[1]),
+        NAV_PAGES.map((item) => item.path),
+      );
+      assert.deepEqual(
+        [...footer.matchAll(/href="([^"]+)"/g)].map((match) => match[1]),
+        FOOTER_PAGES.map((item) => item.path),
+      );
+      for (const path of UNPUBLISHED_PATHS)
+        assert.equal(html.includes(`href="${path}`), false);
+      if (NAV_PAGES.some((item) => item.id === page.id))
+        assert.match(header, /aria-current="page"/);
+      else assert.match(footer, /aria-current="page"/);
       if (["prices", "economy"].includes(page.id))
         assert.match(
           html,
@@ -71,6 +134,35 @@ test("every page renders its own heading, navigation and missing-data content", 
       if (page.id === "overview") {
         assert.doesNotMatch(html, /id="trends"/);
         assert.doesNotMatch(html, /Earlier AI report summaries/);
+      }
+      if (page.id === "about") {
+        assert.match(html, /Office for National Statistics/);
+        assert.match(html, /Bank of England/);
+        assert.match(html, /labelled as commentary/);
+        assert.match(html, /not a government website/);
+        assert.match(html, /does not produce official statistics/);
+        assert.match(html, /UK-wide/);
+        assert.doesNotMatch(html, /independent|endorsed|unbiased|official partner/i);
+      }
+    }
+    for (const [path, html] of rendered) {
+      for (const href of html.match(/href="([^"]+)"/g).map((item) => item.slice(6, -1))) {
+        if (/^(https?:|mailto:)/.test(href)) continue;
+        const url = new URL(href, `https://finstats.example${path}`);
+        const legacy = legacyDestination(url.pathname, url.hash);
+        const target = legacy
+          ? new URL(legacy, "https://finstats.example")
+          : url;
+        const destination = resolvePage(target.pathname);
+        assert.notEqual(destination.id, "missing", `${path} links to ${href}`);
+        assert.equal(UNPUBLISHED_PATHS.includes(target.pathname), false, href);
+        if (!target.hash) continue;
+        const id = decodeURIComponent(target.hash.slice(1));
+        assert.match(
+          rendered.get(destination.path),
+          new RegExp(`id="${id}"`),
+          `${path} -> ${href}`,
+        );
       }
     }
     const emptyMetric = {

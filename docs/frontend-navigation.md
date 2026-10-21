@@ -12,11 +12,15 @@ verified figures and existing lazy chart component.
 | `/prices` | Annual CPIH, what inflation means for spending power, the trend and sources |
 | `/economy` | Bank Rate, monthly GDP, borrowing/saving and growth guides, relevant charts and earlier AI publication summaries |
 | `/government-budget` | Reading taxes/spending announcements, start dates, affected groups, independent OBR forecasts and original publications |
+| `/about` | Purpose, current UK coverage and the role of labelled AI summaries |
 | `/sources` | Definitions, provenance, revisions, checks and distinctions between fact, forecast and interpretation |
 
-Jobs/pay and housing do not yet have dedicated pages: the verified dataset does
-not cover them. The economy page explains that limitation. New coverage should
-add evidence and useful explanations before adding an empty navigation category.
+The header links only to pages with working content: Overview, Prices, Economy
+and Government. About and Sources stay in the footer. Jobs & Pay (`/jobs-pay`),
+housing (`/housing`), calendar (`/calendar`) and separate wage or unemployment
+URLs are not linked and are not pages yet. The economy page explains that
+limitation. New coverage should add evidence and useful explanations before
+adding an empty navigation category.
 
 The Government page is explicitly an educational guide, not a fabricated current
 Budget summary. Earlier AI summaries remain labelled, collapsible and linked to
@@ -78,11 +82,17 @@ controls; its failure never affects the statistics.
 
 ## Accessibility and checks
 
-Mobile navigation uses a labelled button with `aria-expanded` and `aria-controls`,
-large link targets, outside-pointer dismissal and document-wide Escape-to-close
-with focus returned to the toggle. Desktop navigation stays
-visible, with `aria-current`. There is a keyboard skip link, one H1 per page,
-visible focus, reduced-motion support and saved theme preference.
+The header collapses below 800px, the same breakpoint as `NAV_COLLAPSE_QUERY`.
+The labelled button uses `aria-expanded` and `aria-controls`. While collapsed,
+the closed menu is `hidden`, so its links are not in the tab order. Opening it
+moves focus to the first link. Closing it while focus is inside, including when
+the viewport becomes narrow, returns focus to the toggle. Escape does that
+immediately. A click or focus move outside the header closes the menu without
+pulling focus back. Desktop navigation stays visible, with
+`aria-current` on the current header or footer link. There is a keyboard skip
+link, one H1 per page, visible focus, reduced-motion support and saved theme
+preference. The visible brand is finstats UK with a small flag; the plant mark
+is not used.
 
 Node tests exercise the actual refresh and event controllers with deferred
 responses, an injected clock and EventTarget browser/document adapters. They cover
