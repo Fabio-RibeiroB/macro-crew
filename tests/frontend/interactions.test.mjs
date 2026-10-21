@@ -62,6 +62,7 @@ function harness() {
     },
     setTimer: (fn) => time.setTimer(fn),
     clearTimer: (id) => time.clearTimer(id),
+    strict: true,
   });
   return { owner, calls, published, errors, states, time };
 }
@@ -136,6 +137,7 @@ test("an abort-aware timeout still reports a timeout rather than a generic cance
     onError: (value) => errors.push(value),
     setTimer: (fn) => time.setTimer(fn),
     clearTimer: (id) => time.clearTimer(id),
+    strict: true,
   });
   const pending = owner.refresh();
   await tick();

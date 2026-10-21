@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowRight,
@@ -32,6 +32,8 @@ import { PAGES, resolvePage } from "./data/pages.mjs";
 import {
   createRefreshController,
   bindRefreshLifecycle,
+  refreshSnapshot,
+  refreshView,
 } from "./data/refresh.mjs";
 import { bindPageNavigation, bindMenuDismissal } from "./data/interactions.mjs";
 import "../styles/friendly.css";
@@ -788,11 +790,13 @@ export default function App({
     pathname ??
       (typeof window === "undefined" ? "/" : window.location.pathname),
   );
-  const [data, setData] = useState<any>(initialData);
-  const [reports, setReports] = useState<any[]>([]);
-  const [reportTime, setReportTime] = useState<string | null>(null);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const needsData = ["overview", "prices", "economy"].includes(page.id);
+  const [snapshot, setSnapshot] = useState(() =>
+    refreshSnapshot(initialData, needsData ? "loading" : "idle"),
+  );
+  const [reportSnapshot, setReportSnapshot] = useState(() =>
+    refreshSnapshot(null),
+  );
   const [menuOpen, setMenuOpen] = useState(false);
   const [dark, setDark] = useState(() => {
     try {
@@ -801,7 +805,6 @@ export default function App({
       return false;
     }
   });
-  const needsData = ["overview", "prices", "economy"].includes(page.id);
   const refreshOwner = useRef<ReturnType<
     typeof createRefreshController
   > | null>(null);
@@ -832,17 +835,13 @@ export default function App({
   useEffect(() => {
     if (!needsData) return;
     const owner = createRefreshController({
+      initialData,
+      initialStatus: "loading",
       load: (signal) =>
         loadVerified(import.meta.env.BASE_URL, (url, options) =>
           fetch(url, { ...options, signal }),
         ),
-      onStart: () => setLoading(true),
-      onData: (next) => {
-        setData(next);
-        setError("");
-      },
-      onError: setError,
-      onSettled: () => setLoading(false),
+      onState: setSnapshot,
     });
     refreshOwner.current = owner;
     const cleanup = bindRefreshLifecycle(owner, window);
@@ -862,16 +861,17 @@ export default function App({
         if (!response.ok) throw new Error("Commentary unavailable");
         return response.json();
       },
-      onStart() {},
-      onData: (value) => {
-        setReports(legacyReports(value));
-        setReportTime(value?.metadata?.generated_at ?? null);
-      },
-      onError() {}, // Commentary failure is independent of verified statistics.
-      onSettled() {},
+      // Commentary failure stays on this snapshot and never changes verified figures.
+      onState: setReportSnapshot,
     });
     return bindRefreshLifecycle(owner, window);
   }, [page.id]);
+  const { loading, error, data } = refreshView(snapshot);
+  const reports = useMemo(
+    () => (reportSnapshot.data ? legacyReports(reportSnapshot.data) : []),
+    [reportSnapshot.data],
+  );
+  const reportTime = reportSnapshot.data?.metadata?.generated_at ?? null;
   const stats = { data, error, loading, refresh };
   return (
     <div className="fs-root">
