@@ -118,4 +118,5 @@ after review. Never build over the served `dist` directory.
 Further reading: [methodology and architecture](docs/architecture-assessment.md),
 [official data details](docs/official-data-foundation.md),
 [deployment and rollback](docs/dashboard-cutover.md),
+[release tracking](docs/releases.md),
 [frontend development](FRONTEND.md), [developer instructions](CLAUDE.md).

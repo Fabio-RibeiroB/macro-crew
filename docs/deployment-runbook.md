@@ -1,5 +1,11 @@
 # FinStats deployment and rollback
 
+> Historical installation record: the baseline and shadow-only procedures below
+> describe 20 October 2026. Production now uses the verified publisher and static
+> topic pages. Use [the current cutover guide](dashboard-cutover.md) for deployment
+> and [release tracking](releases.md) for tags, receipts and rollback. Do not
+> reinstall the shadow timer alongside the production publisher.
+
 ## Verified host baseline — 20 October 2026
 
 The production checkout is `/home/finstats/public_html/macro-crew`, owned by
