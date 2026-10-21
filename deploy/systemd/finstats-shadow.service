@@ -1,0 +1,22 @@
+[Unit]
+Description=FinStats official-data shadow collection
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=finstats
+Group=finstats
+WorkingDirectory=/home/finstats/public_html/macro-crew
+Environment=PYTHONPATH=/home/finstats/public_html/macro-crew/src
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/home/finstats/public_html/macro-crew/.venv/bin/python -m finstats --data-dir /home/finstats/.local/state/finstats-shadow
+TimeoutStartSec=5min
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/finstats/.local/state/finstats-shadow
+StandardOutput=journal
+StandardError=journal
