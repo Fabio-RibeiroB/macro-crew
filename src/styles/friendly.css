@@ -941,8 +941,23 @@
     padding: 22px;
   }
 }
+.fs-stat-compact {
+  padding: 20px;
+}
+.fs-stat-compact .fs-stat-top {
+  margin-bottom: 8px;
+}
+.fs-stat-compact .fs-number {
+  margin-top: 8px;
+}
 .fs-stat-compact .fs-comparison {
-  min-height: 48px;
+  min-height: 0;
+  padding: 8px 0;
+  margin-bottom: 8px;
+}
+.fs-stat-compact .fs-details {
+  margin-top: 10px;
+  padding-top: 8px;
 }
 .fs-stat-compact .fs-fresh {
   margin-top: 12px;
