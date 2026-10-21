@@ -242,7 +242,8 @@ function MetricCard({
           "A verified reading is not available yet."
         )}
       </p>
-      {!compact && isPay && (
+      {compact && kind === "house_price_level" && <p className="fs-comparison">Annual change: {secondaryMetric?.latest?.value == null ? "not available" : `${percent(secondaryMetric.latest.value)} for ${formatPeriod(secondaryMetric.latest.period)}`}{secondaryMetric?.collection_status === "degraded" ? " · update delayed; last verified figure shown" : ""}</p>}
+      {isPay && (
         <p className="fs-comparison">
           {secondaryMetric?.latest?.value != null ? (
             <>
@@ -262,9 +263,9 @@ function MetricCard({
           )}
         </p>
       )}
-      {!compact && kind === "private_rent_growth" && <p className="fs-comparison">Average monthly rent: {secondaryMetric?.latest?.value == null ? "not available" : `£${Number(secondaryMetric.latest.value).toLocaleString("en-GB")}`} {secondaryMetric?.latest?.period ? `in ${formatPeriod(secondaryMetric.latest.period)}` : ""}{secondaryMetric?.collection_status === "degraded" ? " · update delayed, showing the last verified rent" : ""}</p>}
-      {!compact && <div className="fs-comparison">
-        {kind === "house_price_level" ? null : kind === "bank_rate" ? rateChange ? (
+      {kind === "private_rent_growth" && <p className="fs-comparison">Average monthly rent: {secondaryMetric?.latest?.value == null ? "not available" : `£${Number(secondaryMetric.latest.value).toLocaleString("en-GB")}`} {secondaryMetric?.latest?.period ? `in ${formatPeriod(secondaryMetric.latest.period)}` : ""}{secondaryMetric?.collection_status === "degraded" ? " · update delayed, showing the last verified rent" : ""}</p>}
+      {kind !== "house_price_level" && <div className="fs-comparison">
+        {kind === "bank_rate" ? rateChange ? (
           <>
             Latest evidenced change: {rateChange.difference > 0 ? "+" : "−"}
             {Math.abs(rateChange.difference).toFixed(2).replace(/\.?0+$/, "")} percentage point
@@ -288,21 +289,16 @@ function MetricCard({
         )}
       </div>}
       {!compact && <p className="fs-stat-meaning">{topic.meaning}</p>}
-      <div className={`fs-fresh fs-fresh-${status.kind}`}>
+      {(!compact || status.kind !== "ok") && <div className={`fs-fresh fs-fresh-${status.kind}`}>
         <ShieldCheck size={14} aria-hidden="true" />
         {status.label}
-      </div>
+      </div>}
       <details className="fs-details fs-info">
         <summary>
           About {topic.short}{" "}
           <ChevronDown size={15} aria-hidden="true" />
         </summary>
         {compact && <p className="fs-stat-meaning">{topic.meaning}</p>}
-        {compact && <p>{topic.measurement}</p>}
-        {compact && isPay && <p>{secondaryMetric?.latest?.value != null ? <>Official CPIH-adjusted regular pay: {percent(secondaryMetric.latest.value)} for {secondaryWindow ? `${formatPeriod(secondaryWindow.start_month)} to ${formatPeriod(secondaryWindow.end_month)}` : formatPeriod(secondaryMetric.latest.period)} · Great Britain{currentWindow && secondaryWindow && currentWindow.start_month === secondaryWindow.start_month && currentWindow.end_month === secondaryWindow.end_month ? " (same published window)" : "; separate window, not directly matched to nominal pay"}{secondaryMetric.collection_status !== "ok" ? " · update delayed, last verified figure shown" : ""}.</> : "Official CPIH-adjusted regular pay is currently unavailable."}</p>}
-        {compact && kind === "private_rent_growth" && <p>Average monthly rent: {secondaryMetric?.latest?.value != null ? `£${Number(secondaryMetric.latest.value).toLocaleString("en-GB")} in ${formatPeriod(secondaryMetric.latest.period)}` : "not available"}{secondaryMetric?.collection_status === "degraded" ? " · update delayed, last verified rent shown" : ""}.</p>}
-        {compact && kind === "house_price_level" && <p>Annual change: {secondaryMetric?.latest?.value != null ? `${percent(secondaryMetric.latest.value)} for ${formatPeriod(secondaryMetric.latest.period)}` : "not available"}{secondaryMetric?.collection_status === "degraded" ? " · update delayed, last verified figure shown" : ""}.</p>}
-        {compact && kind === "bank_rate" && rateChange && <p>Latest evidenced change: {rateChange.difference > 0 ? "+" : "−"}{Math.abs(rateChange.difference).toFixed(2).replace(/\.?0+$/, "")} percentage point{Math.abs(rateChange.difference) === 1 ? "" : "s"} at the {formatPeriod(rateChange.period)} observation.</p>}
         <p>{topic.caution}</p>
         <dl>
           <div>

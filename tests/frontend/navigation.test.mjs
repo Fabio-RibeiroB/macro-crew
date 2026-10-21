@@ -220,9 +220,12 @@ test("every page renders its own heading, navigation and missing-data content", 
     const overview = renderToStaticMarkup(
       createElement(App, { pathname: "/", initialData: overviewData }),
     );
+    const visibleOverviewCards = [...overview.matchAll(/<article class="fs-stat fs-stat-compact\b[\s\S]*?<\/article>/g)]
+      .map(([card]) => card.replace(/<details\b[^>]*>[\s\S]*?<\/details>/g, ""))
+      .join("\n");
     assert.match(overview, /class="fs-number">3\.5%/);
     assert.match(overview, /class="fs-number">4\.5%/);
-    assert.match(overview, /Latest evidenced change: \+1\.1 percentage points at the 20 October 2026 observation/);
+    assert.match(visibleOverviewCards, /Latest evidenced change: \+1\.1 percentage points at the 20 October 2026 observation/);
     assert.match(overview, /About Inflation \(CPIH\)/);
     assert.match(overview, /See Inflation \(CPIH\) details/);
     assert.match(overview, /href="\/economy#interest-rates"/);
@@ -423,10 +426,14 @@ test("Jobs & Pay renders official nominal and independently dated CPIH real pay"
       createElement(App, { pathname: "/", initialData: source }),
     );
     const home = overview(data);
-    const payCardAt = home.indexOf("Regular pay growth");
-    const realContextAt = home.indexOf("Official CPIH-adjusted regular pay: 0.6%", payCardAt);
+    const homeVisibleCards = [...home.matchAll(/<article class="fs-stat fs-stat-compact\b[\s\S]*?<\/article>/g)]
+      .map(([card]) => card.replace(/<details\b[^>]*>[\s\S]*?<\/details>/g, ""));
+    const homeVisible = homeVisibleCards.join("\n");
+    const payCardAt = homeVisible.indexOf("<h2>Regular pay growth</h2>");
+    const realContextAt = homeVisible.indexOf("Official CPIH-adjusted regular pay: 0.6%", payCardAt);
     assert.ok(realContextAt > payCardAt);
-    assert.match(home.slice(realContextAt, realContextAt + 260), /Great Britain|same published window/);
+    assert.match(homeVisible.slice(realContextAt, realContextAt + 260), /Great Britain|same published window/);
+    assert.match(homeVisible, /The last rate change cannot be established from the available history/);
     assert.ok(home.indexOf("Regular pay growth") < home.indexOf(">GDP</h2>"),
       "the Wages card precedes GDP in the homepage subset");
     const unemploymentAt = home.indexOf(">Unemployment</h2>");

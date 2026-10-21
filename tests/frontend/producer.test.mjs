@@ -163,6 +163,26 @@ test("Housing renders a national house-price card and separate pounds and percen
     assert.doesNotMatch(html, /Annual change: 0\.9%/);
     assert.doesNotMatch(html, /percentage points compared with July 2026/);
     assert.match(html, /Recent observations are provisional and subject to revision/);
+    const home = renderToStaticMarkup(createElement(App, { pathname: "/", initialData: producer }));
+    const visibleCards = [...home.matchAll(/<article class="fs-stat fs-stat-compact\b[\s\S]*?<\/article>/g)]
+      .map(([card]) => card.replace(/<details\b[^>]*>[\s\S]*?<\/details>/g, ""));
+    const houseCard = visibleCards.find((card) => card.includes("<h2>House prices</h2>"));
+    assert.ok(houseCard, "the house-price homepage card is present");
+    assert.match(houseCard, /Annual change: 0\.9% for August 2026/);
+    assert.doesNotMatch(houseCard, /<details/);
+    const rentCard = visibleCards.find((card) => card.includes("<h2>Rent</h2>"));
+    assert.match(rentCard, /Average monthly rent: £1,406 in September 2026/);
+    assert.match(rentCard, /<span>Unchanged<\/span> compared with August 2026/);
+    const delayedGrowth = { ...producer.metrics.house_price_growth, collection_status: "degraded" };
+    const missingLevelHome = renderToStaticMarkup(createElement(App, {
+      pathname: "/",
+      initialData: { ...producer, metrics: { ...producer.metrics, house_price_level: null, house_price_growth: delayedGrowth } },
+    }));
+    const missingLevelCard = [...missingLevelHome.matchAll(/<article class="fs-stat fs-stat-compact\b[\s\S]*?<\/article>/g)]
+      .map(([card]) => card.replace(/<details\b[^>]*>[\s\S]*?<\/details>/g, ""))
+      .find((card) => card.includes("<h2>House prices</h2>"));
+    assert.match(missingLevelCard, /Not available/);
+    assert.match(missingLevelCard, /Annual change: 0\.9% for August 2026 · update delayed; last verified figure shown/);
     const { HistoricalTrendCard } = await server.ssrLoadModule("/src/app/components/HistoricalTrendCard.tsx");
     const pounds = renderToStaticMarkup(createElement(HistoricalTrendCard, {
       title: "Average house price", label: "Average house price", unit: "£",
