@@ -558,7 +558,6 @@ function Statistics({
             : "Verified figures are unavailable. You can still read the guides and visit the official sources."}
         </div>
       )}
-      {data?.fixture_label && <div className="fs-alert" role="status">{data.fixture_label}</div>}
       {data ? (
         <>
           <div className={`fs-stat-grid fs-stat-count-${kinds.length}`}>

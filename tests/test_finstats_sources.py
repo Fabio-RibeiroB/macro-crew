@@ -65,11 +65,46 @@ def test_missing_pipr_level_column_value_does_not_invalidate_growth():
     with zipfile.ZipFile(altered, 'w', zipfile.ZIP_DEFLATED) as output:
         for member in source.infolist():
             content = ET.tostring(rows_xml) if member.filename == 'xl/worksheets/sheet4.xml' else source.read(member)
-            output.writestr(member, content)
+            output.writestr(member.filename, content)
     body = altered.getvalue()
     assert parse('private_rent_growth', body, date(2026, 10, 21)).observations[-1].value == '3.805277'
     with pytest.raises(ValidationError, match='Latest UK PIPR observation unavailable'):
         parse('private_rent_level', body, date(2026, 10, 21))
+
+
+def test_malformed_pipr_xml_and_cell_references_are_validation_failures():
+    source = zipfile.ZipFile(io.BytesIO(fixture('private_rent_growth')))
+    members = [(member.filename, source.read(member.filename)) for member in source.infolist()]
+    malformed_xml = io.BytesIO()
+    with zipfile.ZipFile(malformed_xml, 'w', zipfile.ZIP_DEFLATED) as output:
+        for filename, original in members:
+            content = b'<invalid' if filename == 'xl/worksheets/sheet4.xml' else original
+            output.writestr(filename, content)
+    with pytest.raises(ValidationError, match='Malformed PIPR workbook structure'):
+        parse('private_rent_growth', malformed_xml.getvalue(), date(2026, 10, 21))
+
+    source_xml = ET.fromstring(dict(members)['xl/worksheets/sheet4.xml'])
+    namespace = {'m': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+    source_xml.find('.//m:sheetData/m:row[@r="6"]/m:c[@r="A6"]', namespace).set('r', '?')
+    malformed_cell = io.BytesIO()
+    with zipfile.ZipFile(malformed_cell, 'w', zipfile.ZIP_DEFLATED) as output:
+        for filename, original in members:
+            content = ET.tostring(source_xml) if filename == 'xl/worksheets/sheet4.xml' else original
+            output.writestr(filename, content)
+    with pytest.raises(ValidationError, match='Malformed PIPR workbook structure'):
+        parse('private_rent_growth', malformed_cell.getvalue(), date(2026, 10, 21))
+
+    unknown_missing = io.BytesIO()
+    original_xml = ET.fromstring(dict(members)['xl/worksheets/sheet4.xml'])
+    for text in original_xml.findall('.//m:t', namespace):
+        if text.text == '[x]':
+            text.text = '[z]'
+    with zipfile.ZipFile(unknown_missing, 'w', zipfile.ZIP_DEFLATED) as output:
+        for filename, original in members:
+            content = ET.tostring(original_xml) if filename == 'xl/worksheets/sheet4.xml' else original
+            output.writestr(filename, content)
+    with pytest.raises(ValidationError, match='Unrecognised numerical value'):
+        parse('private_rent_growth', unknown_missing.getvalue(), date(2026, 10, 21))
 
 
 def test_cpih_is_annual_rate_with_monthly_reference_periods():

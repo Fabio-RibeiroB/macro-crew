@@ -7,6 +7,7 @@ import json
 from html.parser import HTMLParser
 import re
 import zipfile
+import zlib
 import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
@@ -334,6 +335,18 @@ def parse_ons_json(definition, body, today):
 
 
 def parse_pipr(metric_key, body, today):
+    """Normalize malformed workbook/XML structures as a source validation failure."""
+    try:
+        return _parse_pipr(metric_key, body, today)
+    except ValidationError:
+        raise
+    except (ET.ParseError, KeyError, IndexError, AttributeError, TypeError,
+            ValueError, OverflowError, OSError, zipfile.BadZipFile,
+            zlib.error) as exc:
+        raise ValidationError('Malformed PIPR workbook structure') from exc
+
+
+def _parse_pipr(metric_key, body, today):
     """Read only the UK national row and two reviewed columns from ONS Table 1."""
     try:
         book = zipfile.ZipFile(io.BytesIO(body))
@@ -425,7 +438,9 @@ def parse_pipr(metric_key, body, today):
         raise ValidationError('Future PIPR reference period')
     points = []
     for period, raw in sorted(selected.items()):
-        value, status = (None, 'missing') if raw in (None, '[x]', '[z]', '') else number(raw)
+        # The recorded UK rows contain [x] as an unavailable marker. Other
+        # missing-looking forms remain unknown and fail closed.
+        value, status = (None, 'missing') if raw is None or raw == '[x]' else number(raw)
         if value is not None and metric_key == 'private_rent_growth':
             value = format(Decimal(value).quantize(Decimal('0.000001')).normalize(), 'f')
         points.append(Observation(period, value, status, len(points) + 1))

@@ -120,3 +120,26 @@ original UK `K02000001` row and the reviewed date/area/annual-change/rent-level
 columns, plus the publication date. The original live workbook is versioned and
 not checked in. This projection exercises the bounded workbook reader and must
 never be treated as a full source archive or production data.
+
+The receipt records the exact versioned ONS workbook URL, original response
+length and SHA-256, its preserved local file timestamp, and the projection
+length/hash and transformation. The HTTP response headers were not retained;
+the timestamp is explicitly identified as local filesystem evidence. The
+projection retains the workbook's underlying numeric cells. For the latest UK
+growth observation, the cell serializes as `3.8052769999999998`; the parser
+explicitly applies decimal quantization to six places and stores `3.805277`.
+This canonical precision is a parser normalization choice, not a claim that ONS
+specifies six-place statistical precision. The ONS October 2026 bulletin
+headlines growth rounded to one decimal place; the FinStats card displays up to
+four decimals, while history and chart coordinates use the canonical six-place
+value. Rent levels are pounds per month and are displayed as whole pounds, as
+published in the bulletin.
+
+The extracted UK Table 1 growth and rent-level cells contain `[x]` as a missing
+token. The parser treats `[x]` and a structurally absent observation cell as
+missing; it does not interpret an empty cell value or `[z]` as missing. Empty
+cell values and `[z]` were not observed and fail validation. Geography, units, latest-month provisional
+status and Northern Ireland imputation/revision caveats are supported by the
+[pinned October 2026 bulletin](https://www.ons.gov.uk/economy/inflationandpriceindices/bulletins/privaterentandhousepricesuk/october2026),
+the [PIPR QMI](https://www.ons.gov.uk/peoplepopulationandcommunity/housing/methodologies/priceindexofprivaterentsqmi)
+and [detailed methodology](https://www.ons.gov.uk/economy/inflationandpriceindices/methodologies/priceindexofprivaterentsdetailedmethodology).

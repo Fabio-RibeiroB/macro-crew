@@ -147,6 +147,39 @@ def test_rent_level_failure_does_not_hide_growth_and_retains_its_verified_histor
     assert data['metrics']['private_rent_level']['latest']['value'] == '1406'
 
 
+def test_corrupt_pipr_is_quarantined_and_other_metrics_still_deliver(tmp_path):
+    private, public_dir = tmp_path / 'private', tmp_path / 'public'
+    collect(private, transport=lambda key: fixture_transport(key), clock=lambda: CPI_WHEN)
+    first = read_generation(private)
+
+    def malformed_pipr(key):
+        if key.startswith('private_rent_'):
+            return b'<invalid'
+        return fixture_transport(key)
+
+    result = collect(private, transport=malformed_pipr, clock=lambda: CPI_WHEN + timedelta(days=1))
+    assert result['failed_metrics'] == ['private_rent_growth', 'private_rent_level']
+    data = read_generation(private)
+    for key in ('private_rent_growth', 'private_rent_level'):
+        assert data['metrics'][key]['collection_status'] == 'degraded'
+        assert data['metrics'][key]['latest']['value'] == first['metrics'][key]['latest']['value']
+        assert data['metrics'][key]['history'] == first['metrics'][key]['history']
+    assert data['metrics']['cpih']['collection_status'] == 'ok'
+    assert data['metrics']['cpih']['latest']['value'] == '3.3'
+
+    from finstats.delivery import deliver
+    deliver(private, public_dir)
+    manifest = json.loads((public_dir / 'current.json').read_text())
+    public_body = (public_dir / manifest['data_url']).read_bytes()
+    assert hashlib.sha256(public_body).hexdigest() == manifest['sha256']
+    public = json.loads(public_body)
+    assert public['metrics']['cpih']['latest']['value'] == '3.3'
+    assert public['metrics']['private_rent_growth']['latest']['value'] == '3.805277'
+    assert public['metrics']['private_rent_level']['latest']['value'] == '1406'
+    assert public['metrics']['private_rent_growth']['collection_status'] == 'degraded'
+    assert public['metrics']['private_rent_level']['collection_status'] == 'degraded'
+
+
 def test_pay_revision_keeps_window_identity_and_previous_snapshot(tmp_path):
     collect(tmp_path, transport=lambda key: fixture_transport(key), clock=lambda: CPI_WHEN)
     first = read_generation(tmp_path)['metrics']['regular_pay_nominal_growth']

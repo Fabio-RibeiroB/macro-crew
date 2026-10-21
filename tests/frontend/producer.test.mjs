@@ -126,6 +126,56 @@ test("producer PIPR data preserves UK geography, workbook identity and distinct 
   assert.equal(chartPoints(level).at(-1).value, 1406);
 });
 
+test("Housing renders real producer rent values and keeps growth visible through level failures", async () => {
+  const { createServer } = await import("vite");
+  const { createElement } = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+  try {
+    const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
+    const producer = await loadVerified("/", fileFetcher(bytes));
+    const html = (metrics) => renderToStaticMarkup(createElement(App, {
+      pathname: "/housing",
+      initialData: { ...producer, metrics },
+    }));
+
+    const current = html(producer.metrics);
+    assert.match(current, /id="rent"/);
+    assert.match(current, /UK private rent · annual growth/);
+    assert.match(current, /class="fs-number">3\.8053%/);
+    assert.match(current, /Average monthly private rent/);
+    assert.match(current, /class="fs-number">£1,406/);
+
+    const delayed = html({
+      ...producer.metrics,
+      private_rent_level: {
+        ...producer.metrics.private_rent_level,
+        collection_status: "degraded",
+      },
+    });
+    assert.match(delayed, /id="rent"/);
+    assert.match(delayed, /class="fs-number">3\.8053%/);
+    assert.match(delayed, /class="fs-number">£1,406/);
+    assert.match(delayed, /Update delayed/);
+
+    const absent = html({
+      ...producer.metrics,
+      private_rent_level: {
+        ...producer.metrics.private_rent_level,
+        latest: null,
+        history: [],
+        validation_status: "unavailable",
+        collection_status: "unavailable",
+      },
+    });
+    assert.match(absent, /id="rent"/);
+    assert.match(absent, /class="fs-number">3\.8053%/);
+    assert.match(absent, /class="fs-number">Not available/);
+  } finally {
+    await server.close();
+  }
+});
+
 test("the previous-reference-month comparison is a percentage-point change", async () => {
   const data = await loadVerified("/", fileFetcher(bytes));
   const cpi = data.metrics.cpi;
