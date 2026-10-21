@@ -42,10 +42,15 @@ export function bindMenuDismissal(doc, header, toggle, close) {
   const pointerdown = (event) => {
     if (!header?.contains(event.target)) close();
   };
+  const focusin = (event) => {
+    if (!header?.contains(event.target)) close();
+  };
   doc.addEventListener("keydown", keydown);
   doc.addEventListener("pointerdown", pointerdown);
+  doc.addEventListener("focusin", focusin);
   return () => {
     doc.removeEventListener("keydown", keydown);
     doc.removeEventListener("pointerdown", pointerdown);
+    doc.removeEventListener("focusin", focusin);
   };
 }

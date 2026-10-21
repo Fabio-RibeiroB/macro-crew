@@ -887,6 +887,7 @@ export default function App({
             finstats<span className="fs-brand-dot">.</span>
           </a>
           <button
+            type="button"
             className="fs-menu-button"
             id="navigation-toggle"
             ref={menuToggle}
@@ -895,7 +896,7 @@ export default function App({
             aria-controls="main-navigation"
           >
             {menuOpen ? "Close menu" : "Menu"}
-            <ChevronDown size={16} />
+            <ChevronDown size={16} aria-hidden="true" />
           </button>
           <nav
             id="main-navigation"

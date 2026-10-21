@@ -50,6 +50,8 @@ test("every page renders its own heading, navigation and missing-data content", 
       );
       assert.match(html, /<main id="main-content"/);
       assert.match(html, /aria-current="page"/);
+      assert.match(html, /General economic information, not individual financial advice/);
+      assert.match(html, /<button type="button" class="fs-menu-button"/);
       assert.equal((html.match(/<h1>/g) || []).length, 1);
       assert.ok(
         html.includes(

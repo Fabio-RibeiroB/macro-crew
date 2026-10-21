@@ -71,6 +71,7 @@ export function createRefreshController({
       active = null;
       run?.cancel();
       if (run) clearTimer(run.timer);
+      if (run && !disposed) onSettled();
     },
     dispose() {
       disposed = true;
