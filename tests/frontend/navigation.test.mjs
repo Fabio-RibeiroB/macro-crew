@@ -220,7 +220,7 @@ test("every page renders its own heading, navigation and missing-data content", 
     );
     assert.match(overview, /class="fs-number">3\.5%/);
     assert.match(overview, /class="fs-number">4\.5%/);
-    assert.match(overview, /Changed by \+1\.1 percentage points on 20 October 2026/);
+    assert.match(overview, /Latest evidenced change: \+1\.1 percentage points at the 20 October 2026 observation/);
     assert.match(overview, /About Inflation/);
     assert.match(overview, /See Inflation details/);
     assert.match(overview, /href="\/economy#interest-rates"/);

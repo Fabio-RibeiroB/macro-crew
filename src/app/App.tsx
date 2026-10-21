@@ -153,10 +153,10 @@ function MetricCard({
       <div className="fs-comparison">
         {kind === "bank_rate" ? rateChange ? (
           <>
-            Changed by {rateChange.difference > 0 ? "+" : "−"}
+            Latest evidenced change: {rateChange.difference > 0 ? "+" : "−"}
             {Math.abs(rateChange.difference).toFixed(2).replace(/\.?0+$/, "")} percentage point
-            {Math.abs(rateChange.difference) === 1 ? "" : "s"} on{" "}
-            {formatPeriod(rateChange.period)}
+            {Math.abs(rateChange.difference) === 1 ? "" : "s"} at the{" "}
+            {formatPeriod(rateChange.period)} observation
           </>
         ) : "The last rate change cannot be established from the available history." : previous && delta !== null ? (
           <>
