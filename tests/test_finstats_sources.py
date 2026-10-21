@@ -118,8 +118,34 @@ def test_cpi_keeps_recorded_monthly_gaps_and_never_invents_periods():
     periods = [o.period for o in data.observations]
     assert periods[:4] == ['2025-01', '2025-03', '2025-05', '2025-06']
     assert '2025-02' not in periods
-    assert '2026-08' in periods
-    assert len({o.period for o in data.observations}) == len(data.observations)
+
+
+def test_unemployment_uses_full_label_window_not_source_date_as_end_month():
+    data = parse('unemployment', fixture('unemployment'), TODAY)
+    assert data.definition.series == 'MGSX'
+    assert data.definition.dataset == 'LMS'
+    assert data.definition.download_url == 'https://www.ons.gov.uk/employmentandlabourmarket/peoplenotinwork/unemployment/timeseries/mgsx/lms/data'
+    latest = data.observations[-1]
+    assert latest.period == '2026-08'
+    assert latest.reference == {
+        'kind': 'rolling_months', 'start_month': '2026-06', 'end_month': '2026-08'}
+    cross_year = next(o for o in data.observations if o.reference['start_month'] == '2025-12')
+    assert cross_year.period == '2026-02'
+    assert cross_year.reference['end_month'] == '2026-02'
+
+
+@pytest.mark.parametrize('old,new', [
+    (b'2026 JUN-AUG', b'2026 JUN-SEP'),
+    (b'2026 JUN-AUG', b'2026 JUL-SEP'),
+    (b'2026 JUN-AUG', b'2026 JUN-XYZ'),
+    (b'2026 JUL', b'2026 AUG'),
+    (b'"year": "2026", "month": "July"', b'"year": "2025", "month": "July"'),
+])
+def test_unemployment_rejects_inconsistent_period_identity(old, new):
+    body = fixture('unemployment')
+    assert old in body
+    with pytest.raises(ValidationError):
+        parse('unemployment', body.replace(old, new, 1), TODAY)
 
 
 def test_cpi_ignores_annual_and_quarterly_arrays_but_keeps_their_months():

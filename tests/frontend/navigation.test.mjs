@@ -392,6 +392,12 @@ test("Jobs & Pay renders official nominal and independently dated CPIH real pay"
     assert.ok(wagesStart >= 0 && nominalValue > wagesStart && realValue > nominalValue,
       "the #wages target contains the primary nominal figure before the real-pay detail");
     assert.match(page, /id="figures" class="fs-anchor-alias"/);
+    const wagesSection = page.slice(wagesStart, page.indexOf('id="unemployment"'));
+    const unemploymentSection = page.slice(page.indexOf('id="unemployment"'));
+    assert.match(wagesSection, /id="wages-title"/);
+    assert.match(wagesSection, /aria-labelledby="wages-title"/);
+    assert.match(unemploymentSection, /id="unemployment-title"/);
+    assert.match(unemploymentSection, /aria-labelledby="unemployment-title"/);
     assert.match(page, /3\.7%/);
     assert.match(page, /0\.6%/);
     assert.match(page, /Official annual growth, adjusted using CPIH/);
@@ -421,6 +427,23 @@ test("Jobs & Pay renders official nominal and independently dated CPIH real pay"
     assert.match(home.slice(realContextAt, realContextAt + 260), /Great Britain|same published window/);
     assert.ok(home.indexOf("Regular pay growth") < home.indexOf(">GDP</h2>"),
       "the Wages card precedes GDP in the homepage subset");
+    const unemploymentAt = home.indexOf(">Unemployment</h2>");
+    const gdpAt = home.indexOf(">GDP</h2>");
+    assert.ok(unemploymentAt > payCardAt && gdpAt > unemploymentAt,
+      "the homepage subset orders Wages, Unemployment, then GDP");
+    assert.match(home, /href="\/jobs-pay#unemployment"/);
+
+    const unemploymentStart = page.indexOf('id="unemployment"');
+    assert.ok(unemploymentStart >= 0);
+    const unemploymentValue = page.indexOf('class="fs-number">4.7%', unemploymentStart);
+    const unemploymentChart = page.indexOf("Loading chart…", unemploymentStart);
+    const qualityLink = page.indexOf("Labour Force Survey quality update, October 2026", unemploymentStart);
+    const sourceDetails = page.indexOf("ONS unemployment rate series, MGSX / LMS", unemploymentStart);
+    assert.ok(unemploymentValue > unemploymentStart && unemploymentChart > unemploymentValue && qualityLink > unemploymentChart && sourceDetails > qualityLink,
+      "the direct anchor contains the value, chart, dated quality caution and source");
+    assert.match(page, /June 2026 to August 2026/);
+    assert.match(page, /compared with May 2026 to July 2026/);
+    assert.match(page, /UK residents aged 16 and over · seasonally adjusted/);
 
     const mismatchedHomeData = structuredClone(data);
     mismatchedHomeData.metrics.regular_pay_real_growth.latest.reference.start_month = "2026-05";

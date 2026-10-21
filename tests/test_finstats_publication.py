@@ -146,6 +146,53 @@ def test_pay_revision_keeps_window_identity_and_previous_snapshot(tmp_path):
     assert current['snapshot_id'] != first['snapshot_id']
 
 
+def test_unemployment_failure_retains_its_verified_window_without_blocking_pay(tmp_path):
+    collect(tmp_path, transport=lambda key: fixture(key), clock=lambda: CPI_WHEN)
+    first = read_generation(tmp_path)
+    prior = first['metrics']['unemployment']
+    def broken(key):
+        if key == 'unemployment':
+            return fixture(key).replace(b'"date": "2026 JUL", "value": "4.7"',
+                                        b'"date": "2026 JUL", "value": ".."', 1)
+        return fixture(key)
+    result = collect(tmp_path, transport=broken, clock=lambda: CPI_WHEN + timedelta(days=1))
+    assert result['failed_metrics'] == ['unemployment']
+    data = read_generation(tmp_path)
+    current = data['metrics']['unemployment']
+    assert current['collection_status'] == 'degraded'
+    assert current['latest'] == prior['latest']
+    assert current['latest']['reference'] == {
+        'kind': 'rolling_months', 'start_month': '2026-06', 'end_month': '2026-08'}
+    assert current['quality_note'] == prior['quality_note']
+    assert data['metrics']['regular_pay_nominal_growth']['collection_status'] == 'ok'
+    assert data['metrics']['gdp']['collection_status'] == 'ok'
+
+
+def test_never_collected_unemployment_stays_unavailable_and_not_zero(tmp_path):
+    def broken(key):
+        return b'<html>access denied</html>' if key == 'unemployment' else fixture(key)
+    result = collect(tmp_path, transport=broken, clock=lambda: CPI_WHEN)
+    assert result['failed_metrics'] == ['unemployment']
+    member = read_generation(tmp_path)['metrics']['unemployment']
+    assert member['validation_status'] == 'unavailable'
+    assert member['latest'] is None
+    assert member['history'] == []
+
+
+def test_unemployment_revision_preserves_rolling_window_and_prior_vintage(tmp_path):
+    collect(tmp_path, transport=lambda key: fixture(key), clock=lambda: CPI_WHEN)
+    original = read_generation(tmp_path)['metrics']['unemployment']
+    def revised(key):
+        body = fixture(key)
+        return body.replace(b'"date": "2026 JUL", "value": "4.7"',
+                            b'"date": "2026 JUL", "value": "4.8"') if key == 'unemployment' else body
+    collect(tmp_path, transport=revised, clock=lambda: CPI_WHEN + timedelta(minutes=1))
+    current = read_generation(tmp_path)['metrics']['unemployment']
+    assert current['latest']['value'] == '4.8'
+    assert current['latest']['reference'] == original['latest']['reference']
+    assert current['snapshot_id'] != original['snapshot_id']
+
+
 def test_activation_failure_preserves_previous_complete_generation(tmp_path):
     collect(tmp_path, fixtures=FIXTURES, clock=lambda: WHEN)
     original = read_generation(tmp_path)

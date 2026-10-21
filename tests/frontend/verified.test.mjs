@@ -410,6 +410,10 @@ test("registered optional metrics validate with geography, windows and deflator"
   });
   assert.equal(referenceWindow(data.metrics.cpi.latest), null);
   assert.equal(unemployment.latest.value, "4.7");
+  assert.equal(unemployment.definition.age_group, "16 and over");
+  assert.equal(unemployment.definition.comparison, "level");
+  assert.equal(unemployment.quality_note, OPTIONAL_METRICS.unemployment.quality_note);
+  assert.equal(unemployment.quality_source_url, OPTIONAL_METRICS.unemployment.quality_source_url);
 });
 
 test("the loader verifies the checksum of a generation with optional metrics", async () => {
@@ -466,7 +470,7 @@ test("rolling charts locate points at their end month and keep their windows", (
   });
 });
 
-test("pay comparison uses the previous overlapping published window only", () => {
+test("rolling labour comparison uses the previous overlapping published window only", () => {
   const data = parseDataset(
     optionalData(),
     parseManifest(fixtureManifest("v1-with-optional")),
@@ -482,6 +486,11 @@ test("pay comparison uses the previous overlapping published window only", () =>
   assert.notDeepEqual(referenceWindow(nominal.latest), referenceWindow(real.latest));
   nominal.history.at(-2).period = "2026-06";
   assert.equal(previousPublishedWindow(nominal), null);
+  const unemployment = data.metrics.unemployment;
+  assert.equal(previousPublishedWindow(unemployment).period, "2026-07");
+  assert.deepEqual(referenceWindow(previousPublishedWindow(unemployment)), {
+    start_month: "2026-05", end_month: "2026-07",
+  });
 });
 
 test("a skipped end month keeps the previous published window comparison unavailable", () => {

@@ -48,7 +48,7 @@ def test_delivery_publishes_cpi_headline_with_core_metrics_retained(tmp_path):
     data = read_public(public)
     assert set(data['metrics']) == {
         'bank_rate', 'cpih', 'gdp', 'cpi',
-        'regular_pay_nominal_growth', 'regular_pay_real_growth'}
+        'regular_pay_nominal_growth', 'regular_pay_real_growth', 'unemployment'}
     cpi = data['metrics']['cpi']
     assert cpi['validation_status'] == 'verified'
     assert cpi['snapshot_evidence_kind'] == 'official_download'
@@ -72,6 +72,14 @@ def test_delivery_publishes_cpi_headline_with_core_metrics_retained(tmp_path):
     assert nominal['definition']['unit'] == real['definition']['unit'] == 'percent'
     assert real['definition']['deflator'] == 'CPIH'
     assert real['latest']['value'] == '0.6'
+    unemployment = data['metrics']['unemployment']
+    assert unemployment['definition']['series'] == 'MGSX'
+    assert unemployment['definition']['age_group'] == '16 and over'
+    assert unemployment['latest']['period'] == '2026-08'
+    assert unemployment['latest']['reference'] == {
+        'kind': 'rolling_months', 'start_month': '2026-06', 'end_month': '2026-08'}
+    assert '95% confidence intervals' in unemployment['quality_note']
+    assert unemployment['quality_source_url'].endswith('/articles/labourforcesurveyqualityupdate/october2026')
 
 
 def test_checked_in_producer_generation_regenerates_byte_identically(tmp_path):
