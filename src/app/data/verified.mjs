@@ -215,6 +215,19 @@ export function previousReading(metric) {
   }
   return previous;
 }
+/** Return the latest change established by adjacent observed Bank Rate points. */
+export function lastRateChange(metric) {
+  if (!metric?.history || metric.history.length < 2) return null;
+  for (let i = metric.history.length - 1; i > 0; i--) {
+    const current = metric.history[i];
+    const previous = metric.history[i - 1];
+    // A missing observation breaks the evidence chain. Do not bridge it.
+    if (current.value === null || previous.value === null) return null;
+    const difference = Number(current.value) - Number(previous.value);
+    if (difference !== 0) return { period: current.period, difference };
+  }
+  return null;
+}
 export function chartPoints(metric) {
   const points = [];
   for (const point of metric.history) {
