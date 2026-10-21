@@ -50,6 +50,11 @@ export function legacyDestination(pathname, hash) {
       "#sources": "/sources",
       "#reports": "/economy#publications",
       "#trends": "/economy#trends",
-    }[hash] || null
+    }[hash.toLowerCase()] || null
   );
+}
+
+export function canonicalDestination(pathname) {
+  const page = resolvePage(pathname);
+  return page.id !== "missing" && page.path !== pathname ? page.path : null;
 }

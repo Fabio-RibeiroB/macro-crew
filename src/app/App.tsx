@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowRight,
@@ -23,11 +23,17 @@ import {
   formatPeriod,
   freshness,
   legacyReports,
+  reportLabel,
   loadVerified,
   percent,
   previousReading,
 } from "./data/verified.mjs";
-import { PAGES, resolvePage, legacyDestination } from "./data/pages.mjs";
+import { PAGES, resolvePage } from "./data/pages.mjs";
+import {
+  createRefreshController,
+  bindRefreshLifecycle,
+} from "./data/refresh.mjs";
+import { bindPageNavigation, bindMenuDismissal } from "./data/interactions.mjs";
 import "../styles/friendly.css";
 
 const topics = {
@@ -251,7 +257,7 @@ function Statistics({
       </div>
       {error && (
         <div className="fs-alert" role="status">
-          {error}.{" "}
+          {error}{" "}
           {data
             ? "The last successfully loaded figures remain below."
             : "Verified figures are unavailable. You can still read the guides and visit the official sources."}
@@ -530,7 +536,10 @@ function InterestGuide() {
 
 function GrowthGuide() {
   return (
-    <section className="fs-container fs-section fs-reading-grid">
+    <section
+      className="fs-container fs-section fs-reading-grid"
+      id="work-and-businesses"
+    >
       <article>
         <p className="fs-eyebrow">Growth and everyday life</p>
         <h2>A growing economy does not lift every household equally</h2>
@@ -670,6 +679,9 @@ function Publications({ reports, reportTime }: any) {
         <a className="fs-link" href="/government-budget">
           Government Budgets & OBR forecasts <ArrowRight size={16} />
         </a>
+        <OfficialLink href="https://obr.uk/">
+          OBR forecasts & analysis
+        </OfficialLink>
       </div>
       <details className="fs-archive">
         <summary>
@@ -693,11 +705,7 @@ function Publications({ reports, reportTime }: any) {
               <p className="fs-eyebrow">
                 Earlier AI summary · {formatPeriod(report.report_date)}
               </p>
-              <h3>
-                {report.key === "financial_stability_report"
-                  ? "Financial stability commentary"
-                  : "Interest-rate and economic outlook commentary"}
-              </h3>
+              <h3>{reportLabel(report)}</h3>
               <p>{report.summary}</p>
               <OfficialLink href={report.source}>
                 Original publication
@@ -794,14 +802,24 @@ export default function App({
     }
   });
   const needsData = ["overview", "prices", "economy"].includes(page.id);
+  const refreshOwner = useRef<ReturnType<
+    typeof createRefreshController
+  > | null>(null);
+  const header = useRef<HTMLElement>(null);
+  const menuToggle = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    const destination = legacyDestination(
-      window.location.pathname,
-      window.location.hash,
-    );
-    if (destination) window.location.replace(destination);
     document.title = `${page.title} | FinStats`;
+    return bindPageNavigation(window, document);
   }, [page.id]);
+  useEffect(() => {
+    if (menuOpen)
+      return bindMenuDismissal(
+        document,
+        header.current,
+        menuToggle.current,
+        () => setMenuOpen(false),
+      );
+  }, [menuOpen]);
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
     try {
@@ -810,85 +828,57 @@ export default function App({
       /* Optional preference. */
     }
   }, [dark]);
-  const refresh = async () => {
-    setLoading(true);
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 15_000);
-    try {
-      const next = await loadVerified(
-        import.meta.env.BASE_URL,
-        (url, options) => fetch(url, { ...options, signal: controller.signal }),
-      );
-      setData(next);
-      setError("");
-    } catch {
-      setError("We couldn’t check the latest figures");
-    } finally {
-      window.clearTimeout(timeout);
-      setLoading(false);
-    }
-  };
+  const refresh = () => refreshOwner.current?.refresh();
   useEffect(() => {
     if (!needsData) return;
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 5 * 60_000);
-    return () => window.clearInterval(timer);
+    const owner = createRefreshController({
+      load: (signal) =>
+        loadVerified(import.meta.env.BASE_URL, (url, options) =>
+          fetch(url, { ...options, signal }),
+        ),
+      onStart: () => setLoading(true),
+      onData: (next) => {
+        setData(next);
+        setError("");
+      },
+      onError: setError,
+      onSettled: () => setLoading(false),
+    });
+    refreshOwner.current = owner;
+    const cleanup = bindRefreshLifecycle(owner, window);
+    return () => {
+      cleanup();
+      if (refreshOwner.current === owner) refreshOwner.current = null;
+    };
   }, [needsData]);
   useEffect(() => {
     if (page.id !== "economy") return;
-    const controller = new AbortController();
-    fetch(`${import.meta.env.BASE_URL}research_report.json`, {
-      cache: "no-store",
-      signal: controller.signal,
-    })
-      .then((r) => {
-        if (!r.ok) throw new Error("Commentary unavailable");
-        return r.json();
-      })
-      .then((value) => {
+    const owner = createRefreshController({
+      load: async (signal) => {
+        const response = await fetch(
+          `${import.meta.env.BASE_URL}research_report.json`,
+          { cache: "no-store", signal },
+        );
+        if (!response.ok) throw new Error("Commentary unavailable");
+        return response.json();
+      },
+      onStart() {},
+      onData: (value) => {
         setReports(legacyReports(value));
         setReportTime(value?.metadata?.generated_at ?? null);
-      })
-      .catch(() => {});
-    return () => controller.abort();
+      },
+      onError() {}, // Commentary failure is independent of verified statistics.
+      onSettled() {},
+    });
+    return bindRefreshLifecycle(owner, window);
   }, [page.id]);
-  useEffect(() => {
-    // Fragment targets appear after React mounts, and data can change their position.
-    let frame = 0;
-    const followFragment = () => {
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(() => {
-        try {
-          const id = decodeURIComponent(window.location.hash.slice(1));
-          if (id)
-            document.getElementById(id)?.scrollIntoView({ block: "start" });
-        } catch {
-          /* An invalid URL fragment must not break the page. */
-        }
-      });
-    };
-    followFragment();
-    window.addEventListener("hashchange", followFragment);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("hashchange", followFragment);
-    };
-  }, [page.id, Boolean(data)]);
   const stats = { data, error, loading, refresh };
   return (
     <div className="fs-root">
       <a className="fs-skip" href="#main-content">
         Skip to main content
       </a>
-      <header
-        className="fs-header"
-        onKeyDown={(event) => {
-          if (event.key === "Escape" && menuOpen) {
-            setMenuOpen(false);
-            document.getElementById("navigation-toggle")?.focus();
-          }
-        }}
-      >
+      <header className="fs-header" ref={header}>
         <div className="fs-header-inner">
           <a href="/" className="fs-brand" aria-label="FinStats home">
             <span className="fs-brand-mark">
@@ -899,6 +889,7 @@ export default function App({
           <button
             className="fs-menu-button"
             id="navigation-toggle"
+            ref={menuToggle}
             onClick={() => setMenuOpen(!menuOpen)}
             aria-expanded={menuOpen}
             aria-controls="main-navigation"
@@ -998,6 +989,9 @@ export default function App({
           </>
         )}
       </main>
+      <p className="fs-container fs-caption">
+        General economic information, not individual financial advice.
+      </p>
       <footer className="fs-footer fs-container">
         <a className="fs-brand" href="/">
           finstats<span className="fs-brand-dot">.</span>

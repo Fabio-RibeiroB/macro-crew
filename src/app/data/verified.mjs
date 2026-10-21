@@ -159,21 +159,50 @@ export function parseDataset(value, manifest) {
   }
   return value;
 }
+export class VerifiedDataError extends Error {
+  constructor(kind, message) {
+    super(message);
+    this.name = "VerifiedDataError";
+    this.kind = kind;
+  }
+}
 export async function loadVerified(base = "/", fetcher = fetch) {
-  const response = await fetcher(`${base}data/current.json`, {
-    cache: "no-store",
-  });
-  if (!response.ok) fail("Verified figures are temporarily unavailable");
-  const manifest = parseManifest(await response.json());
-  const dataResponse = await fetcher(`${base}data/${manifest.data_url}`);
-  if (!dataResponse.ok) fail("The verified data release could not be loaded");
-  const bytes = await dataResponse.arrayBuffer();
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
-  const hash = Array.from(new Uint8Array(digest), (b) =>
-    b.toString(16).padStart(2, "0"),
-  ).join("");
-  if (hash !== manifest.sha256) fail("The data integrity check failed");
-  return parseDataset(JSON.parse(new TextDecoder().decode(bytes)), manifest);
+  const get = async (url, options) => {
+    let response;
+    try {
+      response = await fetcher(url, options);
+    } catch (error) {
+      if (error?.name === "AbortError") throw error;
+      throw new VerifiedDataError("network", "Official-data request failed");
+    }
+    if (!response.ok)
+      throw new VerifiedDataError(
+        response.status === 404 ? "missing" : "unavailable",
+        "Verified figures are temporarily unavailable",
+      );
+    return response;
+  };
+  try {
+    const response = await get(`${base}data/current.json`, {
+      cache: "no-store",
+    });
+    const manifest = parseManifest(await response.json());
+    const dataResponse = await get(`${base}data/${manifest.data_url}`);
+    const bytes = await dataResponse.arrayBuffer();
+    const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+    const hash = Array.from(new Uint8Array(digest), (b) =>
+      b.toString(16).padStart(2, "0"),
+    ).join("");
+    if (hash !== manifest.sha256) fail("The data integrity check failed");
+    return parseDataset(JSON.parse(new TextDecoder().decode(bytes)), manifest);
+  } catch (error) {
+    if (error instanceof VerifiedDataError || error?.name === "AbortError")
+      throw error;
+    throw new VerifiedDataError(
+      "invalid",
+      "The data integrity or format check failed",
+    );
+  }
 }
 export function previousReading(metric) {
   if (!metric.latest || metric.history.length < 2) return null;
@@ -262,4 +291,12 @@ export function legacyReports(value) {
       key,
       report_date: isoDate(r.report_date) ? r.report_date : null,
     }));
+}
+
+export function reportLabel(report) {
+  if (report.key === "financial_stability_report")
+    return "Financial stability commentary";
+  return report.source.includes("/monetary-policy-report/")
+    ? "Monetary Policy Report commentary"
+    : "MPC / monetary policy commentary";
 }

@@ -4,6 +4,7 @@ import {
   PAGES,
   resolvePage,
   legacyDestination,
+  canonicalDestination,
 } from "../../src/app/data/pages.mjs";
 
 test("plain-English pages have stable direct URLs and unique navigation identities", () => {
@@ -24,6 +25,9 @@ test("old section links preserve access without redirect loops", () => {
   assert.equal(legacyDestination("/", "#decisions"), "/economy#interest-rates");
   assert.equal(legacyDestination("/", "#reports"), "/economy#publications");
   assert.equal(legacyDestination("/", "#sources"), "/sources");
+  assert.equal(legacyDestination("/", "#Sources"), "/sources");
+  assert.equal(canonicalDestination("/prices/"), "/prices");
+  assert.equal(canonicalDestination("/unknown/"), null);
   assert.equal(legacyDestination("/", "#trends"), "/economy#trends");
   assert.equal(legacyDestination("/", "#everyday"), null);
   assert.equal(legacyDestination("/economy", "#interest-rates"), null);
