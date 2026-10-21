@@ -94,6 +94,14 @@ link, one H1 per page, visible focus, reduced-motion support and saved theme
 preference. The visible brand is finstats UK with a small flag; the plant mark
 is not used.
 
+Menu visibility is controlled by React's `hidden` attribute. Do not hide the
+closed menu directly in a media query: browsers can blur its focused link before
+the media-query listener captures the focus target. Browser regression check:
+focus a navigation link at 1024px, shrink to 390px, and verify focus lands on
+Menu. Repeat across 801px to 800px. With focus on the theme button instead,
+shrinking must preserve that focus. Opening Menu must focus its first link;
+Escape must close it and return focus to Menu.
+
 Node tests exercise the actual refresh and event controllers with deferred
 responses, an injected clock and EventTarget browser/document adapters. They cover
 out-of-order responses, abort-ignoring transports, deadline races, cleanup, pagehide/
