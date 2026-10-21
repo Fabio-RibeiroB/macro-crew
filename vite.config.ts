@@ -22,6 +22,12 @@ export default defineConfig({
     },
     react(),
     tailwindcss(),
+    {
+      name: 'finstats-root-deployment',
+      configResolved(config) {
+        if (config.base !== '/') throw new Error('FinStats currently requires domain-root hosting (base /).');
+      },
+    },
   ],
   resolve: {
     alias: {
