@@ -88,5 +88,20 @@
       "https://www.ons.gov.uk/peoplepopulationandcommunity/housing/methodologies/priceindexofprivaterentsqmi",
       "https://www.ons.gov.uk/economy/inflationandpriceindices/methodologies/priceindexofprivaterentsdetailedmethodology"
     ]
+  },
+  "uk_hpi_average_prices.csv": {
+    "source": "HM Land Registry UK HPI official Average price CSV (reduced test fixture)",
+    "originalURL": "https://publicdata.landregistry.gov.uk/market-trend-data/house-price-index-data/Average-prices-2026-08.csv?utm_medium=GOV.UK&utm_source=datadownload&utm_campaign=average_price&utm_term=9.30_21_10_26",
+    "retrievaltime": "2026-10-21T23:06:23.965378+00:00",
+    "source_published_date": "2026-10-21",
+    "content_type": "text/csv",
+    "original_bytes": 7580400,
+    "original_bytesSHA": "dde90f4ca1aeca2749a6fe61f00c4f3daef58c1bec232b6da1130a16d6686c90",
+    "bytes": 7520,
+    "bytesSHA": "9048402914cceb2214a1f48246f499683585aa2af2f007cb7e160b696b2cd790",
+    "reduction": "Test-only national series excerpt: retain all UK national rows (K02000001) from 2016-01 onward, exact source values and CSV columns; no values recalculated or rounded in fixture projection.",
+    "sha256": "9048402914cceb2214a1f48246f499683585aa2af2f007cb7e160b696b2cd790",
+    "url": "https://publicdata.landregistry.gov.uk/market-trend-data/house-price-index-data/Average-prices-2026-08.csv?utm_medium=GOV.UK&utm_source=datadownload&utm_campaign=average_price&utm_term=9.30_21_10_26",
+    "retrieved_at": "2026-10-21T23:06:23.965378+00:00"
   }
 }

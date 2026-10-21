@@ -143,3 +143,15 @@ status and Northern Ireland imputation/revision caveats are supported by the
 [pinned October 2026 bulletin](https://www.ons.gov.uk/economy/inflationandpriceindices/bulletins/privaterentandhousepricesuk/october2026),
 the [PIPR QMI](https://www.ons.gov.uk/peoplepopulationandcommunity/housing/methodologies/priceindexofprivaterentsqmi)
 and [detailed methodology](https://www.ons.gov.uk/economy/inflationandpriceindices/methodologies/priceindexofprivaterentsdetailedmethodology).
+
+
+## UK House Price Index (issue #32)
+
+The HM Land Registry UK HPI Average price CSV was downloaded from the official
+August 2026 data-download release on 21 October 2026. `receipts.json` records the
+original download URL, full-source byte count and SHA-256, retrieval time and
+release date. The committed CSV is a reduced test fixture containing exact UK
+national rows (K02000001) from January 2016 onward, retaining the official columns
+and values. It is not a live figure or complete source archive. The producer and
+reader fixture is built from the real collect → publish → deliver pipeline; the
+source release date, reference month and retrieval time remain separate.

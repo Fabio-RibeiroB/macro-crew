@@ -24,6 +24,9 @@ def fixture_transport(key):
     body = fixture(key)
     if key.startswith('private_rent_'):
         return body, ('https://www.ons.gov.uk/file?uri=%2Feconomy%2Finflationandpriceindices%2Fdatasets%2Fpriceindexofprivaterentsukmonthlypricestatistics%2F21october2026%2Fpriceindexofprivaterentsukmonthlypricestatistics.xlsx')
+    if key.startswith('house_price_'):
+        receipt = json.loads((FIXTURES / 'receipts.json').read_text())['uk_hpi_average_prices.csv']
+        return body, receipt['originalURL'], receipt['source_published_date']
     return body
 
 
@@ -31,6 +34,31 @@ def test_recorded_bytes_match_receipts():
     receipts = json.loads((FIXTURES / 'receipts.json').read_text())
     for name, receipt in receipts.items():
         assert hashlib.sha256((FIXTURES / name).read_bytes()).hexdigest() == receipt['sha256']
+
+
+def test_recorded_uk_hpi_average_price_contract_and_display_precision():
+    receipts = json.loads((FIXTURES / 'receipts.json').read_text())['uk_hpi_average_prices.csv']
+    assert receipts['originalURL'].startswith('https://publicdata.landregistry.gov.uk/market-trend-data/house-price-index-data/Average-prices-')
+    assert receipts['original_bytes'] > receipts['bytes']
+    assert 'reduced test fixture' in receipts['source']
+    level = parse('house_price_level', fixture('house_price_level'), date(2026, 10, 22))
+    growth = parse('house_price_growth', fixture('house_price_growth'), date(2026, 10, 22))
+    assert level.observations[-1].period == growth.observations[-1].period == '2026-08'
+    assert level.observations[-1].value == '273037'
+    assert growth.observations[-1].value == '0.9'
+    assert level.definition.unit == 'GBP'
+    assert growth.definition.unit == 'percent'
+    assert level.definition.series == 'Average_Price'
+    assert growth.definition.series == 'Annual_Change'
+    assert level.definition.source_url.startswith('https://www.gov.uk/')
+
+
+def test_uk_hpi_wrong_geography_and_columns_fail_closed():
+    body = fixture('house_price_level').decode()
+    with pytest.raises(ValidationError, match='national row unavailable'):
+        parse('house_price_level', body.replace('United Kingdom,K02000001', 'Great Britain,K03000001').encode(), date(2026, 10, 22))
+    with pytest.raises(ValidationError, match='columns changed'):
+        parse('house_price_level', body.replace('Average_Price,Monthly_Change', 'Price,Monthly_Change', 1).encode(), date(2026, 10, 22))
 
 
 def test_recorded_pipr_workbook_selects_only_the_uk_national_growth_and_level():

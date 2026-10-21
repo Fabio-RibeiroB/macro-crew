@@ -19,6 +19,7 @@ from zoneinfo import ZoneInfo
 MAX_BYTES = 2_000_000
 MAX_PIPR_BYTES = 25_000_000
 MAX_SOURCE_PAGE_BYTES = 2_000_000
+MAX_HPI_BYTES = 10_000_000
 PARSER_VERSION = 1
 MONTHS = {name: index for index, name in enumerate(
     ('JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'), 1)}
@@ -109,6 +110,18 @@ DEFINITIONS = {
         'level', ONS + '/economy/inflationandpriceindices/datasets/priceindexofprivaterentsukmonthlypricestatistics',
         ONS + '/economy/inflationandpriceindices/datasets/priceindexofprivaterentsukmonthlypricestatistics',
         unit='GBP_per_month'),
+    'house_price_level': Definition(
+        'uk.house_price.average_level', 'Average_Price', 'UK House Price Index: Average price',
+        'Average house price', 'monthly', 'not_seasonally_adjusted', 'level',
+        'https://www.gov.uk/government/collections/uk-house-price-index-reports',
+        'https://www.gov.uk/government/statistical-data-sets/uk-house-price-index-data-downloads',
+        unit='GBP'),
+    'house_price_growth': Definition(
+        'uk.house_price.annual_change', 'Annual_Change', 'UK House Price Index: Average price',
+        'Annual change in average house price', 'monthly', 'not_seasonally_adjusted',
+        'year_on_year', 'https://www.gov.uk/government/collections/uk-house-price-index-reports',
+        'https://www.gov.uk/government/statistical-data-sets/uk-house-price-index-data-downloads',
+        unit='percent'),
 }
 
 # Optional metric members: registered public-definition fields the writer is
@@ -121,6 +134,8 @@ OPTIONAL_METRICS = {
     'unemployment': {'geography': 'United Kingdom', 'age_group': '16 and over', 'window_months': 3},
     'private_rent_growth': {'geography': 'United Kingdom', 'area_code': 'K02000001', 'release_caveat': 'UK latest two months provisional; Northern Ireland latest two months imputed'},
     'private_rent_level': {'geography': 'United Kingdom', 'area_code': 'K02000001', 'release_caveat': 'UK latest two months provisional; Northern Ireland latest two months imputed'},
+    'house_price_level': {'geography': 'United Kingdom', 'area_code': 'K02000001', 'release_caveat': 'Recent observations provisional and subject to revision', 'house_price_download': True},
+    'house_price_growth': {'geography': 'United Kingdom', 'area_code': 'K02000001', 'release_caveat': 'Recent observations provisional and subject to revision', 'house_price_download': True},
 }
 
 # Keys whose official endpoint is the structured ONS JSON timeseries response
@@ -146,6 +161,8 @@ def fixture_file(key):
         return 'unemployment_mgsx_lms.json'
     if key.startswith('private_rent_'):
         return 'pipr_uk_monthly_price_statistics.xlsx'
+    if key.startswith('house_price_'):
+        return 'uk_hpi_average_prices.csv'
     if key in JSON_TIMESERIES:
         return f'{key}_{definition.series.lower()}_{definition.dataset.lower()}.json'
     return f'{key}.csv'
@@ -470,13 +487,73 @@ def _parse_pipr(metric_key, body, today):
     return Snapshot(DEFINITIONS[metric_key], published, None, tuple(points))
 
 
+def parse_hpi(body, today):
+    try:
+        return _parse_hpi(body, today)
+    except ValidationError:
+        raise
+    except (KeyError, IndexError, AttributeError, TypeError, ValueError, OverflowError) as exc:
+        raise ValidationError("Malformed UK HPI CSV structure") from exc
+
+
+def _parse_hpi(body, today):
+    try:
+        rows = list(csv.DictReader(io.StringIO(body.decode('utf-8-sig'), newline=''), strict=True))
+    except (UnicodeError, csv.Error) as exc:
+        raise ValidationError('Invalid UK HPI CSV') from exc
+    expected = ['Date', 'Region_Name', 'Area_Code', 'Average_Price', 'Monthly_Change', 'Annual_Change', 'Average_Price_SA']
+    if not rows or list(rows[0]) != expected:
+        raise ValidationError('UK HPI Average price CSV columns changed')
+    selected = {}
+    def hpi_value(raw):
+        if raw == '':
+            return None
+        if not re.fullmatch(r'[+-]?\d+(?:\.\d+)?', raw):
+            raise ValidationError('Unrecognised UK HPI value token')
+        value, status = number(raw)
+        if status != 'observed' or value is None:
+            raise ValidationError('Unrecognised UK HPI value token')
+        return value
+    for index, row in enumerate(rows, 2):
+        if row.get('Area_Code') != 'K02000001' or row.get('Region_Name') != 'United Kingdom':
+            continue
+        try:
+            period = date.fromisoformat(row['Date']).strftime('%Y-%m')
+        except (ValueError, TypeError) as exc:
+            raise ValidationError('Invalid UK HPI reference month') from exc
+        if period in selected:
+            raise ValidationError('Duplicate UK HPI UK reference month')
+        price = hpi_value(row['Average_Price'])
+        annual = hpi_value(row['Annual_Change'])
+        # This official table publishes average price in whole pounds and annual
+        # change to one decimal place. Retain its displayed precision.
+        if price is not None:
+            price = format(Decimal(price).quantize(Decimal('1'), rounding=ROUND_HALF_UP), 'f')
+        if annual is not None:
+            annual = format(Decimal(annual).quantize(Decimal('0.1'), rounding=ROUND_HALF_UP).normalize(), 'f')
+        selected[period] = (price, annual, index)
+    if not selected:
+        raise ValidationError('UK HPI national row unavailable')
+    latest = max(selected)
+    if latest > today.strftime('%Y-%m'):
+        raise ValidationError('Future UK HPI reference period')
+    if selected[latest][0] is None or selected[latest][1] is None:
+        raise ValidationError('Latest UK HPI national observation unavailable')
+    return {key: Snapshot(DEFINITIONS[key], None, None, tuple(
+        Observation(period, values[col], 'observed' if values[col] is not None else 'missing', values[2])
+        for period, values in sorted(selected.items()))) for key, col in (
+            ('house_price_level', 0), ('house_price_growth', 1))}
+
+
 def parse(key: str, body: bytes, today: date) -> Snapshot:
     definition = DEFINITIONS[key]
-    max_bytes = MAX_PIPR_BYTES if key.startswith('private_rent_') else MAX_BYTES
+    max_bytes = MAX_PIPR_BYTES if key.startswith('private_rent_') else MAX_HPI_BYTES if key.startswith('house_price_') else MAX_BYTES
     if len(body) > max_bytes:
         raise ValidationError('Response exceeds size limit')
     if key.startswith('private_rent_'):
         return parse_pipr(key, body, today)
+    if key.startswith('house_price_'):
+        return parse_hpi(body, today)[key]
     if key in JSON_TIMESERIES:
         observations, published, next_release = parse_ons_json(definition, body, today)
     else:
@@ -595,6 +672,42 @@ def fetch(key: str) -> bytes:
         if len(payload) > MAX_PIPR_BYTES:
             raise ValidationError('PIPR workbook exceeds size limit')
         return payload, url
+    if key.startswith('house_price_'):
+        page_url = 'https://www.gov.uk/government/collections/uk-house-price-index-reports'
+        request = Request(page_url, headers={'User-Agent': 'FinStats/2.0 (+https://github.com/Fabio-RibeiroB/macro-crew)'})
+        with urlopen(request, timeout=30) as response:
+            if response.status != 200 or urlsplit(response.geturl()).hostname != 'www.gov.uk':
+                raise ValidationError('Unexpected UK HPI reports page response')
+            page = response.read(MAX_SOURCE_PAGE_BYTES + 1)
+        if len(page) > MAX_SOURCE_PAGE_BYTES:
+            raise ValidationError('UK HPI reports page exceeds size limit')
+        text = page.decode('utf-8', 'strict')
+        editions = re.findall(r'href=["\'](/government/statistical-data-sets/uk-house-price-index-data-downloads-[a-z]+-[0-9]{4}(?:--[0-9]+)?)["\']', text)
+        if not editions:
+            raise ValidationError('Current UK HPI downloads release unavailable')
+        release_page_url = 'https://www.gov.uk' + editions[0]
+        with urlopen(Request(release_page_url, headers={'User-Agent': 'FinStats/2.0 (+https://github.com/Fabio-RibeiroB/macro-crew)'}), timeout=30) as response:
+            if response.status != 200 or urlsplit(response.geturl()).hostname != 'www.gov.uk':
+                raise ValidationError('Unexpected UK HPI release page response')
+            release_page = response.read(MAX_SOURCE_PAGE_BYTES + 1)
+        if len(release_page) > MAX_SOURCE_PAGE_BYTES:
+            raise ValidationError('UK HPI release page exceeds size limit')
+        release_text = release_page.decode('utf-8', 'strict')
+        published_match = re.search(r'"datePublished"\s*:\s*"([0-9]{4}-[0-9]{2}-[0-9]{2})T', release_text)
+        if not published_match:
+            raise ValidationError('UK HPI publication date unavailable')
+        links = re.findall(r'href=["\'](https://publicdata\.landregistry\.gov\.uk/market-trend-data/house-price-index-data/Average-prices-[0-9]{4}-[0-9]{2}\.csv(?:\?[^"\']*)?)["\']', release_text)
+        if not links:
+            raise ValidationError('Current official UK HPI Average price CSV unavailable')
+        url = links[0].replace('&amp;', '&')
+        request = Request(url, headers={'User-Agent': 'FinStats/2.0 (+https://github.com/Fabio-RibeiroB/macro-crew)'})
+        with urlopen(request, timeout=60) as response:
+            if response.status != 200 or urlsplit(response.geturl()).hostname != 'publicdata.landregistry.gov.uk':
+                raise ValidationError('Unexpected UK HPI CSV response')
+            payload = response.read(MAX_HPI_BYTES + 1)
+        if len(payload) > MAX_HPI_BYTES:
+            raise ValidationError('UK HPI CSV exceeds size limit')
+        return payload, url, published_match.group(1)
     request = Request(DEFINITIONS[key].download_url, headers={
         'User-Agent': 'FinStats/2.0 (+https://github.com/Fabio-RibeiroB/macro-crew)'})
     with urlopen(request, timeout=30) as response:

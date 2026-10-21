@@ -1,7 +1,7 @@
 """Append-only evidence and source vintages. No dependency on AI or public JSON."""
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from decimal import Decimal
 import hashlib
@@ -149,7 +149,7 @@ class Store:
             WHERE s.key=?''' + cutoff + ' ORDER BY s.vintage DESC,a.id DESC LIMIT 1', params).fetchone()
         return dict(row) if row else None
 
-    def ingest(self, key, body, when, source_url=None, evidence_kind='official_download'):
+    def ingest(self, key, body, when, source_url=None, evidence_kind='official_download', source_published_date=None):
         collected = timestamp(when)
         digest = hashlib.sha256(body).hexdigest()
         raw_path = self.directory / 'raw' / (digest + '.bin')
@@ -165,6 +165,16 @@ class Store:
             attempt_id = cursor.lastrowid
         try:
             candidate = parse(key, body, when.astimezone(timezone.utc).date())
+            if key.startswith('house_price_'):
+                if source_published_date is None:
+                    raise ValidationError('UK HPI release date missing from source receipt')
+                try:
+                    datetime.strptime(source_published_date, '%Y-%m-%d')
+                except (TypeError, ValueError) as exc:
+                    raise ValidationError('Invalid UK HPI release date') from exc
+                if source_published_date > when.date().isoformat():
+                    raise ValidationError('Future UK HPI release date')
+                candidate = replace(candidate, published_date=source_published_date)
             if key.startswith('private_rent_') and evidence_kind == 'official_download':
                 edition = re.search(r'(?:%2F|/)([0-9]{1,2}[a-z]+[0-9]{4})(?:%2F|/)', source_url or '')
                 released = candidate.published_date

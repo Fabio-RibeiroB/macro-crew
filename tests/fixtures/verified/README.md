@@ -22,14 +22,26 @@ the unchanged three core metric members plus reviewed optional metric members.
   producer output, not hand-written test data. It is produced by the real
   collect → publish → deliver pipeline over the recorded official fixtures in
   `tests/fixtures/official/` with a fixed clock (2026-10-21T12:00Z) and a fixed
-  generation id. It contains the unchanged core measures, CPI, and both pay
-  measures plus both UK PIPR rent measures with `mode: "official"`; the Python
+  generation id. It contains the unchanged core measures, CPI, pay and UK PIPR rent measures,
+  plus both UK HPI average price measures with `mode: "official"`; the Python
   suite regenerates it byte for byte and the frontend suite loads it through the
-  real reader. Values mirror recorded excerpts and a reduced test-only PIPR
-  workbook projection. This synthetic producer artifact is never deployed live.
+  real reader. Values mirror recorded excerpts and reduced, clearly labelled
+  PIPR and UK HPI test fixtures. This synthetic producer artifact is never deployed live.
+
+`producer-pay-v1.json` retains source release date, collection time, UK geography,
+reference month, separate GBP and percent units, and the UK HPI source receipt
+identity. Its CSV excerpt contains only UK national rows from 2016 onward; the
+receipt keeps the full official file URL, original byte count and full-source SHA-256.
 
 Tests may mutate copies of these fixtures in memory; checked-in bytes are never
 modified by a test run. A recorded fixture can never become public official data.
 
 `m1-reader.mjs` freezes the M1 manifest/dataset reader from accepted commit
 `189437f` for compatibility tests. It is test-only and is not used by the app.
+- `producer-pay-v1.json` now includes the actual UK HPI Average price CSV-derived
+  `house_price_level` and `house_price_growth` members alongside rent. UK HPI's
+  checked-in source excerpt is labelled in `tests/fixtures/official/receipts.json`;
+  its source release date is retained separately from retrieval time and the
+  August 2026 reference month. The full original CSV hash and size are in that
+  receipt; only the UK national rows from 2016 onward are included in the test
+  fixture. No fixture value is a live production figure.

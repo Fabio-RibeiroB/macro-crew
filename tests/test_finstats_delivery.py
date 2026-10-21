@@ -15,7 +15,7 @@ from tests.test_finstats_storage import CPI_WHEN, WHEN
 
 def prepared(tmp_path):
     private, public = tmp_path / 'private', tmp_path / 'public'
-    collect(private, transport=fixture_transport, clock=lambda: WHEN)
+    collect(private, transport=fixture_transport, clock=lambda: CPI_WHEN)
     return private, public
 
 
@@ -49,7 +49,8 @@ def test_delivery_publishes_cpi_headline_with_core_metrics_retained(tmp_path):
     assert set(data['metrics']) == {
         'bank_rate', 'cpih', 'gdp', 'cpi',
         'regular_pay_nominal_growth', 'regular_pay_real_growth', 'unemployment',
-        'private_rent_growth', 'private_rent_level'}
+        'private_rent_growth', 'private_rent_level',
+        'house_price_level', 'house_price_growth'}
     cpi = data['metrics']['cpi']
     assert cpi['validation_status'] == 'verified'
     assert cpi['snapshot_evidence_kind'] == 'official_download'
@@ -89,6 +90,16 @@ def test_delivery_publishes_cpi_headline_with_core_metrics_retained(tmp_path):
     assert level['definition']['unit'] == 'GBP_per_month'
     assert growth['latest']['period'] == level['latest']['period'] == '2026-09'
     assert level['latest']['value'] == '1406'
+    house_level = data['metrics']['house_price_level']
+    house_growth = data['metrics']['house_price_growth']
+    assert house_level['definition']['geography'] == 'United Kingdom'
+    assert house_level['definition']['area_code'] == 'K02000001'
+    assert house_level['definition']['unit'] == 'GBP'
+    assert house_growth['definition']['unit'] == 'percent'
+    assert house_level['latest']['period'] == house_growth['latest']['period'] == '2026-08'
+    assert house_level['latest']['value'] == '273037'
+    assert house_growth['latest']['value'] == '0.9'
+    assert house_level['source_published_date'] == '2026-10-21'
 
 
 def test_checked_in_producer_generation_regenerates_byte_identically(tmp_path):

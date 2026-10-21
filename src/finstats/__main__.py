@@ -43,6 +43,11 @@ def collect(directory, transport=fetch, clock=utc_now, fixtures=None):
                         body = (Path(fixtures) / fixture_file(key)).read_bytes()
                         kind = 'recorded_fixture'
                         url = f'fixture:{fixture_file(key)}'
+                        source_published_date = None
+                        if key.startswith('house_price_'):
+                            receipt = json.loads((Path(fixtures) / 'receipts.json').read_text()).get(fixture_file(key), {})
+                            source_published_date = receipt.get('source_published_date')
+                            url = receipt.get('originalURL', url)
                     else:
                         if transport is fetch and key.startswith('private_rent_'):
                             fetched = shared_downloads.get('pipr')
@@ -55,15 +60,29 @@ def collect(directory, transport=fetch, clock=utc_now, fixtures=None):
                                     shared_downloads['pipr'] = exc
                                     raise
                                 shared_downloads['pipr'] = fetched
+                        elif transport is fetch and key.startswith('house_price_'):
+                            fetched = shared_downloads.get('hpi')
+                            if isinstance(fetched, Exception):
+                                raise fetched
+                            if fetched is None:
+                                try:
+                                    fetched = transport(key)
+                                except (ValueError, OSError, HTTPException, sqlite3.Error) as exc:
+                                    shared_downloads['hpi'] = exc
+                                    raise
+                                shared_downloads['hpi'] = fetched
                         else:
                             fetched = transport(key)
                         if isinstance(fetched, tuple):
-                            body, url = fetched
+                            body, url, *metadata = fetched
+                            source_published_date = metadata[0] if metadata else None
                         else:
                             body, url = fetched, DEFINITIONS[key].download_url
+                            source_published_date = None
                         kind = 'official_download'
                     when = clock()
-                    store.ingest(key, body, when, source_url=url, evidence_kind=kind)
+                    store.ingest(key, body, when, source_url=url, evidence_kind=kind,
+                                 source_published_date=source_published_date)
                 except (ValueError, OSError, HTTPException, sqlite3.Error) as exc:
                     failures.append(key)
                     if isinstance(exc, sqlite3.Error):

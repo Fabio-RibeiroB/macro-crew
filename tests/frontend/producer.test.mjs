@@ -41,7 +41,7 @@ test("producer output passes the manifest checksum and the full reader contract"
   const data = await loadVerified("/", fileFetcher(bytes));
   assert.deepEqual(
     Object.keys(data.metrics).sort(),
-    ["bank_rate", "cpi", "cpih", "gdp", "private_rent_growth", "private_rent_level", "regular_pay_nominal_growth", "regular_pay_real_growth", "unemployment"],
+    ["bank_rate", "cpi", "cpih", "gdp", "house_price_growth", "house_price_level", "private_rent_growth", "private_rent_level", "regular_pay_nominal_growth", "regular_pay_real_growth", "unemployment"],
   );
 });
 
@@ -52,7 +52,7 @@ test("producer pay-v1 output remains accepted by the deployed M1 reader", () => 
   );
   assert.deepEqual(Object.keys(deployedView.metrics).sort(), [
     "bank_rate", "cpi", "cpih", "gdp",
-    "private_rent_growth", "private_rent_level",
+    "house_price_growth", "house_price_level", "private_rent_growth", "private_rent_level",
     "regular_pay_nominal_growth", "regular_pay_real_growth", "unemployment",
   ]);
   assert.equal(deployedView.metrics.bank_rate.latest.value, "3.75");
@@ -124,6 +124,55 @@ test("producer PIPR data preserves UK geography, workbook identity and distinct 
   assert.equal(growth.definition.release_caveat, "UK latest two months provisional; Northern Ireland latest two months imputed");
   assert.deepEqual(chartPoints(growth).slice(-2).map((point) => point.value), [3.8, 3.8]);
   assert.equal(chartPoints(level).at(-1).value, 1406);
+});
+
+test("producer UK HPI output carries release, reference, geography and independent chart units", async () => {
+  const data = await loadVerified("/", fileFetcher(bytes));
+  const level = data.metrics.house_price_level;
+  const growth = data.metrics.house_price_growth;
+  assert.equal(level.latest.period, "2026-08");
+  assert.equal(level.latest.value, "273037");
+  assert.equal(growth.latest.period, level.latest.period);
+  assert.equal(growth.latest.value, "0.9");
+  assert.equal(level.source_published_date, "2026-10-21");
+  assert.equal(growth.source_download_url, level.source_download_url);
+  assert.equal(level.definition.geography, "United Kingdom");
+  assert.equal(level.definition.area_code, "K02000001");
+  assert.equal(level.definition.unit, "GBP");
+  assert.equal(growth.definition.unit, "percent");
+  assert.equal(level.history.length, growth.history.length);
+  assert.ok(level.history.length >= 60);
+});
+
+test("Housing renders a national house-price card and separate pounds and percentage charts", async () => {
+  const { createServer } = await import("vite");
+  const { createElement } = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+  try {
+    const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
+    const producer = await loadVerified("/", fileFetcher(bytes));
+    const html = renderToStaticMarkup(createElement(App, { pathname: "/housing", initialData: producer }));
+    assert.match(html, /id="house-prices"/);
+    assert.match(html, /UK average house price/);
+    assert.match(html, /£273,037/);
+    assert.match(html, /Annual change: 0\.9%/);
+    assert.doesNotMatch(html, /percentage points compared with July 2026/);
+    assert.match(html, /Recent observations are provisional and subject to revision/);
+    const { HistoricalTrendCard } = await server.ssrLoadModule("/src/app/components/HistoricalTrendCard.tsx");
+    const pounds = renderToStaticMarkup(createElement(HistoricalTrendCard, {
+      title: "Average house price", label: "Average house price", unit: "£",
+      data: chartPoints(producer.metrics.house_price_level).slice(-2),
+    }));
+    const percentChart = renderToStaticMarkup(createElement(HistoricalTrendCard, {
+      title: "Annual change", label: "Annual change", unit: "%",
+      data: chartPoints(producer.metrics.house_price_growth).slice(-2),
+    }));
+    assert.match(pounds, /Exact values in pounds/);
+    assert.match(percentChart, /Exact values in percent/);
+    assert.doesNotMatch(pounds, /0\.9%/);
+    assert.doesNotMatch(percentChart, /£273,037/);
+  } finally { await server.close(); }
 });
 
 test("Housing renders real producer rent values and keeps growth visible through level failures", async () => {
