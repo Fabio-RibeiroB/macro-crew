@@ -215,6 +215,15 @@ test("a gap before a possible Bank Rate transition prevents bridging it", () => 
   assert.equal(lastRateChange(metric), null);
 });
 
+test("a skipped working date does not establish when Bank Rate changed", () => {
+  const metric = sample().data.metrics.bank_rate;
+  metric.history = [
+    { period: "2026-10-16", value: "4.00", status: "observed" },
+    { period: "2026-10-20", value: "3.75", status: "observed" },
+  ];
+  assert.equal(lastRateChange(metric), null);
+});
+
 test("insufficient Bank Rate history does not imply a change date", () => {
   const metric = sample().data.metrics.bank_rate;
   metric.history = [

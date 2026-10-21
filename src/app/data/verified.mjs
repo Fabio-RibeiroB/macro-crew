@@ -223,6 +223,16 @@ export function lastRateChange(metric) {
     const previous = metric.history[i - 1];
     // A missing observation breaks the evidence chain. Do not bridge it.
     if (current.value === null || previous.value === null) return null;
+    // Bank Rate is observed on working days. A skipped weekday makes the
+    // transition date uncertain, even when the rate differs at the next point.
+    const date = new Date(`${previous.period}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + 1);
+    const end = new Date(`${current.period}T00:00:00Z`);
+    while (date < end) {
+      const weekday = date.getUTCDay();
+      if (weekday !== 0 && weekday !== 6) return null;
+      date.setUTCDate(date.getUTCDate() + 1);
+    }
     const difference = Number(current.value) - Number(previous.value);
     if (difference !== 0) return { period: current.period, difference };
   }
