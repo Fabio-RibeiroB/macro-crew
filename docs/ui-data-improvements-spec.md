@@ -425,7 +425,7 @@ Keep its links accessible from individual metric sections and the footer.
 
 ## 10. Architecture and delivery constraints
 
-Follow CLAUDE.md, README.md and FRONTEND.md; this specification does not duplicate
+Follow AGENTS.md, README.md and FRONTEND.md; this specification does not duplicate
 or replace their shared operational guidance.
 
 Extend `src/finstats` deterministic source contracts, storage and immutable public
