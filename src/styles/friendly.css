@@ -267,10 +267,30 @@
 .fs-section-heading .fs-eyebrow {
   margin-bottom: 8px;
 }
+.fs-section-heading h1,
 .fs-section-heading p:not(.fs-eyebrow) {
   color: var(--fs-muted);
   font-size: 14px;
   margin-top: 9px;
+}
+.fs-section-heading h1 {
+  color: var(--fs-ink);
+  font-size: clamp(26px, 3vw, 34px);
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+  margin: 0;
+}
+.fs-overview {
+  position: relative;
+  padding-top: 25px;
+  padding-bottom: 44px;
+}
+.fs-overview .fs-section-heading {
+  margin-bottom: 18px;
+}
+.fs-anchor-alias {
+  position: absolute;
+  top: 0;
 }
 .fs-text-button {
   display: flex;
@@ -302,6 +322,15 @@
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 17px;
+}
+.fs-stat-top h3 {
+  font-size: 17px;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+.fs-stat-top > svg {
+  color: var(--topic);
+  flex-shrink: 0;
 }
 .fs-stat-top .fs-eyebrow {
   margin: 0;
@@ -1092,7 +1121,34 @@
   min-height: 48px;
 }
 .fs-stat-compact .fs-fresh {
-  margin-top: 18px;
+  margin-top: 12px;
+}
+.fs-stat-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  margin-top: 10px;
+  color: var(--fs-accent);
+  font-size: 12px;
+  font-weight: 650;
+  text-decoration: none;
+}
+.fs-stat-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.fs-stat-link:focus-visible,
+.fs-info summary:focus-visible {
+  outline: 3px solid var(--fs-accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.fs-info > p {
+  line-height: 1.65;
+}
+.fs-info .fs-stat-meaning {
+  min-height: 0;
 }
 @media (max-width: 380px) {
   .fs-header-inner {
