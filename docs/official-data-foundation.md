@@ -167,3 +167,9 @@ subsecond historical cutoffs, incomplete HTTP responses, isolated SQLite stateme
 failure, unusable-store publication prevention, descendant/symlink path rejection
 and receipt-aware exports. These results exclude the two legacy CrewAI integration
 suites, as does the CI job; no production collector or website was changed.
+
+## Gilt yields
+
+Yield coverage is outside the shadow collector described above. The source
+comparison, and the owner decision still required before a yield feed is built,
+are in [Gilt-yield qualification](gilt-yield-qualification.md).
