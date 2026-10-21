@@ -178,7 +178,8 @@ function validateDefinition(definition, spec) {
     definition.unit !== spec.unit ||
     definition.version !== spec.version ||
     definition.geography !== spec.geography ||
-    definition.source_url !== spec.source_url
+    definition.source_url !== spec.source_url ||
+    definition.download_url !== spec.download_url
   )
     fail("Unexpected optional metric definition");
   if (spec.window_months !== undefined) {
@@ -203,6 +204,7 @@ function validateReference(point, spec) {
   const reference = point.reference;
   if (
     !object(reference) ||
+    Object.keys(reference).sort().join(",") !== "end_month,kind,start_month" ||
     reference.kind !== "rolling_months" ||
     !isoMonth(reference.start_month) ||
     !isoMonth(reference.end_month) ||
@@ -215,7 +217,7 @@ function validateReference(point, spec) {
   if (month !== reference.end_month)
     fail("Reference window does not match its definition");
 }
-function validateOptionalMetric(key, metric, spec) {
+function validateOptionalMetric(metric, spec) {
   if (!object(metric) || !object(metric.definition))
     fail("Missing optional metric definition");
   validateDefinition(metric.definition, spec);
@@ -345,7 +347,7 @@ export function parseDataset(value, manifest) {
     if (key in METRICS) continue;
     const spec = OPTIONAL_METRICS[key];
     if (!spec) fail("Unknown metric");
-    validateOptionalMetric(key, metric, spec);
+    validateOptionalMetric(metric, spec);
   }
   return value;
 }
@@ -465,6 +467,16 @@ export function referenceWindow(point) {
   )
     return null;
   return { start_month: reference.start_month, end_month: reference.end_month };
+}
+export function previousPublishedWindow(metric) {
+  if (!metric?.latest || metric.history.length < 2) return null;
+  const current = metric.latest.reference;
+  const previous = metric.history.at(-2);
+  if (!current || !previous.reference || previous.value === null) return null;
+  const expectedPrevious = new Date(`${previous.period}-01T00:00:00Z`);
+  expectedPrevious.setUTCMonth(expectedPrevious.getUTCMonth() + 1);
+  if (expectedPrevious.toISOString().slice(0, 7) !== metric.latest.period) return null;
+  return previous;
 }
 export function freshness(metric, now = new Date()) {
   if (!metric.latest) return { label: "Unavailable", kind: "warning" };

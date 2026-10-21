@@ -1,8 +1,5 @@
-// End-to-end: the checked-in generation is the actual producer output
-// (collect → publish → deliver over recorded official fixtures), and the real
-// reader accepts it with CPI present and the core metrics retained. The Python
-// suite regenerates these bytes through the same pipeline and asserts they are
-// byte-identical (tests/test_finstats_delivery.py).
+// The checked-in generation is actual producer output (collect → publish →
+// deliver over recorded official fixtures), accepted by the live reader.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -17,9 +14,9 @@ import {
 } from "../../src/app/data/verified.mjs";
 
 const WIRE = new URL("../fixtures/verified/", import.meta.url);
-const bytes = readFileSync(new URL("producer-cpi-v1.json", WIRE));
+const bytes = readFileSync(new URL("producer-pay-v1.json", WIRE));
 const manifest = JSON.parse(
-  readFileSync(new URL("producer-cpi-v1.manifest.json", WIRE), "utf8"),
+  readFileSync(new URL("producer-pay-v1.manifest.json", WIRE), "utf8"),
 );
 
 function fileFetcher(data) {
@@ -40,8 +37,23 @@ test("producer output passes the manifest checksum and the full reader contract"
   const data = await loadVerified("/", fileFetcher(bytes));
   assert.deepEqual(
     Object.keys(data.metrics).sort(),
-    ["bank_rate", "cpi", "cpih", "gdp"],
+    ["bank_rate", "cpi", "cpih", "gdp", "regular_pay_nominal_growth", "regular_pay_real_growth"],
   );
+});
+
+test("producer pay measures preserve exact official identities and full rolling windows", async () => {
+  const data = await loadVerified("/", fileFetcher(bytes));
+  const nominal = data.metrics.regular_pay_nominal_growth;
+  const real = data.metrics.regular_pay_real_growth;
+  assert.equal(nominal.definition.series, "KAI9");
+  assert.equal(real.definition.series, "A2FA");
+  assert.equal(real.definition.deflator, "CPIH");
+  assert.deepEqual(nominal.latest.reference, {
+    kind: "rolling_months", start_month: "2026-06", end_month: "2026-08",
+  });
+  assert.deepEqual(nominal.latest.reference, real.latest.reference);
+  assert.equal(nominal.latest.value, "3.7");
+  assert.equal(real.latest.value, "0.6");
 });
 
 test("validated CPI carries its exact definition, release date and history", async () => {

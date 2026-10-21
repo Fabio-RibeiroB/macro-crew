@@ -166,6 +166,11 @@ class Store:
             candidate = parse(key, body, when.astimezone(timezone.utc).date())
             semantic_hash = hashlib.sha256(encode(candidate.semantic_content())).hexdigest()
             payload = asdict(candidate)
+            # Keep the historical core snapshot wire shape byte-for-byte; only
+            # qualified rolling-window observations carry reference metadata.
+            for observation in payload['observations']:
+                if observation['reference'] is None:
+                    del observation['reference']
             vintage = candidate.published_date or candidate.observations[-1].period
             previous = self.latest(key)
             if previous and vintage >= previous['vintage']:

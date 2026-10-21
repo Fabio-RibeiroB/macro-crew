@@ -14,6 +14,7 @@ import {
   freshness,
   legacyReports,
   referenceWindow,
+  previousPublishedWindow,
 } from "../../src/app/data/verified.mjs";
 import {
   METRICS as M1_METRICS,
@@ -463,6 +464,24 @@ test("rolling charts locate points at their end month and keep their windows", (
     start_month: "2026-06",
     end_month: "2026-08",
   });
+});
+
+test("pay comparison uses the previous overlapping published window only", () => {
+  const data = parseDataset(
+    optionalData(),
+    parseManifest(fixtureManifest("v1-with-optional")),
+  );
+  const nominal = data.metrics.regular_pay_nominal_growth;
+  assert.equal(previousPublishedWindow(nominal).period, "2026-07");
+  assert.deepEqual(referenceWindow(previousPublishedWindow(nominal)), {
+    start_month: "2026-05",
+    end_month: "2026-07",
+  });
+  const real = data.metrics.regular_pay_real_growth;
+  real.latest.reference = { ...real.latest.reference, start_month: "2026-05" };
+  assert.notDeepEqual(referenceWindow(nominal.latest), referenceWindow(real.latest));
+  nominal.history.at(-2).period = "2026-06";
+  assert.equal(previousPublishedWindow(nominal), null);
 });
 
 test("a skipped end month keeps the previous published window comparison unavailable", () => {
