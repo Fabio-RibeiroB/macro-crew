@@ -20,8 +20,12 @@ Private legacy AI cron → research_report.json → clearly labelled archived su
 
 The verified metrics are **daily Bank Rate (IUDBEDR)**, **annual CPI inflation
 (D7G7/MM23)** — the homepage and Prices headline, with **annual CPIH inflation
-(L55O/MM23)** retained as clearly labelled supporting context — and **monthly
-seasonally adjusted real GDP growth (ECYX/MGDP)**.
+(L55O/MM23)** retained as clearly labelled supporting context — **nominal regular
+pay growth (KAI9/LMS)** and its official **CPIH-adjusted counterpart (A2FA/LMS)**
+for Great Britain, **UK unemployment aged 16+ (MGSX/LMS)**, and **monthly
+seasonally adjusted real GDP growth (ECYX/MGDP)**. Labour figures retain their
+full three-month reference windows. These describe integrated source coverage;
+the [M2 acceptance record](docs/m2-acceptance.md) distinguishes it from deployment.
 Reference period, official release date and FinStats check time are separate.
 Missing figures remain unavailable. Failed collection preserves previously
 verified data; failed AI never blocks statistical publication. Revision history
