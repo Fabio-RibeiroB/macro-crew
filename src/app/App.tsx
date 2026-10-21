@@ -126,13 +126,14 @@ function MetricCard({
   const delta = previous
     ? Number(metric.latest.value) - Number(previous.value)
     : null;
+  const Tag = compact ? "h2" : "h3";
   return (
     <article
       className={`fs-stat ${compact ? "fs-stat-compact" : ""}`}
       style={{ "--topic": topic.color } as React.CSSProperties}
     >
       <div className="fs-stat-top">
-        <h3>{topic.short}</h3>
+        <Tag>{topic.short}</Tag>
         <topic.Icon size={18} aria-hidden="true" />
       </div>
       <p className="fs-number">{percent(metric.latest?.value)}</p>
@@ -171,7 +172,7 @@ function MetricCard({
           About {topic.short}{" "}
           <ChevronDown size={15} aria-hidden="true" />
         </summary>
-        <p className="fs-stat-meaning">{topic.meaning}</p>
+        {compact && <p className="fs-stat-meaning">{topic.meaning}</p>}
         <p>{topic.caution}</p>
         <dl>
           <div>
