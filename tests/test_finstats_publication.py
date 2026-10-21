@@ -165,6 +165,59 @@ def test_rent_level_failure_does_not_hide_growth_and_retains_its_verified_histor
     assert data['metrics']['private_rent_level']['latest']['value'] == '1406'
 
 
+@pytest.mark.parametrize(('bad_column', 'failed_key', 'accepted_key'), [
+    ('Annual_Change', 'house_price_growth', 'house_price_level'),
+    ('Average_Price', 'house_price_level', 'house_price_growth'),
+])
+def test_house_price_series_fail_independently_and_keep_prior_verified_history(
+        tmp_path, bad_column, failed_key, accepted_key):
+    collect(tmp_path, transport=lambda key: fixture_transport(key), clock=lambda: CPI_WHEN)
+    before = read_generation(tmp_path)
+    def broken_one_series(key):
+        if key.startswith('house_price_'):
+            body, url, released = fixture_transport(key)
+            lines = body.decode().splitlines()
+            headers = lines[0].split(',')
+            position = headers.index(bad_column)
+            cells = lines[-1].split(',')
+            cells[position] = 'UNKNOWN'
+            lines[-1] = ','.join(cells)
+            return ('\n'.join(lines) + '\n').encode(), url, released
+        return fixture_transport(key)
+    result = collect(tmp_path, transport=broken_one_series, clock=lambda: CPI_WHEN + timedelta(days=1))
+    assert result['failed_metrics'] == [failed_key]
+    data = read_generation(tmp_path)
+    assert data['metrics'][failed_key]['collection_status'] == 'degraded'
+    assert data['metrics'][failed_key]['history'] == before['metrics'][failed_key]['history']
+    assert data['metrics'][accepted_key]['collection_status'] == 'ok'
+    assert data['metrics'][accepted_key]['latest']['period'] == '2026-08'
+    assert data['metrics']['gdp']['collection_status'] == 'ok'
+    from finstats.delivery import deliver
+    public_dir = tmp_path.parent / (tmp_path.name + '-public')
+    deliver(tmp_path, public_dir)
+    manifest = json.loads((public_dir / 'current.json').read_text())
+    public = json.loads((public_dir / manifest['data_url']).read_text())
+    assert public['metrics'][failed_key]['collection_status'] == 'degraded'
+    assert public['metrics'][accepted_key]['collection_status'] == 'ok'
+    assert public['metrics']['gdp']['latest']['value'] is not None
+
+
+def test_malformed_hpi_csv_is_quarantined_while_other_feeds_deliver(tmp_path):
+    collect(tmp_path, transport=lambda key: fixture_transport(key), clock=lambda: CPI_WHEN)
+    def malformed_hpi(key):
+        if key.startswith('house_price_'):
+            body, url, released = fixture_transport(key)
+            return b'Date,Region_Name,Area_Code\n\xff', url, released
+        return fixture_transport(key)
+    result = collect(tmp_path, transport=malformed_hpi, clock=lambda: CPI_WHEN + timedelta(days=1))
+    assert result['failed_metrics'] == ['house_price_level', 'house_price_growth']
+    data = read_generation(tmp_path)
+    for key in ('house_price_level', 'house_price_growth'):
+        assert data['metrics'][key]['collection_status'] == 'degraded'
+        assert data['metrics'][key]['latest']['period'] == '2026-08'
+    assert data['metrics']['gdp']['collection_status'] == 'ok'
+
+
 def test_corrupt_pipr_is_quarantined_and_other_metrics_still_deliver(tmp_path):
     private, public_dir = tmp_path / 'private', tmp_path / 'public'
     collect(private, transport=lambda key: fixture_transport(key), clock=lambda: CPI_WHEN)

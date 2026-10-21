@@ -31,6 +31,7 @@ interface HistoricalTrendCardProps {
   title: string;
   label: string;
   unit?: string;
+  unitDescription?: string;
   color?: string;
   data: TrendPoint[];
   referenceLine?: { value: number; label: string };
@@ -100,6 +101,7 @@ export function HistoricalTrendCard({
   title,
   label,
   unit = "%",
+  unitDescription = unit === "£" ? "pounds per month" : unit === "%" ? "percent" : unit,
   color = "#60a5fa",
   data,
   referenceLine,
@@ -287,7 +289,7 @@ export function HistoricalTrendCard({
             <div className="fs-chart-values-scroll">
               <table>
                 <caption>
-                  {title}. Exact values in {unit === "%" ? "percent" : unit === "£" ? "pounds per month" : unit}.
+                  {title}. Exact values in {unitDescription}.
                   Latest revised values for each reference period.
                   {selection.notice ? ` ${selection.notice}` : ""}
                 </caption>

@@ -197,6 +197,7 @@ function MetricCard({
         <p className="fs-number">Not available</p>
         <p className="fs-measure">{topic.measurement}</p>
         <p className="fs-period">A verified reading is not available yet.</p>
+        {kind === "house_price_level" && compact && secondaryMetric?.latest?.value != null && <p className="fs-comparison">Annual change: {percent(secondaryMetric.latest.value)} for {formatPeriod(secondaryMetric.latest.period)}{secondaryMetric.collection_status === "degraded" ? " · update delayed; last verified figure shown" : ""}</p>}
     <a className="fs-stat-link" href={topic.detailHref}>
         See {topic.short.toLowerCase()} details <ArrowRight size={15} aria-hidden="true" />
         </a>
@@ -241,7 +242,7 @@ function MetricCard({
           "A verified reading is not available yet."
         )}
       </p>
-      {compact && isPay && (
+      {!compact && isPay && (
         <p className="fs-comparison">
           {secondaryMetric?.latest?.value != null ? (
             <>
@@ -261,9 +262,8 @@ function MetricCard({
           )}
         </p>
       )}
-      {kind === "private_rent_growth" && <p className="fs-comparison">Average monthly rent: {secondaryMetric?.latest?.value == null ? "not available" : `£${Number(secondaryMetric.latest.value).toLocaleString("en-GB")}`} {secondaryMetric?.latest?.period ? `in ${formatPeriod(secondaryMetric.latest.period)}` : ""}{secondaryMetric?.collection_status === "degraded" ? " · update delayed, showing the last verified rent" : ""}</p>}
-      {kind === "house_price_level" && <p className="fs-comparison">Annual change: {secondaryMetric?.latest?.value == null ? "not available" : percent(secondaryMetric.latest.value)} {secondaryMetric?.latest?.period ? `for ${formatPeriod(secondaryMetric.latest.period)}` : ""}{secondaryMetric?.collection_status === "degraded" ? " · update delayed, showing the last verified annual change" : ""}</p>}
-      <div className="fs-comparison">
+      {!compact && kind === "private_rent_growth" && <p className="fs-comparison">Average monthly rent: {secondaryMetric?.latest?.value == null ? "not available" : `£${Number(secondaryMetric.latest.value).toLocaleString("en-GB")}`} {secondaryMetric?.latest?.period ? `in ${formatPeriod(secondaryMetric.latest.period)}` : ""}{secondaryMetric?.collection_status === "degraded" ? " · update delayed, showing the last verified rent" : ""}</p>}
+      {!compact && <div className="fs-comparison">
         {kind === "house_price_level" ? null : kind === "bank_rate" ? rateChange ? (
           <>
             Latest evidenced change: {rateChange.difference > 0 ? "+" : "−"}
@@ -286,7 +286,7 @@ function MetricCard({
         ) : (
           "A directly comparable previous reading is not available."
         )}
-      </div>
+      </div>}
       {!compact && <p className="fs-stat-meaning">{topic.meaning}</p>}
       <div className={`fs-fresh fs-fresh-${status.kind}`}>
         <ShieldCheck size={14} aria-hidden="true" />
@@ -298,6 +298,11 @@ function MetricCard({
           <ChevronDown size={15} aria-hidden="true" />
         </summary>
         {compact && <p className="fs-stat-meaning">{topic.meaning}</p>}
+        {compact && <p>{topic.measurement}</p>}
+        {compact && isPay && <p>{secondaryMetric?.latest?.value != null ? <>Official CPIH-adjusted regular pay: {percent(secondaryMetric.latest.value)} for {secondaryWindow ? `${formatPeriod(secondaryWindow.start_month)} to ${formatPeriod(secondaryWindow.end_month)}` : formatPeriod(secondaryMetric.latest.period)} · Great Britain{currentWindow && secondaryWindow && currentWindow.start_month === secondaryWindow.start_month && currentWindow.end_month === secondaryWindow.end_month ? " (same published window)" : "; separate window, not directly matched to nominal pay"}{secondaryMetric.collection_status !== "ok" ? " · update delayed, last verified figure shown" : ""}.</> : "Official CPIH-adjusted regular pay is currently unavailable."}</p>}
+        {compact && kind === "private_rent_growth" && <p>Average monthly rent: {secondaryMetric?.latest?.value != null ? `£${Number(secondaryMetric.latest.value).toLocaleString("en-GB")} in ${formatPeriod(secondaryMetric.latest.period)}` : "not available"}{secondaryMetric?.collection_status === "degraded" ? " · update delayed, last verified rent shown" : ""}.</p>}
+        {compact && kind === "house_price_level" && <p>Annual change: {secondaryMetric?.latest?.value != null ? `${percent(secondaryMetric.latest.value)} for ${formatPeriod(secondaryMetric.latest.period)}` : "not available"}{secondaryMetric?.collection_status === "degraded" ? " · update delayed, last verified figure shown" : ""}.</p>}
+        {compact && kind === "bank_rate" && rateChange && <p>Latest evidenced change: {rateChange.difference > 0 ? "+" : "−"}{Math.abs(rateChange.difference).toFixed(2).replace(/\.?0+$/, "")} percentage point{Math.abs(rateChange.difference) === 1 ? "" : "s"} at the {formatPeriod(rateChange.period)} observation.</p>}
         <p>{topic.caution}</p>
         <dl>
           <div>
@@ -471,8 +476,8 @@ function Housing({ data, loading, error, refresh }: any) {
       </details>
     </Statistics>
     <Statistics data={data} kinds={["house_price_level"]} loading={loading} error={error} refresh={refresh} sectionId="house-prices" title="House prices" eyebrow="UK House Price Index">
-      <article className="fs-stat"><div className="fs-stat-top"><h3>UK average house price</h3><Landmark size={18} aria-hidden="true" /></div><p className="fs-number">{metricValue(houseLevel)}</p><p className="fs-measure">United Kingdom · pounds</p><p className="fs-period">{houseLevel?.latest ? `For ${formatPeriod(houseLevel.latest.period)}` : "A verified reading is not available yet."}</p><p className="fs-fresh">{houseLevel ? freshness(houseLevel).label : "Unavailable"}</p><p className="fs-comparison">Annual change: {houseGrowth?.latest?.value == null ? "not available" : percent(houseGrowth.latest.value)}{houseGrowth?.latest?.period ? ` for ${formatPeriod(houseGrowth.latest.period)}` : ""}</p><details className="fs-details fs-info"><summary>Source details <ChevronDown size={15} aria-hidden="true" /></summary><p>HM Land Registry UK HPI, Average price CSV · United Kingdom (K02000001). Price is shown in pounds; annual change is a separate percentage series.</p><p>Source release date: {houseLevel?.source_published_date ?? "not supplied"}. Last successful check: {checkedAt(houseLevel?.last_successful_check_at ?? null)}. Recent observations are provisional and subject to revision.</p>{houseLevel && <OfficialLink href={houseLevel.definition.source_url}>UK House Price Index releases</OfficialLink>}</details></article>
-      <Suspense fallback={<p role="status">Loading charts…</p>}><div className={`fs-chart-grid fs-chart-count-${houseCharts.length}`}>{houseCharts.map((metric) => <HistoricalTrendCard key={metric.definition.metric_id} title={metric.definition.title} label={metric.definition.unit === "GBP" ? "Average house price" : "Annual change"} color={metric.definition.unit === "GBP" ? "#547b8a" : "#9b6b32"} unit={metric.definition.unit === "GBP" ? "£" : "%"} data={chartPoints(metric)} />)}</div></Suspense>
+      {houseGrowth?.latest && <article className="fs-stat fs-housing-support"><div className="fs-stat-top"><h3>Annual change in average house prices</h3><Landmark size={18} aria-hidden="true" /></div><p className="fs-number">{percent(houseGrowth.latest.value)}</p><p className="fs-measure">United Kingdom · annual percentage change</p><p className="fs-period">For {formatPeriod(houseGrowth.latest.period)}</p><p className="fs-fresh">{freshness(houseGrowth).label}</p><details className="fs-details fs-info"><summary>Source details <ChevronDown size={15} aria-hidden="true" /></summary><p>HM Land Registry UK HPI, Average price CSV · Annual_Change series · United Kingdom (K02000001). The release date and last successful check are recorded separately.</p><p>Source release date: {houseGrowth.source_published_date ?? "not supplied"}. Last successful check: {checkedAt(houseGrowth.last_successful_check_at ?? null)}. Recent observations are provisional and subject to revision.</p><OfficialLink href={houseGrowth.definition.source_url}>UK House Price Index releases</OfficialLink></details></article>}
+      <Suspense fallback={<p role="status">Loading charts…</p>}><div className={`fs-chart-grid fs-chart-count-${houseCharts.length}`}>{houseCharts.map((metric) => <HistoricalTrendCard key={metric.definition.metric_id} title={metric.definition.title} label={metric.definition.unit === "GBP" ? "Average house price" : "Annual change"} color={metric.definition.unit === "GBP" ? "#547b8a" : "#9b6b32"} unit={metric.definition.unit === "GBP" ? "£" : "%"} unitDescription={metric.definition.unit === "GBP" ? "pounds" : "percent"} data={chartPoints(metric)} />)}</div></Suspense>
       <p className="fs-caption">The national average covers the United Kingdom; latest estimates are provisional and may be revised.</p>
     </Statistics>
   </>;
@@ -946,8 +951,9 @@ function About() {
         <p>
           Wages and unemployment are published from verified official series.
           UK private-rent growth and average monthly rent are also published.
-          House prices, energy and other measures stay off the site until their
-          feeds are ready. If a statistic covers a smaller area than the UK,
+          UK average house prices are published from the HM Land Registry UK HPI.
+          Energy and other measures stay off the site until their feeds are
+          ready. If a statistic covers a smaller area than the UK,
           such as Great Britain, that geography is named with the figure.
         </p>
         <h2>Official figures and AI summaries</h2>

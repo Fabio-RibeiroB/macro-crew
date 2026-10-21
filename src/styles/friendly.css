@@ -962,6 +962,47 @@
 .fs-stat-compact .fs-fresh {
   margin-top: 12px;
 }
+@media (min-width: 1100px) {
+  .fs-overview {
+    padding-top: 14px;
+    padding-bottom: 20px;
+  }
+  .fs-overview .fs-section-heading {
+    margin-bottom: 10px;
+  }
+  .fs-overview .fs-section-heading h1 {
+    font-size: 27px;
+  }
+  .fs-overview .fs-text-button {
+    padding: 5px 0;
+  }
+  .fs-overview .fs-stat-count-7 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .fs-overview .fs-stat-compact {
+    padding: 13px 15px;
+  }
+  .fs-overview .fs-stat-compact .fs-stat-top h2 {
+    font-size: 15px;
+  }
+  .fs-overview .fs-stat-compact .fs-number {
+    font-size: 39px;
+    line-height: 1.1;
+  }
+  .fs-overview .fs-stat-compact .fs-period {
+    margin-top: 5px;
+    font-size: 11px;
+  }
+  .fs-overview .fs-stat-compact .fs-fresh {
+    margin-top: 7px;
+    font-size: 9px;
+  }
+  .fs-overview .fs-stat-compact .fs-details {
+    margin-top: 6px;
+    padding-top: 6px;
+  }
+}
 .fs-stat-link {
   display: inline-flex;
   align-items: center;

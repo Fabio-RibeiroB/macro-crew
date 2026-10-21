@@ -154,24 +154,42 @@ test("Housing renders a national house-price card and separate pounds and percen
     const producer = await loadVerified("/", fileFetcher(bytes));
     const html = renderToStaticMarkup(createElement(App, { pathname: "/housing", initialData: producer }));
     assert.match(html, /id="house-prices"/);
-    assert.match(html, /UK average house price/);
+    assert.match(html, /House prices/);
     assert.match(html, /£273,037/);
-    assert.match(html, /Annual change: 0\.9%/);
+    assert.match(html, /Annual change in average house prices/);
+    assert.match(html, /class="fs-number">0\.9%/);
+    assert.match(html, /Source release date: 2026-10-21/);
+    assert.equal((html.match(/class="fs-number">£273,037/g) || []).length, 1);
+    assert.doesNotMatch(html, /Annual change: 0\.9%/);
     assert.doesNotMatch(html, /percentage points compared with July 2026/);
     assert.match(html, /Recent observations are provisional and subject to revision/);
     const { HistoricalTrendCard } = await server.ssrLoadModule("/src/app/components/HistoricalTrendCard.tsx");
     const pounds = renderToStaticMarkup(createElement(HistoricalTrendCard, {
       title: "Average house price", label: "Average house price", unit: "£",
+      unitDescription: "pounds",
       data: chartPoints(producer.metrics.house_price_level).slice(-2),
     }));
     const percentChart = renderToStaticMarkup(createElement(HistoricalTrendCard, {
       title: "Annual change", label: "Annual change", unit: "%",
       data: chartPoints(producer.metrics.house_price_growth).slice(-2),
     }));
-    assert.match(pounds, /Exact values in pounds/);
+    assert.match(pounds, /Exact values in pounds\./);
+    assert.doesNotMatch(pounds, /Exact values in pounds per month/);
     assert.match(percentChart, /Exact values in percent/);
     assert.doesNotMatch(pounds, /0\.9%/);
     assert.doesNotMatch(percentChart, /£273,037/);
+
+    const levelUnavailable = { ...producer.metrics.house_price_level, latest: null, history: [], collection_status: "unavailable" };
+    const growthDelayed = { ...producer.metrics.house_price_growth, collection_status: "degraded" };
+    const partial = renderToStaticMarkup(createElement(App, {
+      pathname: "/housing",
+      initialData: { ...producer, metrics: { ...producer.metrics, house_price_level: levelUnavailable, house_price_growth: growthDelayed } },
+    }));
+    assert.match(partial, /House prices/);
+    assert.match(partial, /class="fs-number">Not available/);
+    assert.match(partial, /class="fs-number">0\.9%/);
+    assert.match(partial, /Source release date: 2026-10-21/);
+    assert.match(partial, /delayed/i);
   } finally { await server.close(); }
 });
 

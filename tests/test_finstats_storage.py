@@ -93,6 +93,14 @@ def test_truncated_or_invalid_source_cannot_replace_verified_history(store):
     assert store.db.execute('SELECT count(*) FROM snapshot').fetchone()[0] == 1
 
 
+def test_hpi_reference_period_cannot_exceed_recorded_release_month(store):
+    body = fixture('house_price_level')
+    with pytest.raises(ValidationError, match='later than its source release'):
+        store.ingest('house_price_level', body, CPI_WHEN,
+                     source_url='https://publicdata.landregistry.gov.uk/market-trend-data/house-price-index-data/Average-prices-2026-08.csv',
+                     source_published_date='2026-07-31')
+
+
 def test_metrics_fail_independently_and_no_ai_is_required(store):
     store.ingest('cpih', fixture('cpih'), WHEN)
     store.failed('gdp', WHEN, 'HTTP 503')

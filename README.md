@@ -27,7 +27,9 @@ seasonally adjusted real GDP growth (ECYX/MGDP)**, and UK-wide PIPR annual priva
 growth plus average monthly rent in pounds. Rent uses ONS Table 1's United Kingdom
 row (K02000001); its latest two months are provisional and Northern Ireland inputs
 are imputed for those months. Labour figures retain their
-full three-month reference windows. These describe integrated source coverage;
+full three-month reference windows. UK House Price Index average price in pounds
+and annual change are separate UK-national series from HM Land Registry's
+Average price CSV. These describe integrated source coverage;
 the [M2 acceptance record](docs/m2-acceptance.md) distinguishes it from deployment.
 Reference period, official release date and FinStats check time are separate.
 Missing figures remain unavailable. Failed collection preserves previously

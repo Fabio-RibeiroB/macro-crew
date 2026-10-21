@@ -174,6 +174,13 @@ class Store:
                     raise ValidationError('Invalid UK HPI release date') from exc
                 if source_published_date > when.date().isoformat():
                     raise ValidationError('Future UK HPI release date')
+                release_month = source_published_date[:7]
+                edition = re.search(r'/Average-prices-(\d{4}-\d{2})\.csv(?:\?|$)', source_url or '')
+                if not edition:
+                    raise ValidationError('UK HPI source URL is not a dated Average price CSV edition')
+                latest_period = max(item.period for item in candidate.observations)
+                if latest_period > release_month or latest_period > edition.group(1):
+                    raise ValidationError('UK HPI reference period is later than its source release')
                 candidate = replace(candidate, published_date=source_published_date)
             if key.startswith('private_rent_') and evidence_kind == 'official_download':
                 edition = re.search(r'(?:%2F|/)([0-9]{1,2}[a-z]+[0-9]{4})(?:%2F|/)', source_url or '')

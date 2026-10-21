@@ -487,16 +487,16 @@ def _parse_pipr(metric_key, body, today):
     return Snapshot(DEFINITIONS[metric_key], published, None, tuple(points))
 
 
-def parse_hpi(body, today):
+def parse_hpi(key, body, today):
     try:
-        return _parse_hpi(body, today)
+        return _parse_hpi(key, body, today)
     except ValidationError:
         raise
     except (KeyError, IndexError, AttributeError, TypeError, ValueError, OverflowError) as exc:
         raise ValidationError("Malformed UK HPI CSV structure") from exc
 
 
-def _parse_hpi(body, today):
+def _parse_hpi(key, body, today):
     try:
         rows = list(csv.DictReader(io.StringIO(body.decode('utf-8-sig'), newline=''), strict=True))
     except (UnicodeError, csv.Error) as exc:
@@ -523,26 +523,28 @@ def _parse_hpi(body, today):
             raise ValidationError('Invalid UK HPI reference month') from exc
         if period in selected:
             raise ValidationError('Duplicate UK HPI UK reference month')
-        price = hpi_value(row['Average_Price'])
-        annual = hpi_value(row['Annual_Change'])
+        # Each requested metric has an independent validation boundary. A bad
+        # token in the other published series must not discard this one.
+        column = 'Average_Price' if key == 'house_price_level' else 'Annual_Change'
+        value = hpi_value(row[column])
         # This official table publishes average price in whole pounds and annual
         # change to one decimal place. Retain its displayed precision.
-        if price is not None:
-            price = format(Decimal(price).quantize(Decimal('1'), rounding=ROUND_HALF_UP), 'f')
-        if annual is not None:
-            annual = format(Decimal(annual).quantize(Decimal('0.1'), rounding=ROUND_HALF_UP).normalize(), 'f')
-        selected[period] = (price, annual, index)
+        if value is not None:
+            precision = Decimal('1') if key == 'house_price_level' else Decimal('0.1')
+            value = format(Decimal(value).quantize(precision, rounding=ROUND_HALF_UP), 'f')
+            if key == 'house_price_growth':
+                value = format(Decimal(value).normalize(), 'f')
+        selected[period] = (value, index)
     if not selected:
         raise ValidationError('UK HPI national row unavailable')
     latest = max(selected)
     if latest > today.strftime('%Y-%m'):
         raise ValidationError('Future UK HPI reference period')
-    if selected[latest][0] is None or selected[latest][1] is None:
+    if selected[latest][0] is None:
         raise ValidationError('Latest UK HPI national observation unavailable')
-    return {key: Snapshot(DEFINITIONS[key], None, None, tuple(
-        Observation(period, values[col], 'observed' if values[col] is not None else 'missing', values[2])
-        for period, values in sorted(selected.items()))) for key, col in (
-            ('house_price_level', 0), ('house_price_growth', 1))}
+    return Snapshot(DEFINITIONS[key], None, None, tuple(
+        Observation(period, values[0], 'observed' if values[0] is not None else 'missing', values[1])
+        for period, values in sorted(selected.items())))
 
 
 def parse(key: str, body: bytes, today: date) -> Snapshot:
@@ -553,7 +555,7 @@ def parse(key: str, body: bytes, today: date) -> Snapshot:
     if key.startswith('private_rent_'):
         return parse_pipr(key, body, today)
     if key.startswith('house_price_'):
-        return parse_hpi(body, today)[key]
+        return parse_hpi(key, body, today)
     if key in JSON_TIMESERIES:
         observations, published, next_release = parse_ons_json(definition, body, today)
     else:

@@ -61,6 +61,19 @@ def test_uk_hpi_wrong_geography_and_columns_fail_closed():
         parse('house_price_level', body.replace('Average_Price,Monthly_Change', 'Price,Monthly_Change', 1).encode(), date(2026, 10, 22))
 
 
+def test_uk_hpi_series_validation_is_independent():
+    body = fixture('house_price_level').decode()
+    level_bad_growth = body.replace('273037,0.3,0.9,', '273037,0.3,UNKNOWN,')
+    assert parse('house_price_level', level_bad_growth.encode(), date(2026, 10, 22)).observations[-1].value == '273037'
+    with pytest.raises(ValidationError, match='token'):
+        parse('house_price_growth', level_bad_growth.encode(), date(2026, 10, 22))
+
+    growth_bad_level = body.replace('273037,0.3,0.9,', 'UNKNOWN,0.3,0.9,')
+    assert parse('house_price_growth', growth_bad_level.encode(), date(2026, 10, 22)).observations[-1].value == '0.9'
+    with pytest.raises(ValidationError, match='token'):
+        parse('house_price_level', growth_bad_level.encode(), date(2026, 10, 22))
+
+
 def test_recorded_pipr_workbook_selects_only_the_uk_national_growth_and_level():
     from finstats.sources import public_definition
     body = fixture('private_rent_growth')
