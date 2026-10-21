@@ -28,8 +28,9 @@ export const METRICS = {
 /**
  * Reviewed optional metric members. Absent members stay absent; a present
  * member must match its registered statistical definition exactly, including
- * unit, geography and window metadata, or the whole generation is rejected.
- * Registry entries are code-owned contracts, not payload-supplied rules.
+ * unit, geography, window metadata and its exact qualified source and
+ * download URLs, or the whole generation is rejected. Registry entries are
+ * code-owned contracts, not payload-supplied rules.
  */
 export const OPTIONAL_METRICS = {
   cpi: {
@@ -42,6 +43,10 @@ export const OPTIONAL_METRICS = {
     unit: "percent",
     version: 1,
     geography: "United Kingdom",
+    source_url:
+      "https://www.ons.gov.uk/economy/inflationandpriceindices/timeseries/d7g7/mm23",
+    download_url:
+      "https://www.ons.gov.uk/economy/inflationandpriceindices/timeseries/d7g7/mm23/data",
   },
   regular_pay_nominal_growth: {
     metric_id: "uk.regular_pay.nominal_annual_growth",
@@ -54,6 +59,10 @@ export const OPTIONAL_METRICS = {
     version: 1,
     geography: "Great Britain",
     window_months: 3,
+    source_url:
+      "https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/earningsandworkinghours/timeseries/kai9/lms",
+    download_url:
+      "https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/earningsandworkinghours/timeseries/kai9/lms/data",
   },
   regular_pay_real_growth: {
     metric_id: "uk.regular_pay.real_annual_growth",
@@ -67,6 +76,10 @@ export const OPTIONAL_METRICS = {
     geography: "Great Britain",
     window_months: 3,
     deflator: "CPIH",
+    source_url:
+      "https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/earningsandworkinghours/timeseries/a2fa/lms",
+    download_url:
+      "https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/earningsandworkinghours/timeseries/a2fa/lms/data",
   },
   unemployment: {
     metric_id: "uk.unemployment.rate",
@@ -79,6 +92,10 @@ export const OPTIONAL_METRICS = {
     version: 1,
     geography: "United Kingdom",
     window_months: 3,
+    source_url:
+      "https://www.ons.gov.uk/employmentandlabourmarket/peoplenotinwork/unemployment/timeseries/mgsx/lms",
+    download_url:
+      "https://www.ons.gov.uk/employmentandlabourmarket/peoplenotinwork/unemployment/timeseries/mgsx/lms/data",
   },
 };
 const fail = (message) => {
@@ -161,7 +178,7 @@ function validateDefinition(definition, spec) {
     definition.unit !== spec.unit ||
     definition.version !== spec.version ||
     definition.geography !== spec.geography ||
-    !officialUrl(definition.source_url)
+    definition.source_url !== spec.source_url
   )
     fail("Unexpected optional metric definition");
   if (spec.window_months !== undefined) {
@@ -218,7 +235,7 @@ function validateOptionalMetric(key, metric, spec) {
   if (
     metric.validation_status !== "verified" ||
     metric.snapshot_evidence_kind !== "official_download" ||
-    !officialUrl(metric.source_download_url) ||
+    metric.source_download_url !== spec.download_url ||
     !/^[a-f0-9]{64}$/.test(metric.source_sha256) ||
     !instant(metric.retrieved_at)
   )

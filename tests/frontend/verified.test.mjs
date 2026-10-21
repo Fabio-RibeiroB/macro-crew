@@ -361,6 +361,18 @@ test("registered optional metrics validate with geography, windows and deflator"
     parseManifest(fixtureManifest("v1-with-optional")),
   );
   assert.equal(data.metrics.cpi.definition.geography, "United Kingdom");
+  for (const key of Object.keys(OPTIONAL_METRICS)) {
+    assert.equal(
+      data.metrics[key].definition.source_url,
+      OPTIONAL_METRICS[key].source_url,
+      `${key} must cite its exact qualified source URL`,
+    );
+    assert.equal(
+      data.metrics[key].source_download_url,
+      OPTIONAL_METRICS[key].download_url,
+      `${key} must cite its exact qualified download URL`,
+    );
+  }
   assert.equal(
     data.metrics.regular_pay_nominal_growth.definition.geography,
     "Great Britain",
@@ -569,6 +581,27 @@ for (const [name, mutate] of [
     "unofficial optional source",
     (d) => {
       d.metrics.cpi.definition.source_url = "https://example.com/series";
+    },
+  ],
+  [
+    "optional source URL bound to another approved series",
+    (d) => {
+      d.metrics.cpi.definition.source_url =
+        "https://www.ons.gov.uk/economy/inflationandpriceindices/timeseries/l55o/mm23";
+    },
+  ],
+  [
+    "optional download URL bound to another approved series",
+    (d) => {
+      d.metrics.cpi.source_download_url =
+        "https://www.ons.gov.uk/employmentandlabourmarket/peoplenotinwork/unemployment/timeseries/mgsx/lms/data";
+    },
+  ],
+  [
+    "nominal pay download citing its real-pay sibling",
+    (d) => {
+      d.metrics.regular_pay_nominal_growth.source_download_url =
+        "https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/earningsandworkinghours/timeseries/a2fa/lms/data";
     },
   ],
   [
