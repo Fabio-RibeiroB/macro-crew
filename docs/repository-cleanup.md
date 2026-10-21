@@ -1,5 +1,21 @@
 # Repository cleanup report — 21 October 2026
 
+## Follow-up status — 21 October 2026
+
+PRs #5, #10, #16 and #18 were updated against main and merged after their CI
+checks passed. There are no open PRs at the time of this update. The original
+proposal below is retained as an audit record, rather than current instructions.
+The nine merged feature/fix branches remaining after those merges and their
+clean temporary worktrees were removed. The six older deletion candidates below
+have also been removed from origin. Local development now has only `main`.
+
+The branch for closed PR #3 (`claude/fix-past-data-calendar-JOTcm`) remains on
+origin because it has unmerged work. Its old calendar component was removed
+from the active frontend; it does not need merging into the current dashboard.
+No production reports or private statistical history were removed by cleanup.
+
+## Original housekeeping assessment
+
 This PR follows the security PR, with only housekeeping changes in its diff.
 Production, repository settings and existing branches are unchanged. Deletion
 candidates below are **proposed**, not deleted; the owner can review them first.
