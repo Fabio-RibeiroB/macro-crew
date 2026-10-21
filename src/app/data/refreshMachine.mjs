@@ -19,7 +19,7 @@ export const REFRESH_EVENTS = [
 ];
 
 /**
- * One allowed move per cell. Null is ignored in production and thrown in tests.
+ * One allowed move per cell. A null cell is ignored unless `strict` is set.
  * `start` while loading supersedes the previous request and stays loading.
  * `cancel` always leaves `loading`, which clears the derived loading flag.
  */
@@ -93,8 +93,7 @@ export function applyRefreshEvent(snapshot, event, options = {}) {
   }
   const nextStatus = REFRESH_TRANSITIONS[snapshot.status]?.[event.type];
   if (nextStatus == null) {
-    const strict = options.strict ?? process.env.NODE_ENV !== "production";
-    if (strict)
+    if (options.strict)
       throw new Error(
         `Invalid refresh transition: ${snapshot.status} + ${event.type}`,
       );

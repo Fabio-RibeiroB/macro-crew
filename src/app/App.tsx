@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowRight,
@@ -836,6 +836,7 @@ export default function App({
     if (!needsData) return;
     const owner = createRefreshController({
       initialData,
+      initialStatus: "loading",
       load: (signal) =>
         loadVerified(import.meta.env.BASE_URL, (url, options) =>
           fetch(url, { ...options, signal }),
@@ -866,7 +867,10 @@ export default function App({
     return bindRefreshLifecycle(owner, window);
   }, [page.id]);
   const { loading, error, data } = refreshView(snapshot);
-  const reports = reportSnapshot.data ? legacyReports(reportSnapshot.data) : [];
+  const reports = useMemo(
+    () => (reportSnapshot.data ? legacyReports(reportSnapshot.data) : []),
+    [reportSnapshot.data],
+  );
   const reportTime = reportSnapshot.data?.metadata?.generated_at ?? null;
   const stats = { data, error, loading, refresh };
   return (

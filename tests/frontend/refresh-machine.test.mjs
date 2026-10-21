@@ -8,6 +8,58 @@ import {
   applyRefreshEvent,
   refreshView,
 } from "../../src/app/data/refreshMachine.mjs";
+
+/** Issue #17 contract, written here rather than read back from the implementation. */
+const EXPECTED_TRANSITIONS = {
+  idle: {
+    start: "loading",
+    resolve: null,
+    reject: null,
+    timeout: null,
+    cancel: null,
+    dispose: "disposed",
+  },
+  loading: {
+    start: "loading",
+    resolve: "success",
+    reject: "error",
+    timeout: "error",
+    cancel: "cancelled",
+    dispose: "disposed",
+  },
+  success: {
+    start: "loading",
+    resolve: null,
+    reject: null,
+    timeout: null,
+    cancel: null,
+    dispose: "disposed",
+  },
+  error: {
+    start: "loading",
+    resolve: null,
+    reject: null,
+    timeout: null,
+    cancel: null,
+    dispose: "disposed",
+  },
+  cancelled: {
+    start: "loading",
+    resolve: null,
+    reject: null,
+    timeout: null,
+    cancel: null,
+    dispose: "disposed",
+  },
+  disposed: {
+    start: null,
+    resolve: null,
+    reject: null,
+    timeout: null,
+    cancel: null,
+    dispose: "disposed",
+  },
+};
 import {
   bindRefreshLifecycle,
   createRefreshController,
@@ -31,35 +83,24 @@ function eventFor(type) {
   return { type };
 }
 
-test("the transition table lists every status and event once", () => {
-  assert.deepEqual(Object.keys(REFRESH_TRANSITIONS), REFRESH_STATUSES);
-  for (const status of REFRESH_STATUSES) {
-    assert.deepEqual(Object.keys(REFRESH_TRANSITIONS[status]), REFRESH_EVENTS);
-    for (const type of REFRESH_EVENTS) {
-      const next = REFRESH_TRANSITIONS[status][type];
-      assert.ok(next === null || REFRESH_STATUSES.includes(next));
-    }
-  }
+test("every transition cell matches the issue contract", () => {
+  assert.deepEqual(REFRESH_TRANSITIONS, EXPECTED_TRANSITIONS);
+  assert.deepEqual(REFRESH_STATUSES, Object.keys(EXPECTED_TRANSITIONS));
+  assert.deepEqual(REFRESH_EVENTS, Object.keys(EXPECTED_TRANSITIONS.idle));
 });
 
-for (const status of REFRESH_STATUSES) {
-  for (const type of REFRESH_EVENTS) {
-    const expected = REFRESH_TRANSITIONS[status][type];
+for (const [status, events] of Object.entries(EXPECTED_TRANSITIONS)) {
+  for (const [type, expected] of Object.entries(events)) {
     test(`${status} + ${type} -> ${expected ?? "rejected"}`, () => {
+      assert.equal(REFRESH_TRANSITIONS[status][type], expected);
       const before = sample(status);
       const event = eventFor(type);
       if (expected == null) {
-        let thrown;
-        try {
-          applyRefreshEvent(before, event, { strict: true });
-        } catch (error) {
-          thrown = error;
-        }
-        assert.equal(
-          thrown?.message,
-          `Invalid refresh transition: ${status} + ${type}`,
+        assert.throws(
+          () => applyRefreshEvent(before, event, { strict: true }),
+          { message: `Invalid refresh transition: ${status} + ${type}` },
         );
-        const ignored = applyRefreshEvent(before, event, { strict: false });
+        const ignored = applyRefreshEvent(before, event);
         assert.equal(ignored.accepted, false);
         assert.equal(ignored.reason, "invalid");
         assert.equal(ignored.snapshot, before);
@@ -95,13 +136,19 @@ for (const status of REFRESH_STATUSES) {
 }
 
 test("a late result for an older generation is ignored and does not throw", () => {
-  const loading = applyRefreshEvent(sample("idle"), { type: "start" }).snapshot;
-  const cancelled = applyRefreshEvent(loading, { type: "cancel" }).snapshot;
-  const late = applyRefreshEvent(cancelled, {
-    type: "resolve",
-    generation: loading.generation,
-    data: { id: "stale" },
-  });
+  const loading = applyRefreshEvent(sample("idle"), { type: "start" }, { strict: true })
+    .snapshot;
+  const cancelled = applyRefreshEvent(loading, { type: "cancel" }, { strict: true })
+    .snapshot;
+  const late = applyRefreshEvent(
+    cancelled,
+    {
+      type: "resolve",
+      generation: loading.generation,
+      data: { id: "stale" },
+    },
+    { strict: true },
+  );
   assert.equal(late.accepted, false);
   assert.equal(late.reason, "stale");
   assert.equal(late.snapshot, cancelled);
@@ -134,12 +181,31 @@ const tick = async () => {
   await Promise.resolve();
 };
 
+test("the controller can start in the loading snapshot the page already shows", () => {
+  const time = clock();
+  const owner = createRefreshController({
+    load: () => new Promise(() => {}),
+    initialData: { id: "server" },
+    initialStatus: "loading",
+    strict: true,
+    setTimer: (fn, delay) => time.setTimer(fn, delay),
+    clearTimer: (id) => time.clearTimer(id),
+  });
+  assert.deepEqual(refreshView(owner.snapshot), {
+    loading: true,
+    error: "",
+    data: { id: "server" },
+  });
+  owner.dispose();
+});
+
 test("the default deadline passed to the timer is 15 seconds", () => {
   const time = clock();
   const owner = createRefreshController({
     load: () => new Promise(() => {}),
     setTimer: (fn, delay) => time.setTimer(fn, delay),
     clearTimer: (id) => time.clearTimer(id),
+    strict: true,
   });
   void owner.refresh();
   assert.deepEqual(time.delays, [15_000]);
@@ -156,6 +222,7 @@ test("pagehide cancel clears the derived loading flag and ignores a late respons
     onState: (snapshot) => views.push(refreshView(snapshot)),
     setTimer: (fn, delay) => time.setTimer(fn, delay),
     clearTimer: (id) => time.clearTimer(id),
+    strict: true,
   });
   const win = new EventTarget();
   win.setInterval = () => 1;
@@ -189,6 +256,7 @@ test("a typed verification failure keeps the last figures and does not throw on 
       new Promise((resolve, reject) => calls.push({ signal, resolve, reject })),
     setTimer: (fn, delay) => time.setTimer(fn, delay),
     clearTimer: (id) => time.clearTimer(id),
+    strict: true,
   });
   const first = owner.refresh();
   await tick();

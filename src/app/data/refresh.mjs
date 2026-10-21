@@ -25,15 +25,17 @@ export function createRefreshController({
   onSettled,
   onState,
   initialData = null,
+  initialStatus = "idle",
+  strict = false,
   timeoutMs = 15_000,
   setTimer = setTimeout,
   clearTimer = clearTimeout,
 }) {
-  let snapshot = refreshSnapshot(initialData);
+  let snapshot = refreshSnapshot(initialData, initialStatus);
   let current = null;
 
   const apply = (event) => {
-    const result = applyRefreshEvent(snapshot, event);
+    const result = applyRefreshEvent(snapshot, event, { strict });
     if (result.accepted) snapshot = result.snapshot;
     return result;
   };
