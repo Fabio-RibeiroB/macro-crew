@@ -192,8 +192,11 @@ secondary and supporting series needs the same provenance and validation.
   announced future cap may appear as upcoming context but must not replace the
   currently effective figure early. Effective-date activation changes evidence.
 - Capture the source's typical-consumption assumptions with each observation.
-  When they change, flag a break and avoid an unqualified like-for-like comparison;
-  use a documented constant-consumption comparison only if supported by evidence.
+  Check tax treatment and calculation-basis changes as well as consumption
+  assumptions. If any of these change, flag the break and avoid an unqualified
+  pound or percentage comparison. Show an adjusted like-for-like comparison only
+  when the source provides an official, documented comparable basis. Otherwise
+  state that the previous-period movement is not directly comparable.
 - Petrol & Diesel: DESNZ weekly UK average retail pump prices, separately labelled
   unleaded petrol and diesel, in pence/litre, including the source's tax treatment.
   Compare each with the previous comparable weekly observation in pence/litre.
@@ -611,7 +614,13 @@ Proposed issues/PRs:
 4. Representative content/failure review and operational handoff: check examples
    from each source family, little-new-information releases, revisions, concurrent
    arrivals, repeat fetches, AI-disabled/budget failure and rollback. Update About,
-   Sources and the deployment runbook to match final behaviour.
+   Sources and the deployment runbook to match final behaviour. Include human-
+   reviewed examples for (a) inflation slowing while the price level still rises,
+   (b) an unemployment change across overlapping three-month windows, (c) revised
+   earlier observations without a new reference period, (d) an Ofgem cap announced
+   but not yet effective, and (e) an unchanged/low-information release. Check factual
+   claims, source and period alignment, and restraint; do not require identical
+   model wording.
 
 **Acceptance:** every qualifying release can be explained with no invented story;
 unchanged evidence causes no new model call; an unchanged headline in a genuinely
@@ -633,6 +642,9 @@ production paid execution remains an explicitly controlled activation step.
 - Explanation/summary tests demonstrate source/trend grounding, restrained output
   when little changed, correct attribution of forecasts, semantic-change triggering,
   retained dates/versions, no duplicate calls and independence from statistics.
+- Human review covers the five representative release cases listed under M7 and
+  checks factual accuracy, source/period alignment and restrained interpretation,
+  not exact wording.
 - Meaningful offline tests cover units, windows, gaps, revisions, partial failure,
   schema migration, checksums, release dates and AI-disabled/failure cases.
 - Run documented frontend tests/build and dependency-light Python suite. Use mocks
