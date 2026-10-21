@@ -85,11 +85,12 @@ generator route is never substituted. Parsed contract facts from this recording:
 - Geography is the United Kingdom: the [September 2026 CPI bulletin](https://www.ons.gov.uk/economy/inflationandpriceindices/bulletins/consumerpriceinflation/september2026)
   is "Consumer price inflation, UK", and CPI is a UK-wide measure. This is the
   reviewed `geography` for the public definition.
-- The recorded `months[]` omits 2025 FEB, APR, AUG and DEC while the CPIH CSV
-  (L55O) records those months. The JSON endpoint represents those periods by
-  absence, so the adapter keeps only present months; the reader keeps the gaps
-  visible and never invents or zero-fills them. Absent expected months also
-  make previous-month comparisons unavailable rather than guessed.
+- The recorded excerpt's `months[]` is a 17-month representative subset that
+  omits 2025 FEB, APR, AUG and DEC; the live endpoint's `months[]` is
+  contiguous. Those omitted periods are excerpt-selection artefacts, retained
+  deliberately so the adapter keeps only present months and the reader keeps
+  gaps visible and never invents or zero-fills them. Absent expected months
+  also make previous-month comparisons unavailable rather than guessed.
 - Value tokens are decimal strings. No non-numeric missing token was recorded,
   so an empty, `..` or other unknown token quarantines the candidate feed; it
   never becomes zero or a synthetic "missing" observation.

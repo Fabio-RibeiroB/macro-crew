@@ -111,8 +111,9 @@ def test_cpi_release_date_converts_to_london_calendar_date():
 
 
 def test_cpi_keeps_recorded_monthly_gaps_and_never_invents_periods():
-    # The recorded D7G7 months[] omits 2025 FEB/APR/AUG/DEC; the endpoint
-    # represents those periods by absence. Only present months may be observed.
+    # The recorded excerpt's months[] is a 17-month subset that omits 2025
+    # FEB/APR/AUG/DEC (excerpt-selection artefacts, not endpoint absence);
+    # only present months may be observed and gaps must stay visible.
     data = parse('cpi', fixture('cpi'), CPI_TODAY)
     periods = [o.period for o in data.observations]
     assert periods[:4] == ['2025-01', '2025-03', '2025-05', '2025-06']

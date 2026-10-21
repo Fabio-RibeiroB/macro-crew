@@ -292,7 +292,7 @@ test("CPI headlines inflation while CPIH stays labelled supporting data", async 
     assert.match(prices, /compared with August 2026/);
     assert.match(prices, /MM23 \/ D7G7/);
     assert.match(prices, /MM23 \/ L55O/);
-    assert.match(prices, /CPI heads the page; CPIH is supporting context/);
+    assert.match(prices, /<h3>CPI and CPIH<\/h3>/);
     assert.match(prices, /Annual CPI inflation was 3\.5% in September 2026/);
     assert.doesNotMatch(prices, /Annual CPIH inflation/);
     const overviewData = {

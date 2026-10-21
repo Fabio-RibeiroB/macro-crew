@@ -429,7 +429,7 @@ function PriceGuide({ data }: any) {
           </OfficialLink>
         </article>
         <aside className="fs-context-card">
-          <h3>CPI heads the page; CPIH is supporting context</h3>
+          <h3>CPI and CPIH</h3>
           <p>
             The Consumer Prices Index (CPI) covers everyday goods and services,
             and the Bank of England’s 2% target applies to it. The CPI figure
