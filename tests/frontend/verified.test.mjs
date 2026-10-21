@@ -15,6 +15,11 @@ import {
   legacyReports,
   referenceWindow,
 } from "../../src/app/data/verified.mjs";
+import {
+  METRICS as M1_METRICS,
+  parseManifest as parseM1Manifest,
+  parseDataset as parseM1Dataset,
+} from "../fixtures/verified/m1-reader.mjs";
 
 const WIRE = new URL("../fixtures/verified/", import.meta.url);
 const fixture = (name) =>
@@ -421,6 +426,22 @@ test("the loader verifies the checksum of a generation with optional metrics", a
     ),
     /integrity/,
   );
+});
+
+test("the frozen M1 consumer view ignores additive members in the same v1 generation", () => {
+  const additive = parseM1Dataset(
+    optionalData(),
+    parseM1Manifest(fixtureManifest("v1-with-optional")),
+  );
+  // The frozen M1 parser validates its three registered keys and returns the
+  // single generation; M1's presentation consumes only these three objects.
+  const m1View = Object.fromEntries(
+    Object.keys(M1_METRICS).map((key) => [key, additive.metrics[key]]),
+  );
+  assert.deepEqual(Object.keys(m1View).sort(), ["bank_rate", "cpih", "gdp"]);
+  assert.equal(m1View.cpih.latest.value, "3.3");
+  assert.deepEqual(m1View.cpih.latest, m1View.cpih.history.at(-1));
+  assert.equal(m1View.gdp.latest.value, "0.1");
 });
 
 test("rolling charts locate points at their end month and keep their windows", () => {

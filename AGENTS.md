@@ -27,8 +27,10 @@ incomplete; do not revive the old AI-number pipeline as a fallback.
 * Preserve generated production reports, private databases and source archives.
   A dirty production checkout can contain intentional generated JSON changes.
 * Build outside the served directory, test data/assets/direct URLs and retain
-  rollback. Templates do not apply themselves. Do not merge/deploy without an
-  explicit instruction covering the action.
+  rollback. Templates do not apply themselves. The owner authorises the oversight
+  agent to merge PRs within the approved specification after review and green
+  required checks. Production deployment and paid-AI execution still require
+  explicit authorisation.
 * Prefer small PRs, minimal dependencies and meaningful tests of data integrity,
   failure recovery and navigation. No cosmetic rewrites or speculative frameworks.
 * Before deleting branches, list candidates, check ancestry against freshly fetched

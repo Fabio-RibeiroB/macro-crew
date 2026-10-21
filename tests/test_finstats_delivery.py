@@ -1,5 +1,6 @@
 import hashlib
 import json
+from pathlib import Path
 import stat
 from unittest.mock import patch
 
@@ -37,6 +38,28 @@ def test_public_delivery_is_readable_official_and_contains_no_private_files(tmp_
     assert 'source_row' not in json.dumps(data)
     assert 'raw/' not in json.dumps(data)
     assert str(private) not in json.dumps(data)
+
+
+def test_shared_wire_fixtures_keep_m1_core_identical_and_add_optional_members():
+    wire = Path(__file__).parent / 'fixtures' / 'verified'
+    def load(name):
+        body = (wire / f'{name}.json').read_bytes()
+        manifest = json.loads((wire / f'{name}.manifest.json').read_text())
+        data = json.loads(body)
+        assert hashlib.sha256(body).hexdigest() == manifest['sha256']
+        assert data['generation_id'] == manifest['generation_id']
+        return data
+
+    baseline = load('m1-core-only')
+    candidate = load('v1-with-optional')
+    core = {'bank_rate', 'cpih', 'gdp'}
+    assert set(baseline['metrics']) == core
+    assert set(candidate['metrics']) == core | {
+        'cpi', 'regular_pay_nominal_growth', 'regular_pay_real_growth', 'unemployment'
+    }
+    for key in core:
+        assert candidate['metrics'][key] == baseline['metrics'][key]
+        assert candidate['metrics'][key]['latest'] == candidate['metrics'][key]['history'][-1]
 
 
 def test_fixture_replay_cannot_be_published_as_official(tmp_path):

@@ -19,3 +19,6 @@ the unchanged three core metric members plus reviewed optional metric members.
 
 Tests may mutate copies of these fixtures in memory; checked-in bytes are never
 modified by a test run. A recorded fixture can never become public official data.
+
+`m1-reader.mjs` freezes the M1 manifest/dataset reader from accepted commit
+`189437f` for compatibility tests. It is test-only and is not used by the app.
