@@ -8,13 +8,23 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { useState } from "react";
+import { useId, useMemo, useState } from "react";
+import {
+  CHART_RANGES,
+  DEFAULT_CHART_RANGE,
+  filterChartRange,
+  moveChartRange,
+} from "../data/chartRange.mjs";
+import { formatPeriod } from "../data/verified.mjs";
 
 interface TrendPoint {
-  date: string;
+  date?: string;
+  period?: string;
   value: number | null;
+  status?: string;
+  revision?: string;
+  unit?: string;
 }
-type TrendRange = "1Y" | "3Y" | "5Y";
 
 interface HistoricalTrendCardProps {
   title: string;
@@ -26,18 +36,15 @@ interface HistoricalTrendCardProps {
   curve?: "linear" | "stepAfter";
 }
 
-const RANGE_OPTIONS: TrendRange[] = ["1Y", "3Y", "5Y"];
-
-function subtractYears(date: Date, years: number) {
-  const next = new Date(date);
-  next.setFullYear(next.getFullYear() - years);
-  return next;
-}
-
 function formatAxisDate(dateStr: string) {
-  const d = new Date(dateStr);
+  const monthly = /^\d{4}-\d{2}$/.test(dateStr);
+  const d = new Date(monthly ? `${dateStr}-01T00:00:00Z` : `${dateStr}T00:00:00Z`);
   if (isNaN(d.getTime())) return dateStr;
-  return d.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
+  return d.toLocaleDateString("en-GB", {
+    month: "short",
+    year: "2-digit",
+    timeZone: "UTC",
+  });
 }
 
 interface CustomTooltipProps {
@@ -47,20 +54,19 @@ interface CustomTooltipProps {
   unit: string;
 }
 
+function exactValue(value: number | null | undefined, unit: string) {
+  return value === null || value === undefined ? "Missing" : `${value}${unit}`;
+}
+
+function revisionText(point: TrendPoint) {
+  if (point.revision) return point.revision;
+  if (point.value === null || point.value === undefined || point.status === "missing")
+    return "Not applicable";
+  return "Latest revised value";
+}
+
 function CustomTooltip({ active, payload, label, unit }: CustomTooltipProps) {
   if (!active || !payload?.length) return null;
-  const d = new Date(label ?? "");
-  const formattedDate = isNaN(d.getTime())
-    ? label
-    : d.toLocaleDateString("en-GB", {
-        ...(/^\d{4}-\d{2}$/.test(label ?? "")
-          ? {}
-          : { day: "numeric" as const }),
-        month: "short",
-        year: "numeric",
-        timeZone: "UTC",
-      });
-
   return (
     <div
       className="rounded-lg px-3 py-2.5 shadow-xl border text-sm"
@@ -70,7 +76,7 @@ function CustomTooltip({ active, payload, label, unit }: CustomTooltipProps) {
       }}
     >
       <p className="text-xs mb-1" style={{ color: "var(--dash-text-4)" }}>
-        {formattedDate}
+        {formatPeriod(label)}
       </p>
       <p
         className="font-bold"
@@ -79,8 +85,7 @@ function CustomTooltip({ active, payload, label, unit }: CustomTooltipProps) {
           fontFamily: "'JetBrains Mono', monospace",
         }}
       >
-        {payload[0].value}
-        {unit}
+        {exactValue(payload[0].value, unit)}
       </p>
     </div>
   );
@@ -95,25 +100,17 @@ export function HistoricalTrendCard({
   referenceLine,
   curve = "linear",
 }: HistoricalTrendCardProps) {
-  const [selectedRange, setSelectedRange] = useState<TrendRange>("5Y");
-
-  const latestDate = data.reduce<Date | null>((cur, point) => {
-    const d = new Date(point.date);
-    if (isNaN(d.getTime())) return cur;
-    return !cur || d > cur ? d : cur;
-  }, null);
-
-  const visibleData = data.filter((point) => {
-    if (!latestDate) return false;
-    const d = new Date(point.date);
-    if (isNaN(d.getTime())) return false;
-    const years = selectedRange === "1Y" ? 1 : selectedRange === "3Y" ? 3 : 5;
-    return d >= subtractYears(latestDate, years);
-  });
+  const [selectedRange, setSelectedRange] = useState(DEFAULT_CHART_RANGE);
+  const noteId = useId();
+  const selection = useMemo(
+    () => filterChartRange(data, selectedRange),
+    [data, selectedRange],
+  );
+  const visibleData = selection.points;
 
   const values = visibleData
     .map((p) => p.value)
-    .filter((v): v is number => v !== null);
+    .filter((v): v is number => typeof v === "number");
   const minVal = values.length ? Math.min(...values) : 0;
   const maxVal = values.length ? Math.max(...values) : 1;
   const padding = (maxVal - minVal) * 0.2 || 0.5;
@@ -121,6 +118,17 @@ export function HistoricalTrendCard({
   const yMax = Math.ceil((maxVal + padding) * 10) / 10;
 
   const gradId = `grad-${color.replace("#", "")}`;
+
+  function onRangeKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    const next = moveChartRange(selectedRange, event.key);
+    if (!next) return;
+    event.preventDefault();
+    setSelectedRange(next);
+    const button = event.currentTarget.querySelector<HTMLButtonElement>(
+      `[data-range="${next}"]`,
+    );
+    button?.focus();
+  }
 
   return (
     <div
@@ -134,42 +142,37 @@ export function HistoricalTrendCard({
         className="px-5 pt-5 pb-3 border-b"
         style={{ borderColor: "var(--dash-border)" }}
       >
-        <div className="flex items-center justify-between gap-2 mb-1.5">
+        <div className="fs-chart-toolbar mb-1.5">
           <span
             className="text-xs font-medium"
             style={{ color: "var(--dash-text-4)" }}
           >
             {label}
           </span>
-          {/* Range toggle — always on same row as label, never wraps */}
           <div
-            className="flex items-center rounded-lg overflow-hidden border flex-shrink-0"
-            style={{
-              borderColor: "var(--dash-border)",
-              background: "var(--dash-bg)",
-            }}
+            className="fs-range"
+            role="radiogroup"
+            aria-label={`Historical range for ${label}`}
+            aria-describedby={selection.notice ? noteId : undefined}
+            onKeyDown={onRangeKeyDown}
           >
-            {RANGE_OPTIONS.map((range) => (
-              <button
-                key={range}
-                type="button"
-                onClick={() => setSelectedRange(range)}
-                aria-pressed={selectedRange === range}
-                className="px-3 py-1.5 text-xs font-medium transition-colors duration-150"
-                style={{
-                  background:
-                    selectedRange === range
-                      ? "var(--dash-border)"
-                      : "transparent",
-                  color:
-                    selectedRange === range
-                      ? "var(--dash-text-1)"
-                      : "var(--dash-text-4)",
-                }}
-              >
-                {range}
-              </button>
-            ))}
+            {CHART_RANGES.map((range) => {
+              const checked = selectedRange === range.id;
+              return (
+                <button
+                  key={range.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={checked}
+                  aria-label={`${range.label}, ${range.name}`}
+                  data-range={range.id}
+                  tabIndex={checked ? 0 : -1}
+                  onClick={() => setSelectedRange(range.id)}
+                >
+                  {range.label}
+                </button>
+              );
+            })}
           </div>
         </div>
         <p
@@ -181,6 +184,11 @@ export function HistoricalTrendCard({
       </div>
 
       <div className="px-3 py-4">
+        {selection.notice && (
+          <p className="fs-chart-range-note" id={noteId} role="status">
+            {selection.notice}
+          </p>
+        )}
         {visibleData.length === 0 ? (
           <div className="h-64 flex items-center justify-center">
             <div className="text-center">
@@ -267,6 +275,39 @@ export function HistoricalTrendCard({
               </AreaChart>
             </ResponsiveContainer>
           </div>
+        )}
+        {visibleData.length > 0 && (
+          <details className="fs-chart-values">
+            <summary>Exact values ({visibleData.length})</summary>
+            <div className="fs-chart-values-scroll">
+              <table>
+                <caption>
+                  {title}. Exact values in {unit === "%" ? "percent" : unit}.
+                  Latest revised values for each reference period.
+                  {selection.notice ? ` ${selection.notice}` : ""}
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Reference period</th>
+                    <th scope="col">Value</th>
+                    <th scope="col">Revision</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleData.map((point) => {
+                    const period = point.period ?? point.date ?? "";
+                    return (
+                      <tr key={period}>
+                        <td>{formatPeriod(period)}</td>
+                        <td>{exactValue(point.value, unit)}</td>
+                        <td>{revisionText(point)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </details>
         )}
       </div>
     </div>

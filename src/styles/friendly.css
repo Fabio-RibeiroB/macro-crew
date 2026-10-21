@@ -479,6 +479,106 @@
 .fs-chart-grid > div {
   border-radius: 16px;
 }
+.fs-chart-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.fs-range {
+  display: flex;
+  flex-shrink: 0;
+  border: 1px solid var(--fs-line);
+  border-radius: 8px;
+  background: var(--fs-bg);
+}
+.fs-range button {
+  appearance: none;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fs-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
+  min-height: 36px;
+  padding: 6px 10px;
+}
+.fs-range button:first-child {
+  border-radius: 7px 0 0 7px;
+}
+.fs-range button:last-child {
+  border-radius: 0 7px 7px 0;
+}
+.fs-range button:hover {
+  color: var(--fs-ink);
+}
+.fs-range button[aria-checked="true"],
+.fs-range button[aria-checked="true"]:hover {
+  background: var(--fs-accent);
+  color: #fff;
+}
+.dark .fs-range button[aria-checked="true"],
+.dark .fs-range button[aria-checked="true"]:hover {
+  color: #15251f;
+}
+.fs-range button:focus-visible {
+  outline-offset: 2px;
+  position: relative;
+  z-index: 1;
+}
+.fs-chart-range-note {
+  margin: 0 8px 8px;
+  color: var(--fs-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.fs-chart-values {
+  margin-top: 8px;
+  border-top: 1px solid var(--fs-line);
+}
+.fs-chart-values summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 4px;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.fs-chart-values-scroll {
+  overflow: auto;
+  max-height: 16rem;
+}
+.fs-chart-values table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.fs-chart-values caption {
+  caption-side: bottom;
+  padding-top: 8px;
+  color: var(--fs-muted);
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: left;
+}
+.fs-chart-values th,
+.fs-chart-values td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--fs-line);
+  text-align: left;
+  white-space: nowrap;
+}
+@media (max-width: 400px) {
+  .fs-chart-toolbar {
+    flex-wrap: wrap;
+  }
+  .fs-range button {
+    padding: 6px 8px;
+  }
+}
 .fs-policy-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
