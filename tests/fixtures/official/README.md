@@ -21,3 +21,69 @@ Source attribution: Bank of England, official Bank Rate database (IUDBEDR);
 Office for National Statistics, Consumer price inflation time series (MM23/L55O)
 and Monthly gross domestic product time series (MGDP/ECYX). See source URLs in the
 receipts for reuse/licensing information. No third-party statistics are included.
+
+## Recorded CPI and labour series (issue #50 qualification)
+
+Four additional ONS JSON endpoints were recorded on 21 October 2026 as part of
+the additive optional-metric reader work. These are exact recorded response
+excerpts: values are unmodified, but bulk history is trimmed to representative
+windows to keep the repository small. Each receipt records the full-response
+SHA-256 and byte length alongside the excerpt hash, so the original recording can
+be re-verified. These fixtures are labelled evidence; no adapter parses them yet
+and they are not promoted to official production figures.
+
+| File | Series | Recorded latest point | Unit | Geography (bulletins) |
+| --- | --- | --- | --- | --- |
+| `cpi_d7g7_mm23.json` | D7G7/MM23, `CPI ANNUAL RATE 00: ALL ITEMS 2015=100` | `2026 SEP` = `3.5` | `%` | United Kingdom |
+| `regular_pay_nominal_kai9_lms.json` | KAI9/LMS, three-month average growth, SA, excluding arrears | `2026 AUG` = `3.7` | `%` | Great Britain |
+| `regular_pay_real_a2fa_lms.json` | A2FA/LMS, three-month average growth, SA, real terms | `2026 AUG` = `0.6` | blank (recorded; see below) | Great Britain |
+| `unemployment_mgsx_lms.json` | MGSX/LMS, unemployment rate aged 16+, SA | `2026 JUL`, label `2026 JUN-AUG` = `4.7` | `%` | United Kingdom |
+
+Recorded contract facts (exact observations from the responses):
+
+- `description.releaseDate` is a UTC instant at 23:00 the day before the UK
+  calendar release (`2026-10-20T23:00:00.000Z` for CPI, `2026-10-19T23:00:00.000Z`
+  for the labour series). Public precision must stay a Europe/London calendar
+  date; the midnight encoding is not an announcement time. `nextRelease` is a
+  human-readable string (`18 November 2026`, `17 November 2026`).
+- MGSX `months[]` carries rolling-window labels: `2026 JUL` has label
+  `2026 JUN-AUG`, and cross-year labels are recorded (`2025 OCT-DEC`,
+  `2025 NOV-JAN`, `2025 DEC-FEB`). The label is the authoritative window and its
+  end month is the canonical key (`2026 JUN-AUG` → `2026-08`). `date` is the
+  middle month and is not the window end.
+- KAI9/A2FA `months[]` labels are single months (`2026 AUG`). The October 2026
+  Average weekly earnings bulletin states regular-pay growth was `3.7%` and real
+  (CPIH-adjusted) regular-pay growth `0.6%`, both "in June to August 2026",
+  matching the `2026 AUG` points. The label month is therefore the **ending
+  month** of the three-month window (`2026 AUG` → June–August → `2026-06` to
+  `2026-08`). This closes the pay ending-month rule for these series.
+- A2FA's `unit` is a blank string in the recorded metadata. Its title declares
+  percentage growth ("...Growth (%): Seasonally Adjusted Regular Pay"), and the
+  bulletin's CPIH-adjusted 0.6% figure matches the recorded value, so blank is a
+  reviewed series-specific exception; the wire contract still normalises to
+  `percent`. A2FA is the CPIH-deflated regular-pay series, not the CPI-based X09
+  supplementary dataset.
+- Annual and quarterly arrays coexist with `months[]`; only `months[]` may enter
+  monthly history. The labour responses populate no `years`/`quarters` at all.
+- The structured seasonal-adjustment field is absent; validated titles and
+  methodology establish adjustment. Values are decimal strings. No non-numeric
+  missing token appears in the recorded excerpts; the missing-value grammar
+  remains unobserved, so unknown tokens must quarantine a candidate feed.
+- Per-point `updateDate` and the `versions[]` list are recorded. Their revision
+  semantics are **not** verified: `updateDate` must not be used to order
+  vintages. Per-dataset OGL reuse exceptions and full population notes remain
+  open questions for the future adapters (issues #27–#29).
+
+Official cross-checks retrieved 21 October 2026:
+
+- [Average weekly earnings in Great Britain: October 2026](https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/employmentandemployeetypes/bulletins/averageweeklyearningsingreatbritain/october2026):
+  "The annual growth rate in employees' average regular earnings (excluding
+  bonuses) was 3.7% in June to August 2026" and "In real terms (adjusted for
+  inflation using the Consumer Prices Index including owner occupiers' housing
+  costs (CPIH)), annual regular pay growth ... at 0.6% in June to August 2026".
+- [Labour market overview, UK: October 2026](https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/employmentandemployeetypes/bulletins/uklabourmarket/october2026):
+  "The UK unemployment rate for people aged 16 years and over was estimated at
+  4.7% in June to August 2026."
+- [Consumer price inflation, UK: September 2026](https://www.ons.gov.uk/economy/inflationandpriceindices/bulletins/consumerpriceinflation/september2026):
+  "The Consumer Prices Index (CPI) rose by 3.5% in the 12 months to
+  September 2026."

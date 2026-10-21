@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import {
   METRICS,
+  OPTIONAL_METRICS,
   parseManifest,
   parseDataset,
   loadVerified,
@@ -11,7 +13,27 @@ import {
   chartPoints,
   freshness,
   legacyReports,
+  referenceWindow,
 } from "../../src/app/data/verified.mjs";
+
+const WIRE = new URL("../fixtures/verified/", import.meta.url);
+const fixture = (name) =>
+  JSON.parse(readFileSync(new URL(`${name}.json`, WIRE), "utf8"));
+const fixtureBytes = (name) => readFileSync(new URL(`${name}.json`, WIRE));
+const fixtureManifest = (name) =>
+  JSON.parse(readFileSync(new URL(`${name}.manifest.json`, WIRE), "utf8"));
+function fixtureFetcher(manifest, bytes) {
+  return async (url) =>
+    url.endsWith("current.json")
+      ? { ok: true, json: async () => manifest }
+      : { ok: true, arrayBuffer: async () => bytes.buffer.slice(
+          bytes.byteOffset,
+          bytes.byteOffset + bytes.byteLength,
+        ) };
+}
+function optionalData() {
+  return JSON.parse(fixtureBytes("v1-with-optional").toString());
+}
 
 const generation = "a".repeat(32);
 const published = "2026-10-20T12:00:00.000000Z";
@@ -305,3 +327,331 @@ test("AI report failure is independent and malicious links are excluded", () => 
     [],
   );
 });
+
+test("the recorded M1 payload is accepted and serializes byte-identically", () => {
+  const bytes = fixtureBytes("m1-core-only");
+  const manifest = fixtureManifest("m1-core-only");
+  assert.equal(
+    createHash("sha256").update(bytes).digest("hex"),
+    manifest.sha256,
+  );
+  const parsed = parseDataset(
+    JSON.parse(bytes.toString()),
+    parseManifest(manifest),
+  );
+  assert.equal(JSON.stringify(parsed), bytes.toString());
+  assert.deepEqual(Object.keys(parsed.metrics).sort(), Object.keys(METRICS).sort());
+  assert.equal(parsed.metrics.cpih.latest.value, "3.3");
+});
+
+test("the loader accepts the M1 payload and absent optional metrics stay absent", async () => {
+  const manifest = fixtureManifest("m1-core-only");
+  const data = await loadVerified(
+    "/",
+    fixtureFetcher(manifest, fixtureBytes("m1-core-only")),
+  );
+  assert.equal(data.metrics.bank_rate.latest.value, "3.75");
+  for (const key of Object.keys(OPTIONAL_METRICS))
+    assert.equal(data.metrics[key], undefined);
+});
+
+test("registered optional metrics validate with geography, windows and deflator", () => {
+  const data = parseDataset(
+    optionalData(),
+    parseManifest(fixtureManifest("v1-with-optional")),
+  );
+  assert.equal(data.metrics.cpi.definition.geography, "United Kingdom");
+  assert.equal(
+    data.metrics.regular_pay_nominal_growth.definition.geography,
+    "Great Britain",
+  );
+  assert.equal(
+    data.metrics.regular_pay_nominal_growth.definition.window_months,
+    3,
+  );
+  assert.equal(
+    data.metrics.regular_pay_nominal_growth.definition.deflator,
+    undefined,
+  );
+  assert.equal(
+    data.metrics.regular_pay_real_growth.definition.deflator,
+    "CPIH",
+  );
+  assert.equal(
+    data.metrics.regular_pay_real_growth.definition.window_months,
+    3,
+  );
+  const unemployment = data.metrics.unemployment;
+  assert.deepEqual(referenceWindow(unemployment.history[0]), {
+    start_month: "2025-11",
+    end_month: "2026-01",
+  });
+  assert.deepEqual(referenceWindow(unemployment.latest), {
+    start_month: "2026-06",
+    end_month: "2026-08",
+  });
+  assert.equal(referenceWindow(data.metrics.cpi.latest), null);
+  assert.equal(unemployment.latest.value, "4.7");
+});
+
+test("the loader verifies the checksum of a generation with optional metrics", async () => {
+  const manifest = fixtureManifest("v1-with-optional");
+  const data = await loadVerified(
+    "/",
+    fixtureFetcher(manifest, fixtureBytes("v1-with-optional")),
+  );
+  assert.equal(data.metrics.unemployment.latest.value, "4.7");
+  manifest.sha256 = "0".repeat(64);
+  await assert.rejects(
+    loadVerified(
+      "/",
+      fixtureFetcher(manifest, fixtureBytes("v1-with-optional")),
+    ),
+    /integrity/,
+  );
+});
+
+test("rolling charts locate points at their end month and keep their windows", () => {
+  const data = parseDataset(
+    optionalData(),
+    parseManifest(fixtureManifest("v1-with-optional")),
+  );
+  const points = chartPoints(data.metrics.unemployment);
+  assert.deepEqual(
+    points.map((p) => p.date),
+    ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08"],
+  );
+  assert.deepEqual(
+    points.map((p) => p.value),
+    [4.9, null, null, null, null, 4.9, 4.9, 4.7],
+  );
+  assert.deepEqual(points.at(-1).reference, {
+    kind: "rolling_months",
+    start_month: "2026-06",
+    end_month: "2026-08",
+  });
+});
+
+test("a skipped end month keeps the previous published window comparison unavailable", () => {
+  const data = parseDataset(
+    optionalData(),
+    parseManifest(fixtureManifest("v1-with-optional")),
+  );
+  const unemployment = data.metrics.unemployment;
+  assert.equal(previousReading(unemployment).period, "2026-07");
+  unemployment.history.at(-2).period = "2026-06";
+  unemployment.history.at(-2).reference = {
+    kind: "rolling_months",
+    start_month: "2026-04",
+    end_month: "2026-06",
+  };
+  assert.equal(previousReading(unemployment), null);
+});
+
+test("an unavailable registered optional member stays an absent view", () => {
+  const data = optionalData();
+  data.metrics.cpi = {
+    ...data.metrics.cpi,
+    validation_status: "unavailable",
+    history: [],
+    latest: null,
+  };
+  const parsed = parseDataset(
+    data,
+    parseManifest(fixtureManifest("v1-with-optional")),
+  );
+  assert.equal(parsed.metrics.cpi.latest, null);
+  assert.deepEqual(parsed.metrics.cpi.history, []);
+});
+
+test("an unavailable optional member still needs its registered definition", () => {
+  const data = optionalData();
+  data.metrics.cpi = {
+    ...data.metrics.cpi,
+    validation_status: "unavailable",
+    history: [],
+    latest: null,
+  };
+  data.metrics.cpi.definition.unit = "index";
+  assert.throws(() =>
+    parseDataset(data, parseManifest(fixtureManifest("v1-with-optional"))),
+  );
+});
+
+for (const [name, mutate] of [
+  [
+    "unknown metric key",
+    (d) => {
+      d.metrics.made_up = d.metrics.cpi;
+    },
+  ],
+  [
+    "wrong optional unit",
+    (d) => {
+      d.metrics.cpi.definition.unit = "index";
+    },
+  ],
+  [
+    "substituted optional series",
+    (d) => {
+      d.metrics.cpi.definition.series = "D7BT";
+    },
+  ],
+  [
+    "wrong optional geography",
+    (d) => {
+      d.metrics.regular_pay_nominal_growth.definition.geography =
+        "United Kingdom";
+    },
+  ],
+  [
+    "CPI geography narrowed to Great Britain",
+    (d) => {
+      d.metrics.cpi.definition.geography = "Great Britain";
+    },
+  ],
+  [
+    "wrong rolling window size",
+    (d) => {
+      d.metrics.unemployment.definition.window_months = 6;
+    },
+  ],
+  [
+    "window metadata on a monthly metric",
+    (d) => {
+      d.metrics.cpi.definition.window_months = 3;
+    },
+  ],
+  [
+    "missing window metadata on a rolling metric",
+    (d) => {
+      delete d.metrics.unemployment.definition.window_months;
+    },
+  ],
+  [
+    "wrong deflator",
+    (d) => {
+      d.metrics.regular_pay_real_growth.definition.deflator = "CPI";
+    },
+  ],
+  [
+    "deflator on nominal pay",
+    (d) => {
+      d.metrics.regular_pay_nominal_growth.definition.deflator = "CPIH";
+    },
+  ],
+  [
+    "optional metric version bump",
+    (d) => {
+      d.metrics.cpi.definition.version = 2;
+    },
+  ],
+  [
+    "wrong optional adjustment",
+    (d) => {
+      d.metrics.regular_pay_nominal_growth.definition.adjustment =
+        "not_seasonally_adjusted";
+    },
+  ],
+  [
+    "wrong optional comparison",
+    (d) => {
+      d.metrics.unemployment.definition.comparison = "year_on_year";
+    },
+  ],
+  [
+    "wrong optional frequency",
+    (d) => {
+      d.metrics.cpi.definition.frequency = "weekly";
+    },
+  ],
+  [
+    "unofficial optional source",
+    (d) => {
+      d.metrics.cpi.definition.source_url = "https://example.com/series";
+    },
+  ],
+  [
+    "optional fixture promoted to official",
+    (d) => {
+      d.metrics.cpi.snapshot_evidence_kind = "recorded_fixture";
+    },
+  ],
+  [
+    "invalid optional provenance hash",
+    (d) => {
+      d.metrics.cpi.source_sha256 = "xyz";
+    },
+  ],
+  [
+    "rolling point without a reference window",
+    (d) => {
+      delete d.metrics.unemployment.history[0].reference;
+    },
+  ],
+  [
+    "rolling window end disagrees with the period key",
+    (d) => {
+      d.metrics.unemployment.history[0].reference.end_month = "2026-02";
+    },
+  ],
+  [
+    "reversed rolling window",
+    (d) => {
+      d.metrics.unemployment.history[0].reference.start_month = "2026-03";
+      d.metrics.unemployment.history[0].reference.end_month = "2026-01";
+    },
+  ],
+  [
+    "short rolling window",
+    (d) => {
+      d.metrics.unemployment.history[0].reference.start_month = "2025-12";
+    },
+  ],
+  [
+    "impossible rolling month",
+    (d) => {
+      d.metrics.unemployment.history[0].reference.start_month = "2025-00";
+    },
+  ],
+  [
+    "reference metadata on a monthly point",
+    (d) => {
+      d.metrics.cpi.history[0].reference = {
+        kind: "rolling_months",
+        start_month: "2026-06",
+        end_month: "2026-07",
+      };
+    },
+  ],
+  [
+    "duplicate optional periods",
+    (d) => {
+      d.metrics.unemployment.history[0].period = "2026-06";
+      d.metrics.unemployment.history[0].reference = {
+        kind: "rolling_months",
+        start_month: "2026-04",
+        end_month: "2026-06",
+      };
+    },
+  ],
+  [
+    "optional card and chart disagree",
+    (d) => {
+      d.metrics.unemployment.latest.value = "999";
+    },
+  ],
+  [
+    "unavailable optional metric with values",
+    (d) => {
+      d.metrics.cpi.validation_status = "unavailable";
+    },
+  ],
+])
+  test(`rejects ${name}`, () => {
+    const data = optionalData();
+    mutate(data);
+    assert.throws(() =>
+      parseDataset(data, parseManifest(fixtureManifest("v1-with-optional"))),
+    );
+  });

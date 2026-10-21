@@ -16,5 +16,53 @@
     "retrieved_at": "2026-10-20T21:49:21.257925+00:00",
     "sha256": "1de136d448d7c1bff7fe28fd2074899847a8ef1b04cbee7c11d78781f97a81ff",
     "content_type": "application/octet-stream;charset=utf-8"
+  },
+  "cpi_d7g7_mm23.json": {
+    "url": "https://www.ons.gov.uk/economy/inflationandpriceindices/timeseries/d7g7/mm23/data",
+    "retrieved_at": "2026-10-21T14:02:10.766043+00:00",
+    "sha256": "abc67cc93da6e848474b3396b44ff129a16aa04cf5c3b85dd054e394aaef0620",
+    "content_type": "application/json;charset=utf-8",
+    "trimmed": true,
+    "original": {
+      "sha256": "f05709a7d468e40599e8f9fe385ce8c42667b8bd49264e65b4ec0c6c5e787604",
+      "bytes": 122605
+    },
+    "trim_note": "Exact recorded values: months from 2025 JAN (latest 2026 SEP), last 12 quarterly points, last 8 previous versions; years, description and structure kept in full. Full response hash recorded above; the hash field covers the retained excerpt."
+  },
+  "regular_pay_nominal_kai9_lms.json": {
+    "url": "https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/earningsandworkinghours/timeseries/kai9/lms/data",
+    "retrieved_at": "2026-10-21T14:02:10.856490+00:00",
+    "sha256": "f3c5e69e73a1e579c65ff7675ac74599a98ddeb6c34fb165f2f13d462e5bf74d",
+    "content_type": "application/json;charset=utf-8",
+    "trimmed": true,
+    "original": {
+      "sha256": "4c5bb19226eb431575091e92dc46fbf95746edd2d440be21624491b7fa602a49",
+      "bytes": 73673
+    },
+    "trim_note": "Exact recorded values: months from 2025 JAN (latest 2026 AUG), last 8 previous versions; years/quarters are empty in the source and remain so."
+  },
+  "regular_pay_real_a2fa_lms.json": {
+    "url": "https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/earningsandworkinghours/timeseries/a2fa/lms/data",
+    "retrieved_at": "2026-10-21T14:02:10.962589+00:00",
+    "sha256": "bafb72d5044faa69c7c251768bd56a5b5ddd025afa3138cf383c771d1b212c02",
+    "content_type": "application/json;charset=utf-8",
+    "trimmed": true,
+    "original": {
+      "sha256": "e01d7c4ad4627190944e0520957f60f0f93cc1cab9c408ca4a8577a7e507ad8e",
+      "bytes": 73971
+    },
+    "trim_note": "Exact recorded values: months from 2025 JAN (latest 2026 AUG), last 8 previous versions. Blank unit is the recorded official metadata, not an omission."
+  },
+  "unemployment_mgsx_lms.json": {
+    "url": "https://www.ons.gov.uk/employmentandlabourmarket/peoplenotinwork/unemployment/timeseries/mgsx/lms/data",
+    "retrieved_at": "2026-10-21T14:02:11.098489+00:00",
+    "sha256": "f8e8c3ad14f03690d79e69190e1fb4e550789c6db034a866383b4a62c2dda4d4",
+    "content_type": "application/json;charset=utf-8",
+    "trimmed": true,
+    "original": {
+      "sha256": "40fc03537a940c9cef14463bc167c6e4d841ad6d9396ea32ca15b0ec229aaa42",
+      "bytes": 174598
+    },
+    "trim_note": "Exact recorded values: months from 2025 JAN (latest 2026 JUL), last 12 quarterly points, last 5 annual points, last 8 previous versions. Cross-year labels 2025 OCT-DEC, 2025 NOV-JAN and 2025 DEC-FEB are retained."
   }
 }
