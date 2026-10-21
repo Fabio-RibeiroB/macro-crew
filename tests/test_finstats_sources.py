@@ -1,0 +1,84 @@
+"""Offline source contracts; fixtures retain original official bytes and receipts."""
+from datetime import date
+from pathlib import Path
+import hashlib
+import json
+
+import pytest
+
+from finstats.sources import DEFINITIONS, ValidationError, parse
+
+FIXTURES = Path(__file__).parent / 'fixtures' / 'official'
+TODAY = date(2026, 10, 20)
+
+
+def fixture(key):
+    return (FIXTURES / f'{key}.csv').read_bytes()
+
+
+def test_recorded_bytes_match_receipts():
+    receipts = json.loads((FIXTURES / 'receipts.json').read_text())
+    for name, receipt in receipts.items():
+        assert hashlib.sha256((FIXTURES / name).read_bytes()).hexdigest() == receipt['sha256']
+
+
+def test_cpih_is_annual_rate_with_monthly_reference_periods():
+    data = parse('cpih', fixture('cpih'), TODAY)
+    assert data.definition.comparison == 'year_on_year'
+    assert data.observations[-1].period == '2026-08'
+    assert data.observations[-1].value == '3.3'
+    assert data.published_date == '2026-09-16'
+    assert data.next_release == '2026-10-21'
+    assert all(len(o.period) == 7 for o in data.observations)
+
+
+def test_gdp_matches_same_release_bulletin():
+    # ONS August 2026 bulletin, published 15 October: June .4, July .4, August .1.
+    data = parse('gdp', fixture('gdp'), TODAY)
+    assert [(o.period, o.value) for o in data.observations[-3:]] == [
+        ('2026-06', '0.4'), ('2026-07', '0.4'), ('2026-08', '0.1')]
+    assert data.published_date == '2026-10-15'
+    assert data.definition.adjustment == 'seasonally_adjusted'
+
+
+def test_bank_rate_preserves_daily_values_without_inventing_release_date():
+    data = parse('bank_rate', fixture('bank_rate'), TODAY)
+    assert data.published_date is None
+    assert data.next_release is None
+    assert data.observations[-1].period == '2026-10-19'
+    assert len([o for o in data.observations if o.period.startswith('2026-01')]) > 1
+
+
+@pytest.mark.parametrize('old,new', [
+    (b'L55O', b'L59C'), (b'MM23', b'OTHER'), (b'"Unit","%"', b'"Unit","index"'),
+    (b'"2026 AUG","3.3"', b'"2026 AUG","NaN"'),
+    (b'"2026 AUG","3.3"', b'"2026 XYZ","3.3"'),
+    (b'16-09-2026', b'16-09-2027'),
+    (b'"2026 AUG","3.3"', b'"2026 AUG",""'),
+    (b'"2026 AUG","3.3"', b'"2026 AUG","3.3"\n"2026 AUG","3.4"'),
+])
+def test_rejects_wrong_identity_units_periods_and_values(old, new):
+    assert old in fixture('cpih')
+    with pytest.raises(ValidationError):
+        parse('cpih', fixture('cpih').replace(old, new), TODAY)
+
+
+@pytest.mark.parametrize('body', [b'', b'<html>Access denied</html>', b'"unterminated'])
+def test_invalid_response_never_becomes_empty_success(body):
+    with pytest.raises(ValidationError):
+        parse('gdp', body, TODAY)
+
+
+def test_bank_rate_checks_series_and_duplicates():
+    for body in [fixture('bank_rate').replace(b'IUDBEDR', b'OTHER'),
+                 b'DATE,SERIES,VALUE\n01 Jan 2026,IUDBEDR,1\n01 Jan 2026,IUDBEDR,2']:
+        with pytest.raises(ValidationError):
+            parse('bank_rate', body, TODAY)
+
+
+def test_missing_historical_observation_is_not_zero_and_extremes_are_preserved():
+    body = fixture('gdp').replace(b'"1997 FEB","0.3"', b'"1997 FEB",".."')
+    data = parse('gdp', body.replace(b'"1997 MAR","0.0"', b'"1997 MAR","-20.1234"'), TODAY)
+    assert data.observations[0].value is None
+    assert data.observations[0].status == 'missing'
+    assert data.observations[1].value == '-20.1234'

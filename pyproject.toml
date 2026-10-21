@@ -1,14 +1,11 @@
 [project]
 name = "uk_macro_crew"
 version = "0.1.0"
-description = "uk_macro_crew using crewAI"
-authors = [{ name = "Your Name", email = "you@example.com" }]
+description = "FinStats official UK statistics and independent economic commentary"
 requires-python = ">=3.10,<3.14"
 dependencies = [
     "crewai[tools]==1.7.2",
     "exa-py>=2.0.2",
-    "pandas>=2.3.3",
-    "pytest>=7.0.0",
 ]
 
 [project.scripts]
@@ -24,6 +21,9 @@ migrate_history = "uk_macro_crew.migrate_history:migrate"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/uk_macro_crew", "src/finstats"]
+
 [tool.crewai]
 type = "crew"
 
@@ -36,6 +36,5 @@ addopts = "-v --tb=short"
 
 [dependency-groups]
 dev = [
-    "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
 ]

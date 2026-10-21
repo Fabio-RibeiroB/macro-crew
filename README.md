@@ -1,256 +1,121 @@
-# UK Macro Crew
+# FinStats — The UK economy, explained
 
-UK Macro Crew is a multi-agent AI system built with [crewAI](https://crewai.com) that automates collection and reporting of UK macroeconomic data. The system uses specialized agents to research and produce a validated current snapshot JSON report of key UK economic indicators.
+[FinStats](https://finstats.fabio.org.uk/) helps UK residents understand prices,
+interest rates and economic growth through official figures, useful charts and
+plain-English context. React/Vite serves a static website; visitors cannot start
+AI jobs. The project is migrating its legacy AI research into a separate,
+evidence-grounded explanation engine.
 
-## Installation
+## How it works today
 
-Ensure you have Python >=3.10 <3.14 installed on your system. This project uses [UV](https://docs.astral.sh/uv/) for dependency management and package handling.
+```text
+ONS and Bank of England structured downloads
+    → deterministic parsers and validation (src/finstats)
+    → private SQLite observations, source evidence and revision vintages
+    → immutable public JSON generation + atomic current.json manifest
+    → static React website verifies and displays the same figures in cards/charts
 
-First, if you haven't already, install uv:
-
-## What It Does
-
-The system is designed for regular execution to produce the latest available UK macroeconomic snapshot including:
-- **Interest Rates**: Bank of England base rates
-- **CPIH**: Consumer Price Index including Housing (month-over-month changes)
-- **GDP**: Gross Domestic Product monthly changes
-- **Monetary Policy Report**: Bank of England policy summaries
-- **Financial Stability Report**: BoE financial stability summaries
-
-### Final Outputs: `research_report.json` and `history_report.json`
-The system produces two JSON files:
-- **Location**: `research_report.json` (in project root)
-- **Growth Pattern**: File is overwritten on each successful run with the latest validated snapshot
-- **Structure**: Snapshot format with current indicator values and report summaries
-- **Usage**: This file contains the current macro view used by the dashboard
-- **Location**: `history_report.json` (in project root)
-- **Growth Pattern**: Appends/upserts by publication date on each successful run
-- **Structure**: Chronological arrays per indicator/report for trend analysis
-- **Usage**: This file is the historical backbone for charts and longitudinal analysis
-
-### Agents
-
-- **Researcher Agent**: Searches for and retrieves key UK economic indicators from authoritative sources
-- **Reporting Analyst Agent**: Formats collected data into a current JSON snapshot
-
-### Output
-
-The system generates:
-- `research_report.json`: a structured snapshot file with the latest available economic indicators and report summaries.
-- `history_report.json`: a validated historical dataset built from each successful snapshot run.
-
-```bash
-pip install uv
+Private legacy AI cron → research_report.json → clearly labelled archived summaries
 ```
 
-Next, navigate to your project directory and install the dependencies:
+The three verified metrics are **daily Bank Rate (IUDBEDR)**, **annual CPIH inflation
+(L55O/MM23)** and **monthly seasonally adjusted real GDP growth (ECYX/MGDP)**.
+Reference period, official release date and FinStats check time are separate.
+Missing figures remain unavailable. Failed collection preserves previously
+verified data; failed AI never blocks statistical publication. Revision history
+starts with locally collected evidence; it is not a reconstructed archive of all
+historical official publication vintages.
 
-(Optional) Lock the dependencies and install them by using the CLI command:
-```bash
-crewai install
-```
-### Environment Setup
+The publisher runs every 30 minutes on the mini PC. Apache HTTPS serves a complete
+release via `dist`, with `data` pointing to `/home/finstats/published-data`. Private
+state is `/home/finstats/.local/state/finstats-shadow`. The daily legacy AI cron
+remains separate. Repository paths and proposed templates are **not proof** of
+installed server settings: see the [security audit](docs/security-audit.md).
 
-**Add your API keys to the `.env` file:**
-```bash
-OPENAI_API_KEY=your_openai_api_key_here
-EXA_API_KEY=your_exa_api_key_here
-MODEL=gpt-6-luna                 # Optional: OpenAI model (default: gpt-6-luna)
-# Leave OPENAI_REASONING_EFFORT unset. The crew picks a value the model accepts
-# (gpt-6-luna uses none). Setting a value that model rejects stops startup.
+## Frontend development
 
-# Error Handling & Timeout Configuration
-AGENT_MAX_ITERATIONS=8          # Maximum iterations per agent (default: 8)
-AGENT_MAX_RETRIES=2            # Maximum retries on failure (default: 2)
-AGENT_MAX_EXECUTION_TIME=900   # Timeout per agent in seconds (default: 900 = 15 min)
-AGENT_MAX_RPM=150              # Rate limit per agent (default: 150)
-CREW_FAIL_FAST=true           # Stop on first error (default: true)
-CREW_MAX_RPM=100              # Rate limit for crew (default: 100)
-```
+Node 20 and npm are used in CI. No API keys are required for frontend development.
 
-The system requires:
-- **OpenAI API Key**: For the LLM agents (`gpt-6-luna` by default, override with `MODEL`)
-- **Exa API Key**: For web search and data retrieval
-
-`OPENAI_REASONING_EFFORT` is optional. Leave it unset so the effort matches `MODEL`: `gpt-6-luna` and `gpt-6-sol` use `none` (required for their Chat Completions tool calls), `gpt-6-astra` and `gpt-6.1-sol` use `medium` because they reject `none`, and `gpt-5-pro` uses `high` because that is the only value it accepts. Other verified models use the default published on their model page. Non-reasoning models such as `gpt-4o-mini` omit the parameter. An explicit value the model does not accept raises `ReasoningEffortError` at startup. An empty value omits the parameter.
-
-## Error Handling & Reliability
-
-The system includes robust error handling to prevent infinite loops and timeouts:
-
-### Built-in Safeguards
-- **Iteration Limits**: Each agent stops after 8 iterations by default
-- **Retry Logic**: Failed operations retry only twice before giving up
-- **Execution Timeouts**: Individual agents timeout after 15 minutes
-- **Fail-Fast Mode**: System stops immediately on unrecoverable errors
-- **Rate Limiting**: Prevents API quota exhaustion
-
-### Configuration Options
-```bash
-# Restrictive settings (for testing or quick runs)
-AGENT_MAX_ITERATIONS=2
-AGENT_MAX_RETRIES=1
-AGENT_MAX_EXECUTION_TIME=300   # 5 minutes
-
-# Production settings (more resilient)
-AGENT_MAX_ITERATIONS=8
-AGENT_MAX_RETRIES=2
-AGENT_MAX_EXECUTION_TIME=900   # 15 minutes
-
-# Disable fail-fast for partial results
-CREW_FAIL_FAST=false
+```sh
+npm ci --ignore-scripts
+npm test
+npm run build
+npm run dev
 ```
 
-### Error Scenarios Handled
-- **API Rate Limits**: Automatic rate limiting prevents quota exhaustion
-- **Search Failures**: Agents provide partial results rather than complete failure
-- **Data Parsing Errors**: Invalid data is skipped, valid data is preserved
-- **Network Timeouts**: Individual agent timeouts prevent system hangs
-- **Infinite Loops**: Iteration limits prevent runaway processes
+The development URL is `http://127.0.0.1:8173`. A missing verified-data export shows
+an explicit unavailable state; general guides still work. Never substitute
+legacy AI numbers or fixtures for verified production figures.
 
-## Running the Project
+Release builds accept only reviewed files in `public/` and check the actual output
+directory for unexpected/private files. Runtime `public/data/` is deliberately
+excluded from release inputs: move any local development export outside `public/`
+before building. Deploy the approved external public-data directory after the
+build, following [the cutover guide](docs/dashboard-cutover.md).
 
-To start the UK macro data collection process:
+## Official-data development and tests
 
-```bash
-# Production run (searches for latest available data)
-crewai run
+Python 3.10–3.13. The official-data package uses the standard library. Core tests
+need only pytest and python-dotenv; no API credentials or CrewAI are necessary:
 
-# Alternative entry points
-uv run uk_macro_crew
-uv run run_crew
+```sh
+uv run --no-project --python 3.12 --with pytest==8.3.5 --with python-dotenv==1.1.0 \
+  env PYTHONPATH=src python -m pytest \
+  --ignore=tests/test_llm_config.py --ignore=tests/test_crew_integration.py
 ```
 
-The system is now simplified to always search for the **latest available data** for each economic indicator. This ensures you always get the most recent UK macroeconomic data without needing to specify timeframes.
+Replay recorded fixtures into private temporary state (output is labelled fixture
+evidence and cannot be published as official data):
 
-This initializes the UK Macro Crew, where the Researcher Agent searches for the latest UK economic data and the Reporting Analyst Agent writes a fresh validated `research_report.json` snapshot.
-
-### Additional Commands
-
-```bash
-# Run tests
-uv run pytest
-
-# Run tests with coverage
-uv run pytest --cov=uk_macro_crew
-
-# Train the crew (for model improvement)
-uv run train <n_iterations> <filename>
-
-# Replay specific task execution
-uv run replay <task_id>
-
-# Seed/update history_report.json from current snapshot
-uv run migrate_history
+```sh
+PYTHONPATH=src python -m finstats --data-dir /tmp/finstats-replay \
+  --fixtures-dir tests/fixtures/official
 ```
 
-## How It Works
+A live manual collection uses the same command without `--fixtures-dir`. Public
+delivery is `python -m finstats.delivery --state-dir PRIVATE --output-dir PUBLIC`;
+read the deployment guide before using real paths. Never use a private directory
+inside a repository, release, or served directory.
 
-The UK Macro Crew consists of two specialized AI agents working together:
+## Legacy AI development
 
-### Researcher Agent
-- **Role**: UK Macroeconomic Data Researcher
-- **Goal**: Find and retrieve the most current UK economic indicators
-- **Tools**: Web search capabilities via Exa API
-- **Sources**: Bank of England, ONS, and other authoritative UK economic data sources
+The legacy dependency tree in `pyproject.toml` is separate from the official-data
+runtime. Fresh installation is **not currently reproducible**: old transitive
+constraints, including LanceDB, can fail resolution on current platforms. Do not
+repair this by upgrading the running production environment in place. A tested
+legacy runtime exists on the server, but carries dependency audit findings.
+A clean, minimal collector virtualenv is proposed in the security PR.
 
-### Reporting Analyst Agent  
-- **Role**: Economic Data Analyst and Report Maintainer
-- **Goal**: Build a current and validated economic data snapshot
-- **Tools**: JSON manipulation tool for structured data updates
-- **Output**: Snapshot JSON report with publication dates, next publication dates, and sources
+`run_crew`, `train`, `replay`, `test` and `run_with_trigger` can incur API charges.
+They require explicit `FINSTATS_AI_ENABLED=true` and use a private daily admission
+ledger. `.env.dist` documents the controls. Keep API keys outside every served
+path, never use `VITE_*` for secrets, and use a dedicated provider project with
+model restrictions and enforced spending limits. Rate limits and attempt counts
+are not dollar caps. See [the audit and checklist](docs/security-audit.md).
 
-### Data Structure
+Full legacy tests also need CrewAI, OpenAI SDK and tools installed. Use dummy keys,
+disabled telemetry and mocked network calls; `uv run test` is a **paid evaluation
+command**, not pytest. CI runs the dependency-light suite, frontend tests and build;
+full legacy compatibility tests are currently a separate offline check.
 
-The system maintains data in this JSON snapshot format:
-```json
-{
-  "metadata": {
-    "generated_at": "2026-03-06T17:02:19.884768Z",
-    "last_updated": "2026-03-06T17:02:19.884768Z"
-  },
-  "current_economic_indicators": {
-    "interest_rate": {
-      "value": "3.75%",
-      "publication_date": "2026-02-05",
-      "next_publication_date": "2026-03-19",
-      "source": "https://www.bankofengland.co.uk/monetary-policy/the-interest-rate-bank-rate"
-    },
-    "cpih": {
-      "value": "-0.3%",
-      "publication_date": "2026-02-18",
-      "next_publication_date": "2026-03-25",
-      "source": "https://www.ons.gov.uk/economy/inflationandpriceindices/bulletins/consumerpriceinflation/january2026"
-    },
-    "gdp": {
-      "value": "+0.1%",
-      "publication_date": "2026-02-12",
-      "next_publication_date": "2026-03-31",
-      "source": "https://www.ons.gov.uk/economy/grossdomesticproductgdp"
-    }
-  },
-  "current_report_summaries": {
-    "monetary_policy_report": {
-      "summary": "Brief summary of policy decisions...",
-      "report_date": "2026-02-05",
-      "next_publication_date": "2026-03-19",
-      "source": "https://www.bankofengland.co.uk/monetary-policy-report/2026/february-2026"
-    },
-    "financial_stability_report": {
-      "summary": "Brief summary of financial system assessment...",
-      "report_date": "2025-12-15",
-      "next_publication_date": "2026-06-15",
-      "source": "https://www.bankofengland.co.uk/financial-stability-report"
-    }
-  }
-}
-```
+## Repository and operations
 
-## Configuration
+* `src/finstats/`: definitions, official parsers, revision store, collector and delivery.
+* `src/app/`: React application, verified-data reader and chart component.
+* `src/uk_macro_crew/`: legacy AI research, report validation/history and CLI.
+* `scheduler.py`: daily legacy scheduling and archive copying; not the official publisher.
+* `deploy/`: reviewable Apache/systemd templates, not automatic deployment.
+* `tests/`: offline release fixtures, data integrity/failure tests and frontend tests.
+* `research_report.json`, `history_report.json` and public copies: retained legacy
+  artifacts for compatibility. They are not authoritative current indicators.
 
-The system is configured through YAML files:
-- `src/uk_macro_crew/config/agents.yaml`: Agent definitions and capabilities
-- `src/uk_macro_crew/config/tasks.yaml`: Task definitions and expected outputs
-- `knowledge/user_preference.txt`: User preferences for data presentation
+Use short-lived branches and focused PRs against `main`. Do not force-push shared
+history or remove branches with unique work. [The cleanup report](docs/repository-cleanup.md)
+lists deletion candidates and remaining owner decisions. Nothing merges or deploys
+from CI. Build a separate release, inspect it, retain rollback, then activate only
+after review. Never build over the served `dist` directory.
 
-## Support
-
-For support, questions, or feedback regarding the UK Macro Crew:
-- Visit the [crewAI documentation](https://docs.crewai.com)
-- Check the [crewAI GitHub repository](https://github.com/joaomdmoura/crewai)
-- [Join the crewAI Discord](https://discord.com/invite/X4JWnZnxPb)
-
-## Project Structure
-
-```
-uk-macro-tracker/          # Project root
-├── .env                   # API keys (OPENAI_API_KEY, EXA_API_KEY)
-├── .env.dist             # Environment template
-├── research_report.json  # Generated current snapshot
-├── history_report.json   # Generated historical time series
-├── knowledge/            # Templates and configuration
-├── src/uk_macro_crew/    # Main source code
-│   ├── config/          # Agent and task YAML configurations
-│   ├── tools/           # Custom JSON manipulation tools
-│   ├── crew.py          # Agent orchestration
-│   └── main.py          # CLI entry points
-└── tests/               # Test suite
-```
-
-### Model-policy boundaries
-
-Reasoning profiles match exact model identities after removing a provider prefix
-and dated snapshot suffix. Unknown variants do not inherit a parent's settings:
-without an override the parameter is omitted, and an explicit unverified override
-is rejected. Fine-tuned IDs use the base model after `ft:`, before the organisation.
-The verified `o3` profile supports `low`, `medium`, and `high` (default `medium`).
-`gpt-5.4-pro` uses `medium`, `high`, or `xhigh`; its policy does not imply transport
-compatibility: it requires the Responses API, while the existing crew uses Chat
-Completions. This PR does not introduce Responses transport support.
-
-CI runs the offline core and pure model-policy tests on Python 3.10, 3.12 and
-3.13 with placeholder keys. CrewAI construction/SDK integration tests are excluded
-from this lightweight job: the existing `crewai[tools]==1.7.2` dependency graph
-currently cannot resolve its `lancedb>=0.5.4,<0.6.dev0` requirement in the available
-package index. Those integration tests remain in the repository and require a
-working legacy environment. CI does not run the research crew or use real keys.
+Further reading: [methodology and architecture](docs/architecture-assessment.md),
+[official data details](docs/official-data-foundation.md),
+[deployment and rollback](docs/dashboard-cutover.md),
+[frontend development](FRONTEND.md), [developer instructions](CLAUDE.md).

@@ -21,6 +21,7 @@ import warnings
 from datetime import datetime
 
 from uk_macro_crew.crew import UkMacroCrew
+from uk_macro_crew.ai_safety import paid_job
 
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 
@@ -51,6 +52,7 @@ def get_configuration_profile():
 # interpolate any tasks and agents information
 
 
+@paid_job
 def run():
     """
     Run the crew with simplified execution for current data snapshot generation.
@@ -112,6 +114,7 @@ def run():
             raise Exception(f"An error occurred while running the simplified crew: {e}")
 
 
+@paid_job
 def train():
     """
     Train the crew for a given number of iterations with simplified inputs.
@@ -130,6 +133,7 @@ def train():
         raise Exception(f"An error occurred while training the crew: {e}")
 
 
+@paid_job
 def replay():
     """
     Replay the crew execution from a specific task.
@@ -141,6 +145,7 @@ def replay():
         raise Exception(f"An error occurred while replaying the crew: {e}")
 
 
+@paid_job
 def test():
     """
     Test the crew execution with simplified inputs and returns the results.
@@ -160,6 +165,7 @@ def test():
         raise Exception(f"An error occurred while testing the crew: {e}")
 
 
+@paid_job
 def run_with_trigger():
     """
     Run the crew with trigger payload.
