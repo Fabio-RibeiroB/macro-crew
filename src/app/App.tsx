@@ -28,14 +28,24 @@ import {
   percent,
   previousReading,
 } from "./data/verified.mjs";
-import { PAGES, resolvePage } from "./data/pages.mjs";
+import {
+  NAV_PAGES,
+  FOOTER_PAGES,
+  documentTitle,
+  resolvePage,
+} from "./data/pages.mjs";
 import {
   createRefreshController,
   bindRefreshLifecycle,
   refreshSnapshot,
   refreshView,
 } from "./data/refresh.mjs";
-import { bindPageNavigation, bindMenuDismissal } from "./data/interactions.mjs";
+import {
+  NAV_COLLAPSE_QUERY,
+  bindPageNavigation,
+  bindMenuDismissal,
+  menuFocusAction,
+} from "./data/interactions.mjs";
 import "../styles/friendly.css";
 
 const topics = {
@@ -212,16 +222,39 @@ function PageHeading({
   title,
   children,
 }: {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }) {
   return (
     <section className="fs-container fs-page-heading">
-      <p className="fs-eyebrow">{eyebrow}</p>
+      {eyebrow ? <p className="fs-eyebrow">{eyebrow}</p> : null}
       <h1>{title}</h1>
-      <p>{children}</p>
+      {children ? <p>{children}</p> : null}
     </section>
+  );
+}
+
+function UkFlag() {
+  return (
+    <span className="fs-flag" aria-hidden="true">
+      <svg viewBox="0 0 60 30" focusable="false">
+        <rect width="60" height="30" fill="#012169" />
+        <path d="M0 0 L60 30 M60 0 L0 30" stroke="#fff" strokeWidth="6" />
+        <path d="M0 0 L60 30 M60 0 L0 30" stroke="#C8102E" strokeWidth="4" />
+        <path d="M30 0 V30 M0 15 H60" stroke="#fff" strokeWidth="10" />
+        <path d="M30 0 V30 M0 15 H60" stroke="#C8102E" strokeWidth="6" />
+      </svg>
+    </span>
+  );
+}
+
+function BrandLink() {
+  return (
+    <a className="fs-brand" href="/" aria-label="finstats UK home">
+      <UkFlag />
+      finstats UK
+    </a>
   );
 }
 
@@ -278,7 +311,7 @@ function Statistics({
             ))}
           </div>
           <p className="fs-caption">
-            FinStats export updated {checkedAt(data.published_at)}. Figures can
+            finstats UK export updated {checkedAt(data.published_at)}. Figures can
             be revised. <a href="/sources">How we check the data</a>
           </p>
         </>
@@ -726,13 +759,58 @@ function Publications({ reports, reportTime }: any) {
   );
 }
 
+function About() {
+  return (
+    <section className="fs-container fs-section fs-reading-grid">
+      <article>
+        <h2>What is published now</h2>
+        <p>
+          The verified figures are UK-wide: CPIH from the Office for National
+          Statistics, Bank Rate from the Bank of England, and monthly real GDP
+          from the Office for National Statistics. Each figure shows its
+          reference period, unit and source. A time when finstats UK checked a
+          feed is not a new official release.
+        </p>
+        <p>
+          Wages, unemployment, housing, energy and other measures stay off the
+          site until their official series are part of the verified feed. If a
+          statistic covers a smaller area than the UK, such as Great Britain,
+          that geography is named with the figure.
+        </p>
+        <h2>Official figures and AI summaries</h2>
+        <p>
+          The numbers come from the named official series. Some pages also keep
+          earlier summaries produced with AI. Those summaries are labelled as
+          commentary. They are separate from the verified figures, they are not
+          official statistics, and they are not forecasts produced by this
+          site.
+        </p>
+        <p>
+          <a className="fs-link" href="/sources">
+            Sources and methodology
+          </a>
+        </p>
+      </article>
+      <aside className="fs-context-card">
+        <h3>Scope and limits</h3>
+        <p>
+          This is a public website that republishes official statistics with
+          attribution. It is not a government website, and it does not produce
+          official statistics.
+        </p>
+        <p>Nothing here is individual financial advice.</p>
+      </aside>
+    </section>
+  );
+}
+
 function Sources() {
   return (
     <section className="fs-container fs-section fs-reading-grid">
       <article>
         <h2>Official statistics supply the numbers</h2>
         <p>
-          FinStats downloads structured data from the ONS and Bank of England.
+          finstats UK downloads structured data from the ONS and Bank of England.
           We check the series definition, unit and reference period, keep source
           evidence and publish a consistent snapshot independently of AI.
         </p>
@@ -798,6 +876,11 @@ export default function App({
     refreshSnapshot(null),
   );
   const [menuOpen, setMenuOpen] = useState(false);
+  const [narrow, setNarrow] = useState(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function")
+      return false;
+    return window.matchMedia(NAV_COLLAPSE_QUERY).matches;
+  });
   const [dark, setDark] = useState(() => {
     try {
       return localStorage.getItem("theme") === "dark";
@@ -810,10 +893,37 @@ export default function App({
   > | null>(null);
   const header = useRef<HTMLElement>(null);
   const menuToggle = useRef<HTMLButtonElement>(null);
+  const menuWasOpen = useRef(false);
+  const menuOpenRef = useRef(false);
+  const pendingMenuFocus = useRef<null | "toggle">(null);
+  menuOpenRef.current = menuOpen;
   useEffect(() => {
-    document.title = `${page.title} | FinStats`;
+    document.title = documentTitle(page);
     return bindPageNavigation(window, document);
-  }, [page.id]);
+  }, [page.id, page.title]);
+  useEffect(() => {
+    const media = window.matchMedia(NAV_COLLAPSE_QUERY);
+    const apply = () => {
+      const nav = document.getElementById("main-navigation");
+      const hiding = media.matches && !menuOpenRef.current;
+      if (
+        hiding &&
+        menuFocusAction({
+          collapsed: true,
+          transition: "none",
+          focusInsideNav: Boolean(nav?.contains(document.activeElement)),
+          navHidden: true,
+        }) === "toggle"
+      ) {
+        pendingMenuFocus.current = "toggle";
+      }
+      setNarrow(media.matches);
+      if (!media.matches) setMenuOpen(false);
+    };
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, []);
   useEffect(() => {
     if (menuOpen)
       return bindMenuDismissal(
@@ -823,6 +933,26 @@ export default function App({
         () => setMenuOpen(false),
       );
   }, [menuOpen]);
+  useEffect(() => {
+    const nav = document.getElementById("main-navigation");
+    const transition =
+      menuOpen === menuWasOpen.current ? "none" : menuOpen ? "open" : "close";
+    if (
+      menuFocusAction({
+        collapsed: narrow,
+        transition,
+        focusInsideNav: false,
+        navHidden: false,
+      }) === "first-link"
+    ) {
+      const link = nav?.querySelector("a");
+      if (link instanceof HTMLElement) link.focus({ preventScroll: true });
+    } else if (pendingMenuFocus.current === "toggle") {
+      menuToggle.current?.focus({ preventScroll: true });
+      pendingMenuFocus.current = null;
+    }
+    menuWasOpen.current = menuOpen;
+  }, [menuOpen, narrow]);
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
     try {
@@ -880,12 +1010,7 @@ export default function App({
       </a>
       <header className="fs-header" ref={header}>
         <div className="fs-header-inner">
-          <a href="/" className="fs-brand" aria-label="FinStats home">
-            <span className="fs-brand-mark">
-              <Sprout size={23} />
-            </span>
-            finstats<span className="fs-brand-dot">.</span>
-          </a>
+          <BrandLink />
           <button
             type="button"
             className="fs-menu-button"
@@ -902,18 +1027,36 @@ export default function App({
             id="main-navigation"
             className={menuOpen ? "fs-nav-open" : ""}
             aria-label="Main navigation"
+            hidden={narrow && !menuOpen}
           >
-            {PAGES.map((item) => (
+            {NAV_PAGES.map((item) => (
               <a
                 key={item.id}
                 href={item.path}
                 aria-current={page.id === item.id ? "page" : undefined}
+                onClick={() => {
+                  // Hide the menu only when the document stays put. Hiding the
+                  // link during a cross-page click can cancel navigation.
+                  if (item.path !== window.location.pathname) return;
+                  if (
+                    menuFocusAction({
+                      collapsed: narrow,
+                      transition: "close",
+                      focusInsideNav: true,
+                      navHidden: true,
+                    }) === "toggle"
+                  ) {
+                    pendingMenuFocus.current = "toggle";
+                  }
+                  setMenuOpen(false);
+                }}
               >
                 {item.label}
               </a>
             ))}
           </nav>
           <button
+            type="button"
             className="fs-icon-button"
             onClick={() => setDark(!dark)}
             aria-label={dark ? "Use light theme" : "Use dark theme"}
@@ -962,6 +1105,15 @@ export default function App({
             <GovernmentGuide />
           </>
         )}
+        {page.id === "about" && (
+          <>
+            <PageHeading title="About">
+              finstats UK gives residents a clear view of the UK economy, using
+              official statistics and plain-English context.
+            </PageHeading>
+            <About />
+          </>
+        )}
         {page.id === "sources" && (
           <>
             <PageHeading
@@ -980,7 +1132,7 @@ export default function App({
               eyebrow="Let’s get you back on track"
               title="Page not found"
             >
-              This address does not match a FinStats page.
+              This address does not match a finstats UK page.
             </PageHeading>
             <section className="fs-container fs-section">
               <a className="fs-button" href="/">
@@ -994,13 +1146,19 @@ export default function App({
         General economic information, not individual financial advice.
       </p>
       <footer className="fs-footer fs-container">
-        <a className="fs-brand" href="/">
-          finstats<span className="fs-brand-dot">.</span>
-        </a>
-        <p>The UK economy, explained.</p>
-        <a className="fs-link" href="/sources">
-          Sources & methodology
-        </a>
+        <BrandLink />
+        <p>Official UK statistics with plain-English context.</p>
+        <nav className="fs-footer-nav" aria-label="Footer">
+          {FOOTER_PAGES.map((item) => (
+            <a
+              key={item.id}
+              href={item.path}
+              aria-current={page.id === item.id ? "page" : undefined}
+            >
+              {item.label}
+            </a>
+          ))}
+        </nav>
       </footer>
     </div>
   );

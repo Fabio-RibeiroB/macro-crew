@@ -8,6 +8,7 @@ import {
 import {
   bindPageNavigation,
   bindMenuDismissal,
+  menuFocusAction,
 } from "../../src/app/data/interactions.mjs";
 import { loadVerified, reportLabel } from "../../src/app/data/verified.mjs";
 
@@ -248,9 +249,72 @@ test("known trailing-slash pages canonicalise and unknown addresses are left alo
   const cleanup = bindPageNavigation(win, {});
   assert.deepEqual(win.replacements, ["/prices?x=1#trends"]);
   cleanup();
+  win.setURL("https://finstats.example/about/?x=1");
+  bindPageNavigation(win, { getElementById() {} });
+  assert.deepEqual(win.replacements, [
+    "/prices?x=1#trends",
+    "/about?x=1",
+  ]);
   win.setURL("https://finstats.example/unknown/");
   bindPageNavigation(win, { getElementById() {} })();
-  assert.equal(win.replacements.length, 1);
+  assert.equal(win.replacements.length, 2);
+});
+
+test("collapsed menu focus enters the first link and returns to the toggle only from inside a hidden menu", () => {
+  assert.equal(
+    menuFocusAction({
+      collapsed: true,
+      transition: "open",
+      focusInsideNav: false,
+      navHidden: false,
+    }),
+    "first-link",
+  );
+  assert.equal(
+    menuFocusAction({
+      collapsed: true,
+      transition: "close",
+      focusInsideNav: true,
+      navHidden: true,
+    }),
+    "toggle",
+  );
+  assert.equal(
+    menuFocusAction({
+      collapsed: true,
+      transition: "close",
+      focusInsideNav: false,
+      navHidden: true,
+    }),
+    "unchanged",
+  );
+  assert.equal(
+    menuFocusAction({
+      collapsed: true,
+      transition: "none",
+      focusInsideNav: true,
+      navHidden: true,
+    }),
+    "toggle",
+  );
+  assert.equal(
+    menuFocusAction({
+      collapsed: true,
+      transition: "none",
+      focusInsideNav: true,
+      navHidden: false,
+    }),
+    "unchanged",
+  );
+  assert.equal(
+    menuFocusAction({
+      collapsed: false,
+      transition: "open",
+      focusInsideNav: false,
+      navHidden: false,
+    }),
+    "unchanged",
+  );
 });
 
 test("fragment scrolling follows navigation only, not slow data or reader scrolling; hash back/forward works", () => {
