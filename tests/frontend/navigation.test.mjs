@@ -96,11 +96,11 @@ test("every page renders its own heading, navigation and missing-data content", 
       assert.match(html, /General economic information, not individual financial advice/);
       assert.match(html, /<button type="button" class="fs-menu-button"/);
       assert.match(html, /aria-controls="main-navigation"/);
-      assert.equal((html.match(/<h1>/g) || []).length, 1);
+      assert.equal((html.match(/<h1\b/g) || []).length, 1);
       assert.ok(
         html.includes(
           page.id === "overview"
-            ? "Big economic news."
+            ? "Latest verified figures"
             : page.title.replaceAll("&", "&amp;"),
         ),
       );
@@ -132,6 +132,8 @@ test("every page renders its own heading, navigation and missing-data content", 
       if (page.id === "government")
         assert.match(html, /not available here yet/);
       if (page.id === "overview") {
+        assert.doesNotMatch(html, /Big economic news|The quick read|Your everyday economy/);
+        assert.match(html, /<h1[^>]*>Latest verified figures<\/h1>/);
         assert.doesNotMatch(html, /id="trends"/);
         assert.doesNotMatch(html, /Earlier AI report summaries/);
       }
@@ -188,6 +190,41 @@ test("every page renders its own heading, navigation and missing-data content", 
     assert.match(noReading, /A verified reading is not available yet/);
     assert.match(noReading, />Not available<\/p>/);
     assert.doesNotMatch(noReading, /class="fs-number">0%/);
+    const overviewData = {
+      published_at: "2026-10-20T12:00:00Z",
+      metrics: Object.fromEntries(
+        ["cpih", "bank_rate", "gdp"].map((kind, index) => {
+          const period = kind === "bank_rate" ? "2026-10-20" : "2026-09";
+          const metric = {
+            definition: {
+              dataset: kind === "cpih" ? "MM23" : kind === "gdp" ? "MGDP" : "IUDBEDR",
+              series: kind === "cpih" ? "L55O" : kind === "gdp" ? "ECYX" : "IUDBEDR",
+              source_url: "https://www.ons.gov.uk/",
+            },
+            history: [
+              { period: kind === "bank_rate" ? "2026-10-19" : "2026-08", value: "3.4", status: "observed" },
+              { period, value: String(3.5 + index), status: "observed" },
+            ],
+            latest: null,
+            collection_status: "ok",
+            validation_status: "verified",
+            last_successful_check_at: "2026-10-20T12:00:00Z",
+          };
+          metric.latest = metric.history.at(-1);
+          return [kind, metric];
+        }),
+      ),
+    };
+    const overview = renderToStaticMarkup(
+      createElement(App, { pathname: "/", initialData: overviewData }),
+    );
+    assert.match(overview, /class="fs-number">3\.5%/);
+    assert.match(overview, /class="fs-number">4\.5%/);
+    assert.match(overview, /About Inflation/);
+    assert.match(overview, /See Inflation details/);
+    assert.match(overview, /href="\/economy#interest-rates"/);
+    assert.match(overview, /href="\/economy#gdp"/);
+    assert.match(overview, /href="\/prices#figures"/);
     const missing = renderToStaticMarkup(
       createElement(App, { pathname: "/does-not-exist" }),
     );

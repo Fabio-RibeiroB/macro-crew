@@ -157,14 +157,6 @@
 .fs-skip:focus {
   top: 12px;
 }
-.fs-hero {
-  display: grid;
-  grid-template-columns: 1.3fr 1fr;
-  gap: 75px;
-  padding-top: 66px;
-  padding-bottom: 65px;
-  align-items: center;
-}
 .fs-eyebrow {
   font-size: 11px;
   letter-spacing: 0.11em;
@@ -175,29 +167,6 @@
   align-items: center;
   gap: 8px;
   margin: 0 0 15px;
-}
-.fs-dot {
-  height: 7px;
-  width: 7px;
-  background: var(--fs-accent);
-  border-radius: 50%;
-}
-.fs-hero h1 {
-  font-size: clamp(38px, 4.7vw, 62px);
-  line-height: 1.09;
-  letter-spacing: -0.055em;
-  font-weight: 800;
-  margin: 18px 0 22px;
-}
-.fs-hero h1 span {
-  color: var(--fs-accent);
-}
-.fs-hero-description {
-  font-size: 17px;
-  color: var(--fs-muted);
-  max-width: 500px;
-  line-height: 1.8;
-  margin-bottom: 26px;
 }
 .fs-button {
   display: inline-flex;
@@ -210,47 +179,6 @@
   text-decoration: none;
   font-size: 13px;
   font-weight: 600;
-}
-.fs-hero-note {
-  border: 1px solid var(--fs-line);
-  border-radius: 20px;
-  background: var(--fs-soft);
-  padding: 30px;
-  position: relative;
-}
-.fs-note-icon {
-  position: absolute;
-  right: 24px;
-  top: 22px;
-  color: var(--fs-accent);
-  opacity: 0.6;
-}
-.fs-hero-note > .fs-eyebrow {
-  padding-right: 34px;
-}
-.fs-hero-note > p:not(.fs-eyebrow) {
-  font-size: 17px;
-  font-weight: 500;
-  line-height: 1.75;
-  margin-bottom: 21px;
-}
-.fs-hero-note > div {
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 7px 0;
-  color: var(--fs-muted);
-}
-.fs-hero-note > a {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  color: var(--fs-accent);
-  font-size: 12px;
-  margin-top: 21px;
-  font-weight: 600;
-  text-decoration: none;
 }
 .fs-section {
   padding-top: 20px;
@@ -267,10 +195,30 @@
 .fs-section-heading .fs-eyebrow {
   margin-bottom: 8px;
 }
+.fs-section-heading h1,
 .fs-section-heading p:not(.fs-eyebrow) {
   color: var(--fs-muted);
   font-size: 14px;
   margin-top: 9px;
+}
+.fs-section-heading h1 {
+  color: var(--fs-ink);
+  font-size: clamp(26px, 3vw, 34px);
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+  margin: 0;
+}
+.fs-overview {
+  position: relative;
+  padding-top: 25px;
+  padding-bottom: 44px;
+}
+.fs-overview .fs-section-heading {
+  margin-bottom: 18px;
+}
+.fs-anchor-alias {
+  position: absolute;
+  top: 0;
 }
 .fs-text-button {
   display: flex;
@@ -303,22 +251,15 @@
   gap: 8px;
   margin-bottom: 17px;
 }
-.fs-stat-top .fs-eyebrow {
+.fs-stat-top h2,
+.fs-stat-top h3 {
+  font-size: 17px;
+  letter-spacing: -0.02em;
   margin: 0;
-  font-size: 10px;
-  letter-spacing: 0.06em;
+}
+.fs-stat-top > svg {
   color: var(--topic);
-}
-.dark .fs-stat-top .fs-eyebrow {
-  color: var(--fs-muted);
-}
-.fs-mini-label {
-  font-size: 10px;
-  background: var(--fs-soft);
-  border-radius: 5px;
-  padding: 4px 7px;
-  color: var(--fs-muted);
-  white-space: nowrap;
+  flex-shrink: 0;
 }
 .fs-stat h3 {
   font-size: 17px;
@@ -443,43 +384,6 @@
   padding: 48px 0;
   margin-bottom: 55px;
   scroll-margin-top: 20px;
-}
-.fs-explainer-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 36px;
-}
-.fs-guide-icon {
-  display: grid;
-  place-items: center;
-  width: 43px;
-  height: 43px;
-  border-radius: 13px;
-  margin-bottom: 17px;
-  color: #294438;
-}
-.fs-peach {
-  background: #f1d8c6;
-}
-.fs-sage {
-  background: #d8e5cc;
-}
-.fs-lilac {
-  background: #e1dcf1;
-}
-.fs-explainer-grid h3 {
-  font-size: 18px;
-  margin-bottom: 13px;
-}
-.fs-explainer-grid p {
-  font-size: 13px;
-  color: var(--fs-muted);
-  line-height: 1.9;
-}
-.fs-explainer-grid .fs-takeaway {
-  color: var(--fs-ink);
-  font-weight: 550;
-  margin: 13px 0 17px;
 }
 .fs-chart-grid {
   display: grid;
@@ -783,9 +687,6 @@
   .fs-header nav {
     gap: 20px;
   }
-  .fs-hero {
-    gap: 35px;
-  }
   .fs-stat {
     padding: 20px;
   }
@@ -822,24 +723,6 @@
     margin-left: 0;
     flex-basis: 100%;
   }
-  .fs-hero {
-    grid-template-columns: 1fr;
-    gap: 28px;
-    padding-top: 34px;
-    padding-bottom: 38px;
-  }
-  .fs-hero h1 {
-    font-size: 34px;
-  }
-  .fs-hero-description {
-    font-size: 15px;
-  }
-  .fs-hero-note {
-    padding: 24px;
-  }
-  .fs-hero-note > p:not(.fs-eyebrow) {
-    font-size: 15px;
-  }
   .fs-section {
     padding-bottom: 40px;
   }
@@ -857,7 +740,6 @@
     margin-top: 13px;
   }
   .fs-stat-grid,
-  .fs-explainer-grid,
   .fs-policy-grid,
   .fs-method {
     grid-template-columns: 1fr;
@@ -881,9 +763,6 @@
   .fs-decisions {
     padding: 35px 0;
     margin-bottom: 35px;
-  }
-  .fs-explainer-grid {
-    gap: 28px;
   }
   .fs-policy-card {
     padding: 23px;
@@ -909,18 +788,6 @@
     font-size: 11px;
   }
 }
-@media (max-width: 360px) {
-  .fs-hero h1 {
-    font-size: 32px;
-  }
-  .fs-mini-label {
-    font-size: 9px;
-  }
-  .fs-stat-top .fs-eyebrow {
-    font-size: 9px;
-  }
-}
-
 /* Topic pages keep the existing palette, cards and chart styling. */
 .fs-page-heading {
   padding-top: 48px;
@@ -959,20 +826,6 @@
 .fs-stat-count-1 .fs-stat-meaning,
 .fs-stat-count-2 .fs-stat-meaning {
   min-height: 0;
-}
-.fs-topic-links > a {
-  display: block;
-  padding: 5px 10px 0 0;
-  text-decoration: none;
-  border-radius: 8px;
-}
-.fs-topic-links > a:hover h3 {
-  text-decoration: underline;
-  text-underline-offset: 4px;
-}
-.fs-topic-links .fs-link {
-  display: inline-flex;
-  margin-top: 10px;
 }
 .fs-reading-grid {
   display: grid;
@@ -1092,7 +945,34 @@
   min-height: 48px;
 }
 .fs-stat-compact .fs-fresh {
-  margin-top: 18px;
+  margin-top: 12px;
+}
+.fs-stat-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  margin-top: 10px;
+  color: var(--fs-accent);
+  font-size: 12px;
+  font-weight: 650;
+  text-decoration: none;
+}
+.fs-stat-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.fs-stat-link:focus-visible,
+.fs-info summary:focus-visible {
+  outline: 3px solid var(--fs-accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.fs-info > p {
+  line-height: 1.65;
+}
+.fs-info .fs-stat-meaning {
+  min-height: 0;
 }
 @media (max-width: 380px) {
   .fs-header-inner {

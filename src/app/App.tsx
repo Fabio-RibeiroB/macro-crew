@@ -1,8 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowDown,
   ArrowRight,
-  Check,
   ChevronDown,
   ExternalLink,
   Landmark,
@@ -50,36 +48,33 @@ import "../styles/friendly.css";
 
 const topics = {
   cpih: {
-    eyebrow: "Cost of living",
-    title: "How fast are prices rising?",
     short: "Inflation",
     Icon: ShoppingBasket,
     measurement: "CPIH · change over 12 months",
     color: "#b56b43",
+    detailHref: "/prices#figures",
     meaning:
       "CPIH measures price changes across everyday goods, services and housing costs. Your own inflation rate depends on what you spend money on.",
     caution:
       "Lower inflation means prices are rising more slowly. It does not usually mean prices are falling.",
   },
   bank_rate: {
-    eyebrow: "Borrowing & saving",
-    title: "What is Bank Rate?",
     short: "Bank Rate",
     Icon: Landmark,
     measurement: "Bank of England · annual interest rate",
     color: "#277567",
+    detailHref: "/economy#interest-rates",
     meaning:
       "Bank Rate influences what lenders charge and what savers earn. Your mortgage or savings rate can differ, and fixed-rate deals usually change when the deal ends.",
     caution:
       "This is a daily observation of the policy rate, not a new MPC announcement.",
   },
   gdp: {
-    eyebrow: "Growth & jobs",
-    title: "Is the economy growing?",
-    short: "Monthly GDP",
+    short: "GDP",
     Icon: Sprout,
     measurement: "Real GDP · change from the previous month",
     color: "#6b76b5",
+    detailHref: "/economy#gdp",
     meaning:
       "GDP measures economic output. Growth can support business activity and jobs, but it does not tell us whether every household is better off.",
     caution:
@@ -131,19 +126,16 @@ function MetricCard({
   const delta = previous
     ? Number(metric.latest.value) - Number(previous.value)
     : null;
+  const Tag = compact ? "h2" : "h3";
   return (
     <article
       className={`fs-stat ${compact ? "fs-stat-compact" : ""}`}
       style={{ "--topic": topic.color } as React.CSSProperties}
     >
       <div className="fs-stat-top">
-        <span className="fs-eyebrow">
-          <topic.Icon size={17} aria-hidden="true" />
-          {topic.eyebrow}
-        </span>
-        <span className="fs-mini-label">Official data</span>
+        <Tag>{topic.short}</Tag>
+        <topic.Icon size={18} aria-hidden="true" />
       </div>
-      <h3>{topic.title}</h3>
       <p className="fs-number">{percent(metric.latest?.value)}</p>
       <p className="fs-measure">{topic.measurement}</p>
       <p className="fs-period">
@@ -175,11 +167,13 @@ function MetricCard({
         <ShieldCheck size={14} aria-hidden="true" />
         {status.label}
       </div>
-      <details className="fs-details">
+      <details className="fs-details fs-info">
         <summary>
-          Where this figure comes from{" "}
+          About {topic.short}{" "}
           <ChevronDown size={15} aria-hidden="true" />
         </summary>
+        {compact && <p className="fs-stat-meaning">{topic.meaning}</p>}
+        <p>{topic.caution}</p>
         <dl>
           <div>
             <dt>Source series</dt>
@@ -208,11 +202,13 @@ function MetricCard({
             </dd>
           </div>
         </dl>
-        <p>{topic.caution}</p>
         <OfficialLink href={metric.definition.source_url}>
           View the official series
         </OfficialLink>
       </details>
+      <a className="fs-stat-link" href={topic.detailHref}>
+        See {topic.short} details <ArrowRight size={15} aria-hidden="true" />
+      </a>
     </article>
   );
 }
@@ -265,21 +261,26 @@ function Statistics({
   error,
   refresh,
   compact = false,
+  overview = false,
 }: any) {
   return (
     <section
-      className="fs-container fs-section"
-      id="figures"
+      className={`fs-container fs-section ${overview ? "fs-overview" : ""}`}
+      id={overview ? "overview" : "figures"}
       aria-labelledby="figures-title"
     >
+      {overview && <span id="figures" className="fs-anchor-alias" />}
       <div className="fs-section-heading">
         <div>
-          <p className="fs-eyebrow">The latest verified figures</p>
-          <h2 id="figures-title">Start with the numbers</h2>
-          <p>
-            Each figure describes its own month or day. Open its source details
-            to check.
-          </p>
+          {!overview && <p className="fs-eyebrow">The latest verified figures</p>}
+          {overview ? (
+            <h1 id="figures-title">Latest verified figures</h1>
+          ) : (
+            <h2 id="figures-title">Latest verified figures</h2>
+          )}
+          {!overview && (
+            <p>Each figure has its own reference period and official source.</p>
+          )}
         </div>
         <button
           className="fs-text-button"
@@ -358,112 +359,6 @@ function Trends({ data, kinds }: any) {
         Latest revised values. Cards and charts share the same official
         snapshot; gaps stay visible.
       </p>
-    </section>
-  );
-}
-
-function Overview({ data }: any) {
-  const inflation = data?.metrics.cpih.latest;
-  const gdp = data?.metrics.gdp.latest;
-  const intro =
-    inflation && gdp
-      ? `Prices were ${Number(inflation.value) > 0 ? "higher than" : Number(inflation.value) < 0 ? "lower than" : "unchanged from"} a year earlier in ${formatPeriod(inflation.period)}. Economic output ${Number(gdp.value) > 0 ? "grew" : Number(gdp.value) < 0 ? "fell" : "was unchanged"} in ${formatPeriod(gdp.period)}.`
-      : "See what is happening to prices, borrowing and growth, then explore what it could mean for you.";
-  return (
-    <section className="fs-hero fs-container" id="overview">
-      <div className="fs-hero-copy">
-        <p className="fs-eyebrow">
-          <span className="fs-dot" />
-          The UK economy, made understandable
-        </p>
-        <h1>
-          Big economic news.
-          <br />
-          <span>Everyday meaning.</span>
-        </h1>
-        <p className="fs-hero-description">
-          A clear starting point for understanding prices, interest rates and
-          the decisions that reach your pocket.
-        </p>
-        <a className="fs-button" href="#figures">
-          See the latest figures <ArrowDown size={17} />
-        </a>
-      </div>
-      <aside className="fs-hero-note">
-        <span className="fs-note-icon">
-          <Landmark size={26} />
-        </span>
-        <p className="fs-eyebrow">The quick read</p>
-        <p>{intro}</p>
-        <div>
-          <Check size={15} />
-          Figures from the ONS & Bank of England
-        </div>
-        <div>
-          <Check size={15} />
-          Dates and sources you can inspect
-        </div>
-        <a href="/economy#interest-rates">
-          How do interest rates reach my pocket? <ArrowRight size={16} />
-        </a>
-      </aside>
-    </section>
-  );
-}
-
-function Explore() {
-  return (
-    <section className="fs-everyday" id="everyday">
-      <div className="fs-container">
-        <div className="fs-section-heading">
-          <div>
-            <p className="fs-eyebrow">Follow what matters to you</p>
-            <h2>Your everyday economy</h2>
-            <p>
-              Choose a subject. Find the figures, a plain-English guide and the
-              wider trend.
-            </p>
-          </div>
-        </div>
-        <div className="fs-explainer-grid fs-topic-links">
-          <a href="/prices">
-            <span className="fs-guide-icon fs-peach">
-              <ShoppingBasket />
-            </span>
-            <h3>Prices & everyday costs</h3>
-            <p>
-              Is inflation easing? Why can the shopping bill still be rising?
-            </p>
-            <span className="fs-link">
-              Explore prices <ArrowRight size={16} />
-            </span>
-          </a>
-          <a href="/economy">
-            <span className="fs-guide-icon fs-sage">
-              <Landmark />
-            </span>
-            <h3>Borrowing, saving & growth</h3>
-            <p>
-              How interest rates and economic activity can affect households and
-              businesses.
-            </p>
-            <span className="fs-link">
-              Explore the economy <ArrowRight size={16} />
-            </span>
-          </a>
-          <a href="/government-budget">
-            <span className="fs-guide-icon fs-lilac">£</span>
-            <h3>Tax & public spending</h3>
-            <p>
-              Understand Budget headlines, who is affected and when changes
-              begin.
-            </p>
-            <span className="fs-link">
-              Explore government decisions <ArrowRight size={16} />
-            </span>
-          </a>
-        </div>
-      </div>
     </section>
   );
 }
@@ -575,7 +470,7 @@ function GrowthGuide() {
       className="fs-container fs-section fs-reading-grid"
       id="work-and-businesses"
     >
-      <article>
+      <article id="gdp">
         <p className="fs-eyebrow">Growth and everyday life</p>
         <h2>A growing economy does not lift every household equally</h2>
         <p>
@@ -1068,9 +963,7 @@ export default function App({
       <main id="main-content" tabIndex={-1}>
         {page.id === "overview" && (
           <>
-            <Overview data={data} />
-            <Statistics {...stats} kinds={keys} compact />
-            <Explore />
+            <Statistics {...stats} kinds={keys} compact overview />
           </>
         )}
         {page.id === "prices" && (
