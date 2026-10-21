@@ -1,9 +1,11 @@
 from datetime import timedelta
 import http.client
 import hashlib
+import io
 import json
 from pathlib import Path
 from unittest.mock import patch
+import zipfile
 
 import pytest
 
@@ -22,6 +24,22 @@ def read_generation(directory):
     data = json.loads(body)
     assert data['generation_id'] == manifest['generation_id']
     return data
+
+
+def corrupt_pipr_table_xml(body):
+    source = zipfile.ZipFile(io.BytesIO(body))
+    altered = io.BytesIO()
+    with zipfile.ZipFile(altered, 'w', zipfile.ZIP_DEFLATED) as output:
+        for member in source.infolist():
+            content = (b'<invalid' if member.filename == 'xl/worksheets/sheet4.xml'
+                       else source.read(member.filename))
+            output.writestr(member.filename, content)
+    body = altered.getvalue()
+    assert zipfile.is_zipfile(io.BytesIO(body))
+    with zipfile.ZipFile(io.BytesIO(body)) as check:
+        assert check.read('xl/worksheets/sheet4.xml') == b'<invalid'
+        assert check.read('xl/workbook.xml')
+    return body
 
 
 def test_offline_cli_publishes_core_and_cpi_without_ai(tmp_path):
@@ -142,7 +160,7 @@ def test_rent_level_failure_does_not_hide_growth_and_retains_its_verified_histor
     assert result['failed_metrics'] == ['private_rent_level']
     data = read_generation(tmp_path)
     assert data['metrics']['private_rent_growth']['collection_status'] == 'ok'
-    assert data['metrics']['private_rent_growth']['latest']['value'] == '3.805277'
+    assert data['metrics']['private_rent_growth']['latest']['value'] == '3.8'
     assert data['metrics']['private_rent_level']['collection_status'] == 'degraded'
     assert data['metrics']['private_rent_level']['latest']['value'] == '1406'
 
@@ -154,7 +172,8 @@ def test_corrupt_pipr_is_quarantined_and_other_metrics_still_deliver(tmp_path):
 
     def malformed_pipr(key):
         if key.startswith('private_rent_'):
-            return b'<invalid'
+            body, source_url = fixture_transport(key)
+            return corrupt_pipr_table_xml(body), source_url
         return fixture_transport(key)
 
     result = collect(private, transport=malformed_pipr, clock=lambda: CPI_WHEN + timedelta(days=1))
@@ -174,7 +193,7 @@ def test_corrupt_pipr_is_quarantined_and_other_metrics_still_deliver(tmp_path):
     assert hashlib.sha256(public_body).hexdigest() == manifest['sha256']
     public = json.loads(public_body)
     assert public['metrics']['cpih']['latest']['value'] == '3.3'
-    assert public['metrics']['private_rent_growth']['latest']['value'] == '3.805277'
+    assert public['metrics']['private_rent_growth']['latest']['value'] == '3.8'
     assert public['metrics']['private_rent_level']['latest']['value'] == '1406'
     assert public['metrics']['private_rent_growth']['collection_status'] == 'degraded'
     assert public['metrics']['private_rent_level']['collection_status'] == 'degraded'

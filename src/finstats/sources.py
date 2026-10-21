@@ -11,7 +11,7 @@ import zlib
 import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from urllib.request import Request, urlopen
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
@@ -442,7 +442,9 @@ def _parse_pipr(metric_key, body, today):
         # missing-looking forms remain unknown and fail closed.
         value, status = (None, 'missing') if raw is None or raw == '[x]' else number(raw)
         if value is not None and metric_key == 'private_rent_growth':
-            value = format(Decimal(value).quantize(Decimal('0.000001')).normalize(), 'f')
+            # Table 1 styles Annual change with the reviewed Excel format 0.0.
+            # Match its published one-decimal rounding, not binary cell noise.
+            value = format(Decimal(value).quantize(Decimal('0.1'), rounding=ROUND_HALF_UP).normalize(), 'f')
         points.append(Observation(period, value, status, len(points) + 1))
     if points[-1].value is None:
         raise ValidationError('Latest UK PIPR observation unavailable')

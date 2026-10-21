@@ -46,7 +46,14 @@ def test_recorded_pipr_workbook_selects_only_the_uk_national_growth_and_level():
     assert public_definition('private_rent_growth')['geography'] == 'United Kingdom'
     assert growth.published_date == level.published_date == '2026-10-21'
     assert growth.observations[-1].period == level.observations[-1].period == '2026-09'
-    assert growth.observations[-1].value == '3.805277'
+    assert [point.value for point in growth.observations[-2:]] == ['3.8', '3.8']
+    # The recorded workbook stores distinct binary numeric values; its G cells
+    # share the custom 0.0 number format documented from the original edition.
+    table = ET.fromstring(zipfile.ZipFile(io.BytesIO(body)).read('xl/worksheets/sheet4.xml'))
+    rows = table.findall('.//m:sheetData/m:row', {'m': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'})
+    raw_latest = [row.find('m:c[@r="G%s"]/m:v' % row.get('r'), {'m': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}).text for row in rows[-2:]]
+    assert raw_latest == ['3.836147', '3.8052769999999998']
+    assert raw_latest[0] != raw_latest[1]
     assert level.observations[-1].value == '1406'
     assert any(point.status == 'missing' and point.value is None for point in growth.observations)
     assert all(point.period == level.observations[index].period for index, point in enumerate(growth.observations))
@@ -67,7 +74,7 @@ def test_missing_pipr_level_column_value_does_not_invalidate_growth():
             content = ET.tostring(rows_xml) if member.filename == 'xl/worksheets/sheet4.xml' else source.read(member)
             output.writestr(member.filename, content)
     body = altered.getvalue()
-    assert parse('private_rent_growth', body, date(2026, 10, 21)).observations[-1].value == '3.805277'
+    assert parse('private_rent_growth', body, date(2026, 10, 21)).observations[-1].value == '3.8'
     with pytest.raises(ValidationError, match='Latest UK PIPR observation unavailable'):
         parse('private_rent_level', body, date(2026, 10, 21))
 

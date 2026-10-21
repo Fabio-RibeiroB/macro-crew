@@ -125,15 +125,15 @@ The receipt records the exact versioned ONS workbook URL, original response
 length and SHA-256, its preserved local file timestamp, and the projection
 length/hash and transformation. The HTTP response headers were not retained;
 the timestamp is explicitly identified as local filesystem evidence. The
-projection retains the workbook's underlying numeric cells. For the latest UK
-growth observation, the cell serializes as `3.8052769999999998`; the parser
-explicitly applies decimal quantization to six places and stores `3.805277`.
-This canonical precision is a parser normalization choice, not a claim that ONS
-specifies six-place statistical precision. The ONS October 2026 bulletin
-headlines growth rounded to one decimal place; the FinStats card displays up to
-four decimals, while history and chart coordinates use the canonical six-place
-value. Rent levels are pounds per month and are displayed as whole pounds, as
-published in the bulletin.
+projection retains the workbook's underlying numeric cells. In the original
+versioned workbook, the August and September 2026 UK growth cells serialize as
+`3.836147` and `3.8052769999999998`. Both use cell style 39, custom format ID
+164, format code `0.0`, so the reviewed workbook displays each as `3.8`. The
+parser uses `Decimal` with `ROUND_HALF_UP` at one decimal place to match that
+published precision. The canonical values used in storage, the homepage,
+history and chart are therefore both `3.8`; raw source bytes and numeric cells
+remain preserved in private source evidence. Rent levels are pounds per month
+and are displayed as whole pounds, as in the bulletin.
 
 The extracted UK Table 1 growth and rent-level cells contain `[x]` as a missing
 token. The parser treats `[x]` and a structurally absent observation cell as
