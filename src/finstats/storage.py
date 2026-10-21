@@ -28,12 +28,13 @@ def encode(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
 
 
-def atomic_write(path: Path, body: bytes):
+def atomic_write(path: Path, body: bytes, mode=0o600):
     """Same-filesystem replacement; the old file survives incomplete writes."""
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix='.' + path.name, dir=path.parent)
     try:
         with os.fdopen(fd, 'wb') as stream:
+            os.fchmod(stream.fileno(), mode)
             stream.write(body)
             stream.flush()
             os.fsync(stream.fileno())

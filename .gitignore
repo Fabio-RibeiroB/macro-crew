@@ -166,9 +166,32 @@ $RECYCLE.BIN/
 # Linux
 *~
 
-# UV lock file
-uv.lock
+# A reviewed dependency lock may be committed; do not ignore it globally.
 
 # CrewAI specific
 .crewai/
 node_modules
+
+# Verified public data is generated at runtime, never bundled from stale fixtures.
+/public/data/
+
+# Local variants, credentials and private processing state
+.env.*
+!.env.dist
+*.pem
+*.key
+*.p12
+*.pfx
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.sqlite-*
+*.db
+*.db-*
+/state/
+/backups/
+/releases/
+/logs/
+/tmp/
+# Match a production symlink as well as a build directory.
+/dist
