@@ -85,6 +85,29 @@ test("overlapping manual/timer refreshes abort older requests and ignore late re
   h.owner.dispose();
 });
 
+test("cancellation settles loading once and ignores cancelled results before retry", async () => {
+  const h = harness();
+  const pending = h.owner.refresh();
+  await tick();
+  h.owner.cancel();
+  h.owner.cancel();
+  assert.deepEqual(h.states, ["loading", "settled"]);
+  assert.equal(h.time.size, 0);
+  assert.equal(h.calls[0].signal.aborted, true);
+  h.calls[0].resolve("cancelled result");
+  await pending;
+  assert.deepEqual(h.published, []);
+  assert.deepEqual(h.errors, []);
+  assert.deepEqual(h.states, ["loading", "settled"]);
+  const retry = h.owner.refresh();
+  await tick();
+  h.calls[1].resolve("fresh result");
+  await retry;
+  assert.deepEqual(h.published, ["fresh result"]);
+  assert.deepEqual(h.states, ["loading", "settled", "loading", "settled"]);
+  h.owner.dispose();
+});
+
 test("disposal aborts pending work and prevents data/error/loading updates after unmount", async () => {
   const h = harness();
   const pending = h.owner.refresh();
@@ -257,6 +280,22 @@ test("fragment scrolling follows navigation only, not slow data or reader scroll
   win.dispatchEvent(new Event("hashchange"));
   win.frames.fire();
   assert.equal(targets.length, 4);
+});
+
+test("menu closes on focus leaving the header and removes its focus listener", () => {
+  const doc = new EventTarget();
+  const inside = {};
+  let closed = 0;
+  const cleanup = bindMenuDismissal(doc, { contains: (target) => target === inside }, null, () => closed++);
+  const inner = new Event("focusin");
+  Object.defineProperty(inner, "target", { value: inside });
+  doc.dispatchEvent(inner);
+  assert.equal(closed, 0);
+  doc.dispatchEvent(new Event("focusin"));
+  assert.equal(closed, 1);
+  cleanup();
+  doc.dispatchEvent(new Event("focusin"));
+  assert.equal(closed, 1);
 });
 
 test("menu closes on Escape anywhere or an outside pointer, preserving inside clicks and removing listeners", () => {
