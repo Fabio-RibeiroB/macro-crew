@@ -85,7 +85,7 @@ DEFINITIONS = {
     'unemployment': Definition(
         'uk.unemployment.rate', 'MGSX', 'LMS',
         'Unemployment rate (aged 16 and over, seasonally adjusted): %',
-        'monthly', 'seasonally_adjusted', 'previous_published_window',
+        'monthly', 'seasonally_adjusted', 'level',
         ONS + '/employmentandlabourmarket/peoplenotinwork/unemployment/timeseries/mgsx/lms',
         ONS + '/employmentandlabourmarket/peoplenotinwork/unemployment/timeseries/mgsx/lms/data'),
 }

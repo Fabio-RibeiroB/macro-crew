@@ -392,6 +392,12 @@ test("Jobs & Pay renders official nominal and independently dated CPIH real pay"
     assert.ok(wagesStart >= 0 && nominalValue > wagesStart && realValue > nominalValue,
       "the #wages target contains the primary nominal figure before the real-pay detail");
     assert.match(page, /id="figures" class="fs-anchor-alias"/);
+    const wagesSection = page.slice(wagesStart, page.indexOf('id="unemployment"'));
+    const unemploymentSection = page.slice(page.indexOf('id="unemployment"'));
+    assert.match(wagesSection, /id="wages-title"/);
+    assert.match(wagesSection, /aria-labelledby="wages-title"/);
+    assert.match(unemploymentSection, /id="unemployment-title"/);
+    assert.match(unemploymentSection, /aria-labelledby="unemployment-title"/);
     assert.match(page, /3\.7%/);
     assert.match(page, /0\.6%/);
     assert.match(page, /Official annual growth, adjusted using CPIH/);

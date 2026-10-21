@@ -87,7 +87,7 @@ export const OPTIONAL_METRICS = {
     dataset: "LMS",
     title: "Unemployment rate (aged 16 and over, seasonally adjusted): %",
     frequency: "monthly",
-    comparison: "previous_published_window",
+    comparison: "level",
     adjustment: "seasonally_adjusted",
     unit: "percent",
     version: 1,

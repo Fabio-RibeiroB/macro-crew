@@ -12,6 +12,10 @@ import {
   previousReading,
   percent,
 } from "../../src/app/data/verified.mjs";
+import {
+  parseManifest as parseM1Manifest,
+  parseDataset as parseM1Dataset,
+} from "../fixtures/verified/m1-reader.mjs";
 
 const WIRE = new URL("../fixtures/verified/", import.meta.url);
 const bytes = readFileSync(new URL("producer-pay-v1.json", WIRE));
@@ -39,6 +43,22 @@ test("producer output passes the manifest checksum and the full reader contract"
     Object.keys(data.metrics).sort(),
     ["bank_rate", "cpi", "cpih", "gdp", "regular_pay_nominal_growth", "regular_pay_real_growth", "unemployment"],
   );
+});
+
+test("producer pay-v1 output remains accepted by the deployed M1 reader", () => {
+  const deployedView = parseM1Dataset(
+    JSON.parse(bytes.toString("utf8")),
+    parseM1Manifest(manifest),
+  );
+  assert.deepEqual(Object.keys(deployedView.metrics).sort(), [
+    "bank_rate", "cpi", "cpih", "gdp",
+    "regular_pay_nominal_growth", "regular_pay_real_growth", "unemployment",
+  ]);
+  assert.equal(deployedView.metrics.bank_rate.latest.value, "3.75");
+  assert.equal(deployedView.metrics.cpi.latest.value, "3.5");
+  assert.equal(deployedView.metrics.cpih.latest.value, "3.3");
+  assert.equal(deployedView.metrics.gdp.latest.value, "0.1");
+  assert.equal(deployedView.metrics.unemployment.latest.value, "4.7");
 });
 
 test("producer output carries MGSX's labelled window through to the verified reader", async () => {

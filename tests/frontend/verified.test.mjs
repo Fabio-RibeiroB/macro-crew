@@ -411,7 +411,7 @@ test("registered optional metrics validate with geography, windows and deflator"
   assert.equal(referenceWindow(data.metrics.cpi.latest), null);
   assert.equal(unemployment.latest.value, "4.7");
   assert.equal(unemployment.definition.age_group, "16 and over");
-  assert.equal(unemployment.definition.comparison, "previous_published_window");
+  assert.equal(unemployment.definition.comparison, "level");
   assert.equal(unemployment.quality_note, OPTIONAL_METRICS.unemployment.quality_note);
   assert.equal(unemployment.quality_source_url, OPTIONAL_METRICS.unemployment.quality_source_url);
 });

@@ -485,20 +485,21 @@ function Statistics({
   alias,
   children,
 }: any) {
+  const headingId = sectionId ? `${sectionId}-title` : "figures-title";
   return (
     <section
       className={`fs-container fs-section ${overview ? "fs-overview" : ""}`}
       id={sectionId ?? (overview ? "overview" : "figures")}
-      aria-labelledby="figures-title"
+      aria-labelledby={headingId}
     >
       {(overview || alias) && <span id={alias ?? "figures"} className="fs-anchor-alias" />}
       <div className="fs-section-heading">
         <div>
           {!overview && <p className="fs-eyebrow">{eyebrow ?? "The latest verified figures"}</p>}
           {overview ? (
-            <h1 id="figures-title">{title ?? "Latest verified figures"}</h1>
+            <h1 id={headingId}>{title ?? "Latest verified figures"}</h1>
           ) : (
-            <h2 id="figures-title">{title ?? "Latest verified figures"}</h2>
+            <h2 id={headingId}>{title ?? "Latest verified figures"}</h2>
           )}
           {!overview && (
             <p>Each figure has its own reference period and official source.</p>
