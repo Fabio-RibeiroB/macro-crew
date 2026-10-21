@@ -83,3 +83,12 @@ def test_reader_rejects_redirect_and_bounds_text(monkeypatch):
     assert 'Evidence' in result and 'malicious()' not in result
     with pytest.raises(ValueError,match='Redirect'):
         mod.NoRedirect().redirect_request(None,None,302,'',{},'https://127.0.0.1')
+
+
+@pytest.mark.parametrize('content', [{}, {'day': '2111-01-01', 'attempts': 0},
+    {'day': '2026-01-01', 'attempts': True}, {'day': 'invalid', 'attempts': 0}])
+def test_semantically_corrupt_ledger_cannot_reset_quota(ai_state, content):
+    ai_state.mkdir(mode=0o700)
+    (ai_state/'attempts.json').write_text(json.dumps(content))
+    with pytest.raises(ValueError):
+        with admitted_run(): pytest.fail('invalid ledger admitted')

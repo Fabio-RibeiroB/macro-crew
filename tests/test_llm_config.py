@@ -116,3 +116,20 @@ def test_both_agents_and_crew_use_configured_model(monkeypatch, openai_key):
             messages=[{"role": "user", "content": "hi"}]
         )
         assert params["reasoning_effort"] == "none"
+
+
+@pytest.mark.parametrize("model,parameter", [
+    ("gpt-6-luna", "max_completion_tokens"), ("o3", "max_completion_tokens"),
+    ("gpt-4o-mini", "max_tokens"),
+])
+def test_paid_calls_have_output_timeout_and_retry_limits(monkeypatch, openai_key, model, parameter):
+    monkeypatch.setenv("MODEL", model)
+    monkeypatch.setenv("OPENAI_REASONING_EFFORT", "")
+    monkeypatch.setenv("FINSTATS_AI_MAX_OUTPUT_TOKENS", "2048")
+    llm = build_agent_llm()
+    params = llm._prepare_completion_params(messages=[{"role": "user", "content": "hi"}])
+    assert params[parameter] == 2048
+    assert llm.client.max_retries == 0
+    assert llm.timeout == 60
+    monkeypatch.setenv("FINSTATS_AI_MAX_OUTPUT_TOKENS", "8193")
+    with pytest.raises(ValueError): build_agent_llm()
