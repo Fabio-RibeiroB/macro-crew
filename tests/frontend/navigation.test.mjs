@@ -396,6 +396,8 @@ test("Jobs & Pay renders official nominal and independently dated CPIH real pay"
     assert.match(page, /0\.6%/);
     assert.match(page, /Official annual growth, adjusted using CPIH/);
     assert.match(page, /June 2026 to August 2026/);
+    assert.match(page, /Unchanged \(0 percentage points\) compared with May 2026 to July 2026; current window June 2026 to August 2026\. These published three-month windows overlap\./);
+    assert.match(page, /Secondary context for the same nominal-pay window/);
     assert.match(page, /KAI9 \/ LMS/);
     assert.match(page, /A2FA \/ LMS/);
     assert.match(page, /Average weekly earnings in Great Britain bulletin/);
@@ -403,6 +405,11 @@ test("Jobs & Pay renders official nominal and independently dated CPIH real pay"
     mismatched.metrics.regular_pay_real_growth.latest.reference.start_month = "2026-05";
     const mismatchPage = renderToStaticMarkup(createElement(App, { pathname: "/jobs-pay", initialData: mismatched }));
     assert.match(mismatchPage, /Its window differs from nominal pay/);
+
+    const missingPrior = structuredClone(data);
+    missingPrior.metrics.regular_pay_real_growth.history.at(-2).period = "2026-06";
+    const missingPriorPage = renderToStaticMarkup(createElement(App, { pathname: "/jobs-pay", initialData: missingPrior }));
+    assert.match(missingPriorPage, /A directly comparable previous CPIH-adjusted published window is not available/);
 
     const overview = (source) => renderToStaticMarkup(
       createElement(App, { pathname: "/", initialData: source }),

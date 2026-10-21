@@ -317,6 +317,12 @@ function Wages({ data, loading, error, refresh }: any) {
   const matching = nominal?.latest && real?.latest &&
     nominal.latest.reference?.start_month === real.latest.reference?.start_month &&
     nominal.latest.reference?.end_month === real.latest.reference?.end_month;
+  const realPrevious = real?.latest ? previousPublishedWindow(real) : null;
+  const realCurrentWindow = referenceWindow(real?.latest);
+  const realPreviousWindow = referenceWindow(realPrevious);
+  const realDelta = realPrevious && real.latest
+    ? Number(real.latest.value) - Number(realPrevious.value)
+    : null;
   const relationship = !nominal?.latest || !real?.latest
     ? "A matched nominal and CPIH-adjusted comparison is unavailable because both series need a current verified window."
     : matching
@@ -336,6 +342,20 @@ function Wages({ data, loading, error, refresh }: any) {
                 <p className="fs-period">{real.latest?.reference
                   ? `${formatPeriod(real.latest.reference.start_month)} to ${formatPeriod(real.latest.reference.end_month)}`
                   : "A verified reading is not available yet."}</p>
+                {realDelta !== null && realCurrentWindow && realPreviousWindow ? (
+                  <p className="fs-comparison">
+                    {Math.abs(realDelta) < 0.00001
+                      ? "Unchanged (0 percentage points)"
+                      : `${realDelta > 0 ? "+" : "−"}${Math.abs(realDelta).toFixed(2).replace(/0$/, "")} percentage points`}
+                    {" compared with "}
+                    {formatPeriod(realPreviousWindow.start_month)} to {formatPeriod(realPreviousWindow.end_month)}
+                    {"; current window "}
+                    {formatPeriod(realCurrentWindow.start_month)} to {formatPeriod(realCurrentWindow.end_month)}
+                    {". These published three-month windows overlap."}
+                  </p>
+                ) : (
+                  <p className="fs-comparison">A directly comparable previous CPIH-adjusted published window is not available.</p>
+                )}
                 {matching && <p className="fs-comparison">Secondary context for the same nominal-pay window.</p>}
                 <p className="fs-fresh">{freshness(real).label}</p>
                 <details className="fs-details fs-info"><summary>Source details <ChevronDown size={15} aria-hidden="true" /></summary>
