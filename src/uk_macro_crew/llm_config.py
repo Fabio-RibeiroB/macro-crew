@@ -154,6 +154,15 @@ def _matches_prefix(name: str, prefix: str) -> bool:
     return name == prefix or name.startswith(prefix + "-")
 
 
+def completion_token_parameter(model: str) -> str:
+    """Select the Chat Completions output limit independently of effort policy."""
+    name = _bare_model_name(model)
+    generation = re.match(r"^gpt-(\d+)(?:-|$)", name)
+    if re.match(r"^o\d", name) or (generation and int(generation.group(1)) >= 5):
+        return "max_completion_tokens"
+    return "max_tokens"
+
+
 def _reasoning_profile(name: str) -> _ReasoningProfile | None:
     return next((profile for profile in _REASONING_PROFILES if name == profile.model), None)
 
