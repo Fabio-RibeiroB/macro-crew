@@ -2,7 +2,10 @@
 from datetime import date
 from pathlib import Path
 import hashlib
+import io
 import json
+import zipfile
+import xml.etree.ElementTree as ET
 
 import pytest
 
@@ -17,10 +20,98 @@ def fixture(key):
     return (FIXTURES / fixture_file(key)).read_bytes()
 
 
+def fixture_transport(key):
+    body = fixture(key)
+    if key.startswith('private_rent_'):
+        return body, ('https://www.ons.gov.uk/file?uri=%2Feconomy%2Finflationandpriceindices%2Fdatasets%2Fpriceindexofprivaterentsukmonthlypricestatistics%2F21october2026%2Fpriceindexofprivaterentsukmonthlypricestatistics.xlsx')
+    return body
+
+
 def test_recorded_bytes_match_receipts():
     receipts = json.loads((FIXTURES / 'receipts.json').read_text())
     for name, receipt in receipts.items():
         assert hashlib.sha256((FIXTURES / name).read_bytes()).hexdigest() == receipt['sha256']
+
+
+def test_recorded_pipr_workbook_selects_only_the_uk_national_growth_and_level():
+    from finstats.sources import public_definition
+    body = fixture('private_rent_growth')
+    growth = parse('private_rent_growth', body, date(2026, 10, 21))
+    level = parse('private_rent_level', body, date(2026, 10, 21))
+    assert growth.definition.series == 'Annual change'
+    assert level.definition.series == 'Rental price'
+    assert growth.definition.unit == 'percent'
+    assert level.definition.unit == 'GBP_per_month'
+    assert public_definition('private_rent_growth')['area_code'] == 'K02000001'
+    assert public_definition('private_rent_growth')['geography'] == 'United Kingdom'
+    assert growth.published_date == level.published_date == '2026-10-21'
+    assert growth.observations[-1].period == level.observations[-1].period == '2026-09'
+    assert [point.value for point in growth.observations[-2:]] == ['3.8', '3.8']
+    # The recorded workbook stores distinct binary numeric values; its G cells
+    # share the custom 0.0 number format documented from the original edition.
+    table = ET.fromstring(zipfile.ZipFile(io.BytesIO(body)).read('xl/worksheets/sheet4.xml'))
+    rows = table.findall('.//m:sheetData/m:row', {'m': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'})
+    raw_latest = [row.find('m:c[@r="G%s"]/m:v' % row.get('r'), {'m': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}).text for row in rows[-2:]]
+    assert raw_latest == ['3.836147', '3.8052769999999998']
+    assert raw_latest[0] != raw_latest[1]
+    assert level.observations[-1].value == '1406'
+    assert any(point.status == 'missing' and point.value is None for point in growth.observations)
+    assert all(point.period == level.observations[index].period for index, point in enumerate(growth.observations))
+
+
+def test_missing_pipr_level_column_value_does_not_invalidate_growth():
+    source = zipfile.ZipFile(io.BytesIO(fixture('private_rent_growth')))
+    rows_xml = ET.fromstring(source.read('xl/worksheets/sheet4.xml'))
+    namespace = {'m': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+    rows = rows_xml.findall('.//m:sheetData/m:row', namespace)
+    last = rows[-1]
+    for cell in list(last.findall('m:c', namespace)):
+        if cell.get('r', '').startswith('H'):
+            last.remove(cell)
+    altered = io.BytesIO()
+    with zipfile.ZipFile(altered, 'w', zipfile.ZIP_DEFLATED) as output:
+        for member in source.infolist():
+            content = ET.tostring(rows_xml) if member.filename == 'xl/worksheets/sheet4.xml' else source.read(member)
+            output.writestr(member.filename, content)
+    body = altered.getvalue()
+    assert parse('private_rent_growth', body, date(2026, 10, 21)).observations[-1].value == '3.8'
+    with pytest.raises(ValidationError, match='Latest UK PIPR observation unavailable'):
+        parse('private_rent_level', body, date(2026, 10, 21))
+
+
+def test_malformed_pipr_xml_and_cell_references_are_validation_failures():
+    source = zipfile.ZipFile(io.BytesIO(fixture('private_rent_growth')))
+    members = [(member.filename, source.read(member.filename)) for member in source.infolist()]
+    malformed_xml = io.BytesIO()
+    with zipfile.ZipFile(malformed_xml, 'w', zipfile.ZIP_DEFLATED) as output:
+        for filename, original in members:
+            content = b'<invalid' if filename == 'xl/worksheets/sheet4.xml' else original
+            output.writestr(filename, content)
+    with pytest.raises(ValidationError, match='Malformed PIPR workbook structure'):
+        parse('private_rent_growth', malformed_xml.getvalue(), date(2026, 10, 21))
+
+    source_xml = ET.fromstring(dict(members)['xl/worksheets/sheet4.xml'])
+    namespace = {'m': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+    source_xml.find('.//m:sheetData/m:row[@r="6"]/m:c[@r="A6"]', namespace).set('r', '?')
+    malformed_cell = io.BytesIO()
+    with zipfile.ZipFile(malformed_cell, 'w', zipfile.ZIP_DEFLATED) as output:
+        for filename, original in members:
+            content = ET.tostring(source_xml) if filename == 'xl/worksheets/sheet4.xml' else original
+            output.writestr(filename, content)
+    with pytest.raises(ValidationError, match='Malformed PIPR workbook structure'):
+        parse('private_rent_growth', malformed_cell.getvalue(), date(2026, 10, 21))
+
+    unknown_missing = io.BytesIO()
+    original_xml = ET.fromstring(dict(members)['xl/worksheets/sheet4.xml'])
+    for text in original_xml.findall('.//m:t', namespace):
+        if text.text == '[x]':
+            text.text = '[z]'
+    with zipfile.ZipFile(unknown_missing, 'w', zipfile.ZIP_DEFLATED) as output:
+        for filename, original in members:
+            content = ET.tostring(original_xml) if filename == 'xl/worksheets/sheet4.xml' else original
+            output.writestr(filename, content)
+    with pytest.raises(ValidationError, match='Unrecognised numerical value'):
+        parse('private_rent_growth', unknown_missing.getvalue(), date(2026, 10, 21))
 
 
 def test_cpih_is_annual_rate_with_monthly_reference_periods():

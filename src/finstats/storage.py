@@ -7,6 +7,7 @@ from decimal import Decimal
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import sqlite3
 import tempfile
@@ -164,6 +165,13 @@ class Store:
             attempt_id = cursor.lastrowid
         try:
             candidate = parse(key, body, when.astimezone(timezone.utc).date())
+            if key.startswith('private_rent_') and evidence_kind == 'official_download':
+                edition = re.search(r'(?:%2F|/)([0-9]{1,2}[a-z]+[0-9]{4})(?:%2F|/)', source_url or '')
+                released = candidate.published_date
+                month = datetime.strptime(released, '%Y-%m-%d').strftime('%B').lower()
+                expected_edition = f'{int(released[8:])}{month}{released[:4]}'
+                if not edition or edition.group(1) != expected_edition:
+                    raise ValidationError('PIPR workbook URL and cover release date disagree')
             semantic_hash = hashlib.sha256(encode(candidate.semantic_content())).hexdigest()
             payload = asdict(candidate)
             # Keep the historical core snapshot wire shape byte-for-byte; only

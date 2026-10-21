@@ -41,7 +41,7 @@ test("producer output passes the manifest checksum and the full reader contract"
   const data = await loadVerified("/", fileFetcher(bytes));
   assert.deepEqual(
     Object.keys(data.metrics).sort(),
-    ["bank_rate", "cpi", "cpih", "gdp", "regular_pay_nominal_growth", "regular_pay_real_growth", "unemployment"],
+    ["bank_rate", "cpi", "cpih", "gdp", "private_rent_growth", "private_rent_level", "regular_pay_nominal_growth", "regular_pay_real_growth", "unemployment"],
   );
 });
 
@@ -52,6 +52,7 @@ test("producer pay-v1 output remains accepted by the deployed M1 reader", () => 
   );
   assert.deepEqual(Object.keys(deployedView.metrics).sort(), [
     "bank_rate", "cpi", "cpih", "gdp",
+    "private_rent_growth", "private_rent_level",
     "regular_pay_nominal_growth", "regular_pay_real_growth", "unemployment",
   ]);
   assert.equal(deployedView.metrics.bank_rate.latest.value, "3.75");
@@ -104,6 +105,86 @@ test("validated CPI carries its exact definition, release date and history", asy
   assert.equal(cpi.source_download_url.endsWith("/timeseries/d7g7/mm23/data"), true);
   assert.equal(cpi.history.length, 17);
   assert.equal(percent(cpi.latest.value), "3.5%");
+});
+
+test("producer PIPR data preserves UK geography, workbook identity and distinct units", async () => {
+  const data = await loadVerified("/", fileFetcher(bytes));
+  const growth = data.metrics.private_rent_growth;
+  const level = data.metrics.private_rent_level;
+  assert.equal(growth.latest.period, "2026-09");
+  assert.equal(growth.latest.value, "3.8");
+  assert.equal(level.latest.value, "1406");
+  assert.equal(growth.source_published_date, "2026-10-21");
+  assert.equal(level.source_published_date, "2026-10-21");
+  assert.equal(growth.definition.area_code, "K02000001");
+  assert.equal(level.definition.geography, "United Kingdom");
+  assert.equal(growth.definition.unit, "percent");
+  assert.equal(level.definition.unit, "GBP_per_month");
+  assert.match(growth.source_download_url, /21october2026/);
+  assert.equal(growth.definition.release_caveat, "UK latest two months provisional; Northern Ireland latest two months imputed");
+  assert.deepEqual(chartPoints(growth).slice(-2).map((point) => point.value), [3.8, 3.8]);
+  assert.equal(chartPoints(level).at(-1).value, 1406);
+});
+
+test("Housing renders real producer rent values and keeps growth visible through level failures", async () => {
+  const { createServer } = await import("vite");
+  const { createElement } = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+  try {
+    const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
+    const producer = await loadVerified("/", fileFetcher(bytes));
+    const html = (metrics) => renderToStaticMarkup(createElement(App, {
+      pathname: "/housing",
+      initialData: { ...producer, metrics },
+    }));
+
+    const current = html(producer.metrics);
+    assert.match(current, /id="rent"/);
+    assert.match(current, /UK private rent · annual growth/);
+    assert.match(current, /class="fs-number">3\.8%/);
+    assert.match(current, /<span>Unchanged<\/span> compared with August 2026/);
+    assert.match(current, /Average monthly private rent/);
+    assert.match(current, /class="fs-number">£1,406/);
+
+    const { HistoricalTrendCard } = await server.ssrLoadModule(
+      "/src/app/components/HistoricalTrendCard.tsx",
+    );
+    const growthChart = renderToStaticMarkup(createElement(HistoricalTrendCard, {
+      title: "Annual private-rent growth", label: "Annual rent growth", unit: "%",
+      data: chartPoints(producer.metrics.private_rent_growth).slice(-2),
+    }));
+    assert.match(growthChart, /Exact values in percent/);
+    assert.equal((growthChart.match(/<td>3\.8%<\/td>/g) || []).length, 2);
+
+    const delayed = html({
+      ...producer.metrics,
+      private_rent_level: {
+        ...producer.metrics.private_rent_level,
+        collection_status: "degraded",
+      },
+    });
+    assert.match(delayed, /id="rent"/);
+    assert.match(delayed, /class="fs-number">3\.8%/);
+    assert.match(delayed, /class="fs-number">£1,406/);
+    assert.match(delayed, /Update delayed/);
+
+    const absent = html({
+      ...producer.metrics,
+      private_rent_level: {
+        ...producer.metrics.private_rent_level,
+        latest: null,
+        history: [],
+        validation_status: "unavailable",
+        collection_status: "unavailable",
+      },
+    });
+    assert.match(absent, /id="rent"/);
+    assert.match(absent, /class="fs-number">3\.8%/);
+    assert.match(absent, /class="fs-number">Not available/);
+  } finally {
+    await server.close();
+  }
 });
 
 test("the previous-reference-month comparison is a percentage-point change", async () => {

@@ -56,7 +56,9 @@ interface CustomTooltipProps {
 }
 
 function exactValue(value: number | null | undefined, unit: string) {
-  return value === null || value === undefined ? "Missing" : `${value}${unit}`;
+  if (value === null || value === undefined) return "Missing";
+  if (unit === "£") return `£${Number(value).toLocaleString("en-GB")}`;
+  return `${value}${unit}`;
 }
 
 function revisionText(point: TrendPoint) {
@@ -241,7 +243,7 @@ export function HistoricalTrendCard({
                   }}
                   axisLine={false}
                   tickLine={false}
-                  tickFormatter={(v: number) => `${v}${unit}`}
+                  tickFormatter={(v: number) => unit === "£" ? `£${Number(v).toLocaleString("en-GB")}` : `${v}${unit}`}
                   width={54}
                 />
                 <Tooltip
@@ -285,7 +287,7 @@ export function HistoricalTrendCard({
             <div className="fs-chart-values-scroll">
               <table>
                 <caption>
-                  {title}. Exact values in {unit === "%" ? "percent" : unit}.
+                  {title}. Exact values in {unit === "%" ? "percent" : unit === "£" ? "pounds per month" : unit}.
                   Latest revised values for each reference period.
                   {selection.notice ? ` ${selection.notice}` : ""}
                 </caption>

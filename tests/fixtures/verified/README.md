@@ -23,9 +23,10 @@ the unchanged three core metric members plus reviewed optional metric members.
   collect → publish → deliver pipeline over the recorded official fixtures in
   `tests/fixtures/official/` with a fixed clock (2026-10-21T12:00Z) and a fixed
   generation id. It contains the unchanged core measures, CPI, and both pay
-  measures with `mode: "official"`; the Python suite regenerates it byte for
-  byte and the frontend suite loads it through the real reader. Values mirror
-  the recorded excerpts and are test artifacts, never deployed live figures.
+  measures plus both UK PIPR rent measures with `mode: "official"`; the Python
+  suite regenerates it byte for byte and the frontend suite loads it through the
+  real reader. Values mirror recorded excerpts and a reduced test-only PIPR
+  workbook projection. This synthetic producer artifact is never deployed live.
 
 Tests may mutate copies of these fixtures in memory; checked-in bytes are never
 modified by a test run. A recorded fixture can never become public official data.

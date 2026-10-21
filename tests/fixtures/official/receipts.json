@@ -64,5 +64,29 @@
       "bytes": 174598
     },
     "trim_note": "Exact recorded values: months from 2025 JAN (latest 2026 JUL), last 12 quarterly points, last 5 annual points, last 8 previous versions. Cross-year labels 2025 OCT-DEC, 2025 NOV-JAN and 2025 DEC-FEB are retained."
+  },
+  "pipr_uk_monthly_price_statistics.xlsx": {
+    "sha256": "1276a6c0791e68d8cf977c1c0bed5896a57d3e14d3dca3a68e79cfb51b89a485",
+    "source": "ONS PIPR UK monthly price statistics, 21 October 2026 edition, Table 1, UK row projected to reviewed columns A/B/C/G/H; reduced test workbook retains national series only.",
+    "source_url": "https://www.ons.gov.uk/file?uri=%2Feconomy%2Finflationandpriceindices%2Fdatasets%2Fpriceindexofprivaterentsukmonthlypricestatistics%2F21october2026%2Fpriceindexofprivaterentsukmonthlypricestatistics.xlsx",
+    "retrieved_at": "2026-10-21T23:27:58.677593+01:00",
+    "retrieval_time_basis": "Filesystem modification timestamp of the preserved original smoke-download file; HTTP Date/Last-Modified response headers were not retained.",
+    "original": {
+      "sha256": "0d79a0b23041b200748edc84526aff286379f59e2367aeeb57ebb8813517a73c",
+      "bytes": 18807933,
+      "content_type": null
+    },
+    "projection": {
+      "sha256": "1276a6c0791e68d8cf977c1c0bed5896a57d3e14d3dca3a68e79cfb51b89a485",
+      "bytes": 7051,
+      "transform": "Test-only projection: retain Table 1 rows with area code K02000001 and columns A/B/C/G/H; retain original row values and numeric cells while converting shared strings to inline strings; replace cover with the original edition publication date and synthetic projection title; retain workbook sheet identities with empty Contents/Notes. No original workbook is committed.",
+      "growth_precision": "In the original versioned workbook, the August and September 2026 UK Annual change cells are 3.836147 and 3.8052769999999998 (Excel numeric representations); both use cell style 39, custom numFmtId 164, format code 0.0. The reviewed workbook therefore displays both as 3.8. Parser Decimal-quantizes to one decimal with ROUND_HALF_UP to match that display, yielding canonical 3.8 for both observations. Card, exact-values table and chart coordinates use the same canonical rate; the ONS bulletin headline also reports 3.8%. The original numeric values and workbook bytes remain in source evidence, while binary-cell noise is not promoted as a published figure.",
+      "missing_values": "Observed in extracted UK Table 1 G/H cells: [x]. Parser treats [x] and structurally absent observation cells as missing. Empty cell values and [z] were not observed and remain unrecognized, rather than assumed missing tokens."
+    },
+    "qualification_sources": [
+      "https://www.ons.gov.uk/economy/inflationandpriceindices/bulletins/privaterentandhousepricesuk/october2026",
+      "https://www.ons.gov.uk/peoplepopulationandcommunity/housing/methodologies/priceindexofprivaterentsqmi",
+      "https://www.ons.gov.uk/economy/inflationandpriceindices/methodologies/priceindexofprivaterentsdetailedmethodology"
+    ]
   }
 }

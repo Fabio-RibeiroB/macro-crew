@@ -367,7 +367,7 @@ test("registered optional metrics validate with geography, windows and deflator"
     parseManifest(fixtureManifest("v1-with-optional")),
   );
   assert.equal(data.metrics.cpi.definition.geography, "United Kingdom");
-  for (const key of Object.keys(OPTIONAL_METRICS)) {
+  for (const key of Object.keys(OPTIONAL_METRICS).filter((key) => key in data.metrics)) {
     assert.equal(
       data.metrics[key].definition.source_url,
       OPTIONAL_METRICS[key].source_url,

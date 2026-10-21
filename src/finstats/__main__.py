@@ -31,6 +31,7 @@ def collector_lock(directory):
 
 def collect(directory, transport=fetch, clock=utc_now, fixtures=None):
     failures = []
+    shared_downloads = {}
     with collector_lock(Path(directory)):
         store = Store(directory)
         try:
@@ -43,9 +44,24 @@ def collect(directory, transport=fetch, clock=utc_now, fixtures=None):
                         kind = 'recorded_fixture'
                         url = f'fixture:{fixture_file(key)}'
                     else:
-                        body = transport(key)
+                        if transport is fetch and key.startswith('private_rent_'):
+                            fetched = shared_downloads.get('pipr')
+                            if isinstance(fetched, Exception):
+                                raise fetched
+                            if fetched is None:
+                                try:
+                                    fetched = transport(key)
+                                except (ValueError, OSError, HTTPException, sqlite3.Error) as exc:
+                                    shared_downloads['pipr'] = exc
+                                    raise
+                                shared_downloads['pipr'] = fetched
+                        else:
+                            fetched = transport(key)
+                        if isinstance(fetched, tuple):
+                            body, url = fetched
+                        else:
+                            body, url = fetched, DEFINITIONS[key].download_url
                         kind = 'official_download'
-                        url = DEFINITIONS[key].download_url
                     when = clock()
                     store.ingest(key, body, when, source_url=url, evidence_kind=kind)
                 except (ValueError, OSError, HTTPException, sqlite3.Error) as exc:

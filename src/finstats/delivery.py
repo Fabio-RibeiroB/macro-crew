@@ -63,6 +63,10 @@ def deliver(state_dir, output_dir):
             url = urlsplit(metric['source_download_url'])
             if url.scheme != 'https' or url.hostname != urlsplit(definition.download_url).hostname:
                 raise ValueError('Unexpected official download URL')
+            if key.startswith('private_rent_') and not re.fullmatch(
+                    r'/file\?uri=(?:%2F|/)economy(?:%2F|/)inflationandpriceindices(?:%2F|/)datasets(?:%2F|/)priceindexofprivaterentsukmonthlypricestatistics(?:%2F|/)[0-9]{1,2}[a-z]+[0-9]{4}(?:%2F|/)priceindexofprivaterentsukmonthlypricestatistics\.xlsx',
+                    url.path + ('?' + url.query if url.query else '')):
+                raise ValueError('Unexpected PIPR workbook edition URL')
             observations = metric['history']
             if not observations or observations[-1] != metric['latest'] or metric['latest']['value'] is None:
                 raise ValueError('Card and history mismatch')

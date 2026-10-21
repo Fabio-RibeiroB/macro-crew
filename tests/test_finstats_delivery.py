@@ -9,13 +9,13 @@ import pytest
 from finstats.__main__ import collect
 from finstats.delivery import deliver, main
 from finstats.storage import atomic_write
-from tests.test_finstats_sources import FIXTURES, fixture
+from tests.test_finstats_sources import FIXTURES, fixture, fixture_transport
 from tests.test_finstats_storage import CPI_WHEN, WHEN
 
 
 def prepared(tmp_path):
     private, public = tmp_path / 'private', tmp_path / 'public'
-    collect(private, transport=fixture, clock=lambda: WHEN)
+    collect(private, transport=fixture_transport, clock=lambda: WHEN)
     return private, public
 
 
@@ -43,12 +43,13 @@ def test_public_delivery_is_readable_official_and_contains_no_private_files(tmp_
 
 def test_delivery_publishes_cpi_headline_with_core_metrics_retained(tmp_path):
     private, public = tmp_path / 'private', tmp_path / 'public'
-    collect(private, transport=fixture, clock=lambda: CPI_WHEN)
+    collect(private, transport=fixture_transport, clock=lambda: CPI_WHEN)
     deliver(private, public)
     data = read_public(public)
     assert set(data['metrics']) == {
         'bank_rate', 'cpih', 'gdp', 'cpi',
-        'regular_pay_nominal_growth', 'regular_pay_real_growth', 'unemployment'}
+        'regular_pay_nominal_growth', 'regular_pay_real_growth', 'unemployment',
+        'private_rent_growth', 'private_rent_level'}
     cpi = data['metrics']['cpi']
     assert cpi['validation_status'] == 'verified'
     assert cpi['snapshot_evidence_kind'] == 'official_download'
@@ -80,12 +81,20 @@ def test_delivery_publishes_cpi_headline_with_core_metrics_retained(tmp_path):
         'kind': 'rolling_months', 'start_month': '2026-06', 'end_month': '2026-08'}
     assert '95% confidence intervals' in unemployment['quality_note']
     assert unemployment['quality_source_url'].endswith('/articles/labourforcesurveyqualityupdate/october2026')
+    growth = data['metrics']['private_rent_growth']
+    level = data['metrics']['private_rent_level']
+    assert growth['definition']['geography'] == level['definition']['geography'] == 'United Kingdom'
+    assert growth['definition']['area_code'] == level['definition']['area_code'] == 'K02000001'
+    assert growth['definition']['unit'] == 'percent'
+    assert level['definition']['unit'] == 'GBP_per_month'
+    assert growth['latest']['period'] == level['latest']['period'] == '2026-09'
+    assert level['latest']['value'] == '1406'
 
 
 def test_checked_in_producer_generation_regenerates_byte_identically(tmp_path):
     private, public = tmp_path / 'private', tmp_path / 'public'
     with patch('finstats.publication.uuid4', return_value=SimpleNamespace(hex='c' * 32)):
-        collect(private, transport=fixture, clock=lambda: CPI_WHEN)
+        collect(private, transport=fixture_transport, clock=lambda: CPI_WHEN)
         deliver(private, public)
     wire = Path(__file__).parent / 'fixtures' / 'verified'
     manifest = json.loads((public / 'current.json').read_text())
@@ -145,7 +154,7 @@ def test_public_activation_failure_keeps_previous_complete_generation(tmp_path):
     private, public = prepared(tmp_path)
     deliver(private, public)
     previous = (public / 'current.json').read_bytes()
-    collect(private, transport=fixture, clock=lambda: WHEN)
+    collect(private, transport=fixture_transport, clock=lambda: WHEN)
     def fail(path, body, **kwargs):
         if path.name == 'current.json':
             raise OSError('activation failed')
@@ -162,7 +171,7 @@ def test_partial_collection_publishes_valid_statistics_but_returns_failure(tmp_p
         def fetcher(key):
             if key == 'gdp':
                 raise TimeoutError()
-            return fixture(key)
+            return fixture_transport(key)
         return collect(directory, transport=fetcher, clock=lambda: WHEN)
     with patch('finstats.delivery.collect', side_effect=partial):
         assert main(['--state-dir', str(private), '--output-dir', str(public)]) == 1

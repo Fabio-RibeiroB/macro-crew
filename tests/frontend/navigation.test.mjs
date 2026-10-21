@@ -17,7 +17,7 @@ test("plain-English pages have stable direct URLs and unique navigation identiti
   assert.equal(new Set(PAGES.map((p) => p.path)).size, PAGES.length);
   assert.deepEqual(
     NAV_PAGES.map((p) => p.label),
-    ["Overview", "Prices", "Economy", "Jobs & Pay", "Government"],
+    ["Overview", "Prices", "Economy", "Jobs & Pay", "Housing", "Government"],
   );
   assert.deepEqual(
     FOOTER_PAGES.map((p) => [p.path, p.label]),
@@ -28,7 +28,7 @@ test("plain-English pages have stable direct URLs and unique navigation identiti
   );
   assert.deepEqual(
     PAGES.map((p) => p.path),
-    ["/", "/prices", "/economy", "/jobs-pay", "/government-budget", "/about", "/sources"],
+    ["/", "/prices", "/economy", "/jobs-pay", "/housing", "/government-budget", "/about", "/sources"],
   );
   for (const page of PAGES) {
     assert.equal(resolvePage(page.path).id, page.id);
@@ -167,6 +167,8 @@ test("every page renders its own heading, navigation and missing-data content", 
         );
       }
     }
+    assert.match(rendered.get("/housing"), /id="rent"/);
+    assert.match(readFileSync(new URL("../../src/app/App.tsx", import.meta.url), "utf8"), /detailHref: "\/housing#rent"/);
     const emptyMetric = {
       definition: {
         dataset: "MM23",
