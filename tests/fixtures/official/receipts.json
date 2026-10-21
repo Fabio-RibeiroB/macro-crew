@@ -64,5 +64,9 @@
       "bytes": 174598
     },
     "trim_note": "Exact recorded values: months from 2025 JAN (latest 2026 JUL), last 12 quarterly points, last 5 annual points, last 8 previous versions. Cross-year labels 2025 OCT-DEC, 2025 NOV-JAN and 2025 DEC-FEB are retained."
+  },
+  "pipr_uk_monthly_price_statistics.xlsx": {
+    "sha256": "1276a6c0791e68d8cf977c1c0bed5896a57d3e14d3dca3a68e79cfb51b89a485",
+    "source": "ONS PIPR UK monthly price statistics, 21 October 2026 edition, Table 1, UK row projected to reviewed columns A/B/C/G/H; reduced test workbook retains national series only."
   }
 }

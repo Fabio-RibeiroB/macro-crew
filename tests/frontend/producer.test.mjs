@@ -41,7 +41,7 @@ test("producer output passes the manifest checksum and the full reader contract"
   const data = await loadVerified("/", fileFetcher(bytes));
   assert.deepEqual(
     Object.keys(data.metrics).sort(),
-    ["bank_rate", "cpi", "cpih", "gdp", "regular_pay_nominal_growth", "regular_pay_real_growth", "unemployment"],
+    ["bank_rate", "cpi", "cpih", "gdp", "private_rent_growth", "private_rent_level", "regular_pay_nominal_growth", "regular_pay_real_growth", "unemployment"],
   );
 });
 
@@ -52,6 +52,7 @@ test("producer pay-v1 output remains accepted by the deployed M1 reader", () => 
   );
   assert.deepEqual(Object.keys(deployedView.metrics).sort(), [
     "bank_rate", "cpi", "cpih", "gdp",
+    "private_rent_growth", "private_rent_level",
     "regular_pay_nominal_growth", "regular_pay_real_growth", "unemployment",
   ]);
   assert.equal(deployedView.metrics.bank_rate.latest.value, "3.75");
@@ -104,6 +105,25 @@ test("validated CPI carries its exact definition, release date and history", asy
   assert.equal(cpi.source_download_url.endsWith("/timeseries/d7g7/mm23/data"), true);
   assert.equal(cpi.history.length, 17);
   assert.equal(percent(cpi.latest.value), "3.5%");
+});
+
+test("producer PIPR data preserves UK geography, workbook identity and distinct units", async () => {
+  const data = await loadVerified("/", fileFetcher(bytes));
+  const growth = data.metrics.private_rent_growth;
+  const level = data.metrics.private_rent_level;
+  assert.equal(growth.latest.period, "2026-09");
+  assert.equal(growth.latest.value, "3.805277");
+  assert.equal(level.latest.value, "1406");
+  assert.equal(growth.source_published_date, "2026-10-21");
+  assert.equal(level.source_published_date, "2026-10-21");
+  assert.equal(growth.definition.area_code, "K02000001");
+  assert.equal(level.definition.geography, "United Kingdom");
+  assert.equal(growth.definition.unit, "percent");
+  assert.equal(level.definition.unit, "GBP_per_month");
+  assert.match(growth.source_download_url, /21october2026/);
+  assert.equal(growth.definition.release_caveat, "UK latest two months provisional; Northern Ireland latest two months imputed");
+  assert.equal(chartPoints(growth).at(-1).value, 3.805277);
+  assert.equal(chartPoints(level).at(-1).value, 1406);
 });
 
 test("the previous-reference-month comparison is a percentage-point change", async () => {

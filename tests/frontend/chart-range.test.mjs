@@ -248,6 +248,12 @@ test("the chart control labels the default range and keeps gaps out of the value
     assert.match(short, /role="radiogroup"/);
     assert.match(short, /aria-label="Historical range for Inflation"/);
     assert.match(short, /aria-label="1Y, 1 year"/);
+    const pounds = renderToStaticMarkup(createElement(HistoricalTrendCard, {
+      title: "Average monthly private rent", label: "Average monthly rent", unit: "£",
+      data: [{ date: "2026-09", period: "2026-09", value: 1406, status: "observed" }],
+    }));
+    assert.match(pounds, /Exact values in pounds per month/);
+    assert.match(pounds, /<td>£1,406<\/td>/);
     assert.match(short, /aria-label="5Y, 5 years"/);
     assert.match(short, /aria-checked="true"/);
     assert.match(short, /aria-label="10Y, 10 years"/);

@@ -113,3 +113,10 @@ Official cross-checks retrieved 21 October 2026:
 - [Consumer price inflation, UK: September 2026](https://www.ons.gov.uk/economy/inflationandpriceindices/bulletins/consumerpriceinflation/september2026):
   "The Consumer Prices Index (CPI) rose by 3.5% in the 12 months to
   September 2026."
+
+`pipr_uk_monthly_price_statistics.xlsx` is a reduced, explicitly test-only
+workbook projection from ONS's 21 October 2026 PIPR edition. It retains the
+original UK `K02000001` row and the reviewed date/area/annual-change/rent-level
+columns, plus the publication date. The original live workbook is versioned and
+not checked in. This projection exercises the bounded workbook reader and must
+never be treated as a full source archive or production data.

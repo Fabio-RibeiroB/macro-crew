@@ -103,6 +103,28 @@ export const OPTIONAL_METRICS = {
     quality_source_url:
       "https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/employmentandemployeetypes/articles/labourforcesurveyqualityupdate/october2026",
   },
+  private_rent_growth: {
+    metric_id: "uk.private_rent.annual_growth", series: "Annual change",
+    dataset: "Price Index of Private Rents, UK: monthly price statistics, Table 1",
+    title: "Annual percentage change in private rent", frequency: "monthly",
+    comparison: "year_on_year", adjustment: "not_seasonally_adjusted",
+    unit: "percent", version: 1, geography: "United Kingdom", area_code: "K02000001",
+    release_caveat: "UK latest two months provisional; Northern Ireland latest two months imputed",
+    table_download: true,
+    source_url: "https://www.ons.gov.uk/economy/inflationandpriceindices/datasets/priceindexofprivaterentsukmonthlypricestatistics",
+    download_url: "https://www.ons.gov.uk/economy/inflationandpriceindices/datasets/priceindexofprivaterentsukmonthlypricestatistics",
+  },
+  private_rent_level: {
+    metric_id: "uk.private_rent.monthly_level", series: "Rental price",
+    dataset: "Price Index of Private Rents, UK: monthly price statistics, Table 1",
+    title: "Average monthly private rent", frequency: "monthly", comparison: "level",
+    adjustment: "not_seasonally_adjusted", unit: "GBP_per_month", version: 1,
+    geography: "United Kingdom", area_code: "K02000001",
+    release_caveat: "UK latest two months provisional; Northern Ireland latest two months imputed",
+    table_download: true,
+    source_url: "https://www.ons.gov.uk/economy/inflationandpriceindices/datasets/priceindexofprivaterentsukmonthlypricestatistics",
+    download_url: "https://www.ons.gov.uk/economy/inflationandpriceindices/datasets/priceindexofprivaterentsukmonthlypricestatistics",
+  },
 };
 const fail = (message) => {
   throw new Error(message);
@@ -190,6 +212,10 @@ function validateDefinition(definition, spec) {
     fail("Unexpected optional metric definition");
   if (spec.title !== undefined && definition.title !== spec.title)
     fail("Unexpected optional metric title");
+  if (spec.area_code !== undefined && definition.area_code !== spec.area_code)
+    fail("Unexpected optional metric geography code");
+  if (spec.release_caveat !== undefined && definition.release_caveat !== spec.release_caveat)
+    fail("Unexpected optional metric release caveat");
   if (spec.window_months !== undefined) {
     if (definition.window_months !== spec.window_months)
       fail("Unexpected optional metric window");
@@ -251,7 +277,9 @@ function validateOptionalMetric(metric, spec) {
   if (
     metric.validation_status !== "verified" ||
     metric.snapshot_evidence_kind !== "official_download" ||
-    metric.source_download_url !== spec.download_url ||
+    !(spec.table_download
+      ? piprDownloadUrl(metric.source_download_url)
+      : metric.source_download_url === spec.download_url) ||
     !/^[a-f0-9]{64}$/.test(metric.source_sha256) ||
     !instant(metric.retrieved_at)
   )
@@ -287,6 +315,14 @@ function validateOptionalMetric(metric, spec) {
     metric.latest.value !== end.value
   )
     fail("Card and chart disagree");
+}
+function piprDownloadUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === "www.ons.gov.uk" &&
+      /^\/file$/.test(url.pathname) &&
+      /^uri=(?:%2F|\/)economy(?:%2F|\/)inflationandpriceindices(?:%2F|\/)datasets(?:%2F|\/)priceindexofprivaterentsukmonthlypricestatistics(?:%2F|\/)[0-9]{1,2}[a-z]+[0-9]{4}(?:%2F|\/)priceindexofprivaterentsukmonthlypricestatistics\.xlsx$/.test(url.search.slice(1));
+  } catch { return false; }
 }
 export function parseDataset(value, manifest) {
   if (

@@ -114,7 +114,19 @@ const topics = {
     meaning: "The share of the economically active population aged 16 and over who are unemployed, measured by the Labour Force Survey.",
     caution: "This Labour Force Survey estimate has greater sampling uncertainty than before the pandemic.",
   },
+  private_rent_growth: {
+    short: "Rent",
+    Icon: Landmark,
+    measurement: "UK private rent · annual growth",
+    color: "#9b6b32",
+    detailHref: "/housing#rent",
+    meaning: "Annual change in average private rents across the United Kingdom.",
+    caution: "The latest two UK months are provisional; Northern Ireland inputs are imputed and revised later.",
+  },
 };
+const metricValue = (metric: any) => metric?.definition?.unit === "GBP_per_month"
+  ? (metric.latest?.value == null ? "Not available" : `£${Number(metric.latest.value).toLocaleString("en-GB")}`)
+  : percent(metric?.latest?.value);
 // CPI headlines the inflation card once a verified reading exists; CPIH stays
 // the labelled fallback and the supporting measure on the Prices page.
 function inflationKind(data: any) {
@@ -210,7 +222,7 @@ function MetricCard({
         <Tag>{topic.short}</Tag>
         <topic.Icon size={18} aria-hidden="true" />
       </div>
-      <p className="fs-number">{percent(metric.latest?.value)}</p>
+      <p className="fs-number">{metricValue(metric)}</p>
       <p className="fs-measure">{topic.measurement}</p>
       <p className="fs-period">
         {metric.latest ? (
@@ -246,6 +258,7 @@ function MetricCard({
           )}
         </p>
       )}
+      {kind === "private_rent_growth" && <p className="fs-comparison">Average monthly rent: {secondaryMetric?.latest?.value == null ? "not available" : `£${Number(secondaryMetric.latest.value).toLocaleString("en-GB")}`} {secondaryMetric?.latest?.period ? `in ${formatPeriod(secondaryMetric.latest.period)}` : ""}{secondaryMetric?.collection_status === "degraded" ? " · update delayed, showing the last verified rent" : ""}</p>}
       <div className="fs-comparison">
         {kind === "bank_rate" ? rateChange ? (
           <>
@@ -430,6 +443,29 @@ function Unemployment({ data, loading, error, refresh }: any) {
   );
 }
 
+function Housing({ data, loading, error, refresh }: any) {
+  const growth = data?.metrics?.private_rent_growth;
+  const level = data?.metrics?.private_rent_level;
+  const charts = [growth, level].filter((metric) => metric?.history?.length);
+  return <>
+    <PageHeading eyebrow="Housing costs" title="Housing costs">Official UK-wide private-rent growth and average monthly rent.</PageHeading>
+    <Statistics data={data} kinds={["private_rent_growth"]} loading={loading} error={error} refresh={refresh} sectionId="rent" title="Private rents" eyebrow="ONS Price Index of Private Rents">
+      <article className="fs-stat"><div className="fs-stat-top"><h3>Average monthly private rent</h3><Landmark size={18} aria-hidden="true" /></div><p className="fs-number">{metricValue(level)}</p><p className="fs-measure">United Kingdom · pounds per month</p><p className="fs-period">{level?.latest ? `For ${formatPeriod(level.latest.period)}` : "A verified reading is not available yet."}</p><p className="fs-fresh">{level ? freshness(level).label : "Unavailable"}</p><details className="fs-details fs-info"><summary>Source details <ChevronDown size={15} aria-hidden="true" /></summary><p>ONS PIPR Table 1 · Rental price · United Kingdom · pounds per month.</p><p>Source publication: {level?.source_published_date ? formatPeriod(level.source_published_date) : "not supplied"}. Last successful check: {checkedAt(level?.last_successful_check_at ?? null)}.</p>{level && <OfficialLink href={level.definition.source_url}>ONS Price Index of Private Rents, UK: monthly price statistics</OfficialLink>}</details></article>
+      <p className="fs-caption">ONS publishes UK estimates with a two-month revision window. Northern Ireland data for the latest two months are imputed; figures are provisional.</p>
+      <Suspense fallback={<p role="status">Loading charts…</p>}>
+        <div className={`fs-chart-grid fs-chart-count-${charts.length}`}>
+          {charts.map((metric) => <HistoricalTrendCard key={metric.definition.metric_id} title={metric.definition.title} label={metric.definition.unit === "percent" ? "Annual rent growth" : "Average monthly rent"} color={metric.definition.unit === "percent" ? "#9b6b32" : "#547b8a"} unit={metric.definition.unit === "percent" ? "%" : "£"} data={chartPoints(metric)} />)}
+        </div>
+      </Suspense>
+      <details className="fs-details fs-info"><summary>Sources and method <ChevronDown size={15} aria-hidden="true" /></summary>
+        <p>ONS PIPR, UK, Table 1, United Kingdom row K02000001. Annual change and average monthly rental price are separate series. The reference month is the source month; release date and FinStats check time remain separate.</p>
+        <p>ONS describes the latest two UK estimates as provisional. Northern Ireland inputs for those months are imputed from its latest available two-month inflation rate, then revised when observed data arrive.</p>
+        {growth && <OfficialLink href={growth.definition.source_url}>ONS Price Index of Private Rents, UK: monthly price statistics</OfficialLink>}
+      </details>
+    </Statistics>
+  </>;
+}
+
 function PageHeading({
   eyebrow,
   title,
@@ -522,6 +558,7 @@ function Statistics({
             : "Verified figures are unavailable. You can still read the guides and visit the official sources."}
         </div>
       )}
+      {data?.fixture_label && <div className="fs-alert" role="status">{data.fixture_label}</div>}
       {data ? (
         <>
           <div className={`fs-stat-grid fs-stat-count-${kinds.length}`}>
@@ -530,7 +567,7 @@ function Statistics({
                 key={kind}
                 kind={kind}
                 metric={data.metrics[kind]}
-                secondaryMetric={kind === "regular_pay_nominal_growth" ? data.metrics.regular_pay_real_growth : undefined}
+                secondaryMetric={kind === "regular_pay_nominal_growth" ? data.metrics.regular_pay_real_growth : kind === "private_rent_growth" ? data.metrics.private_rent_level : undefined}
                 compact={compact}
               />
             ))}
@@ -897,10 +934,10 @@ function About() {
         </p>
         <p>
           Wages and unemployment are published from verified official series.
-          Housing, energy and other measures stay off the site until their feeds
-          are ready. If a
-          statistic covers a smaller area than the UK, such as Great Britain,
-          that geography is named with the figure.
+          UK private-rent growth and average monthly rent are also published.
+          House prices, energy and other measures stay off the site until their
+          feeds are ready. If a statistic covers a smaller area than the UK,
+          such as Great Britain, that geography is named with the figure.
         </p>
         <h2>Official figures and AI summaries</h2>
         <p>
@@ -943,6 +980,12 @@ function Sources() {
           Every figure’s source disclosure shows the series, official
           publication date where supplied and last successful check. A
           collection time is not a new official release.
+        </p>
+        <p>
+          Rent uses ONS PIPR UK Table 1, United Kingdom area code K02000001.
+          Annual change and average monthly pounds are separate series. The
+          latest two UK months are provisional; Northern Ireland inputs for
+          those months are imputed and revised when observed data arrive.
         </p>
         <h3>Revisions are part of the record</h3>
         <p>
@@ -993,7 +1036,7 @@ export default function App({
     pathname ??
       (typeof window === "undefined" ? "/" : window.location.pathname),
   );
-  const needsData = ["overview", "prices", "economy", "jobs-pay"].includes(page.id);
+  const needsData = ["overview", "prices", "economy", "jobs-pay", "housing"].includes(page.id);
   const [snapshot, setSnapshot] = useState(() =>
     refreshSnapshot(initialData, needsData ? "loading" : "idle"),
   );
@@ -1195,7 +1238,7 @@ export default function App({
           <>
             <Statistics
               {...stats}
-              kinds={[inflationKind(data), "bank_rate", "regular_pay_nominal_growth", "unemployment", "gdp"]}
+              kinds={[inflationKind(data), "bank_rate", "regular_pay_nominal_growth", "unemployment", "private_rent_growth", "gdp"]}
               compact
               overview
             />
@@ -1233,6 +1276,7 @@ export default function App({
             <Unemployment {...stats} />
           </>
         )}
+        {page.id === "housing" && <Housing {...stats} />}
         {page.id === "government" && (
           <>
             <PageHeading eyebrow="Government & Budget" title={page.title}>

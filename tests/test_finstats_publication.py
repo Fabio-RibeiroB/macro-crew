@@ -10,7 +10,7 @@ import pytest
 from finstats.__main__ import collect, collector_lock, main
 from finstats.publication import publish
 from finstats.storage import Store
-from tests.test_finstats_sources import FIXTURES, fixture
+from tests.test_finstats_sources import FIXTURES, fixture, fixture_transport
 from tests.test_finstats_storage import CPI_WHEN, WHEN
 
 
@@ -42,11 +42,11 @@ def test_offline_cli_publishes_core_and_cpi_without_ai(tmp_path):
 
 
 def test_failed_source_keeps_last_verified_figures_and_other_sources_publish(tmp_path):
-    collect(tmp_path, transport=lambda key: fixture(key), clock=lambda: WHEN)
+    collect(tmp_path, transport=lambda key: fixture_transport(key), clock=lambda: WHEN)
     def broken(key):
         if key == 'cpih':
             raise TimeoutError('do not publish sensitive error detail')
-        return fixture(key)
+        return fixture_transport(key)
     result = collect(tmp_path, transport=broken, clock=lambda: WHEN + timedelta(days=2))
     assert result['failed_metrics'] == ['cpih']
     data = read_generation(tmp_path)
@@ -59,7 +59,7 @@ def test_failed_source_keeps_last_verified_figures_and_other_sources_publish(tmp
 
 def test_first_run_missing_source_is_unavailable_not_zero(tmp_path):
     def broken(key):
-        return b'<html>access denied</html>' if key == 'gdp' else fixture(key)
+        return b'<html>access denied</html>' if key == 'gdp' else fixture_transport(key)
     result = collect(tmp_path, transport=broken, clock=lambda: CPI_WHEN)
     assert result['failed_metrics'] == ['gdp']
     member = read_generation(tmp_path)['metrics']['gdp']
@@ -70,7 +70,7 @@ def test_first_run_missing_source_is_unavailable_not_zero(tmp_path):
 
 def test_cpi_never_collected_is_unavailable_not_zero(tmp_path):
     def broken(key):
-        return b'<html>access denied</html>' if key == 'cpi' else fixture(key)
+        return b'<html>access denied</html>' if key == 'cpi' else fixture_transport(key)
     result = collect(tmp_path, transport=broken, clock=lambda: CPI_WHEN)
     assert result['failed_metrics'] == ['cpi']
     member = read_generation(tmp_path)['metrics']['cpi']
@@ -82,11 +82,11 @@ def test_cpi_never_collected_is_unavailable_not_zero(tmp_path):
 
 
 def test_cpi_failure_after_success_keeps_last_verified_cpi(tmp_path):
-    collect(tmp_path, transport=lambda key: fixture(key), clock=lambda: CPI_WHEN)
+    collect(tmp_path, transport=lambda key: fixture_transport(key), clock=lambda: CPI_WHEN)
     def broken(key):
         if key == 'cpi':
             raise TimeoutError('temporary outage')
-        return fixture(key)
+        return fixture_transport(key)
     result = collect(tmp_path, transport=broken, clock=lambda: CPI_WHEN + timedelta(days=2))
     assert result['failed_metrics'] == ['cpi']
     data = read_generation(tmp_path)
@@ -97,7 +97,7 @@ def test_cpi_failure_after_success_keeps_last_verified_cpi(tmp_path):
 
 def test_pay_windows_round_trip_through_private_store_and_public_projection(tmp_path):
     private, public_dir = tmp_path / 'private', tmp_path / 'public'
-    result = collect(private, transport=lambda key: fixture(key), clock=lambda: CPI_WHEN)
+    result = collect(private, transport=lambda key: fixture_transport(key), clock=lambda: CPI_WHEN)
     assert not result['failed_metrics']
     data = read_generation(private)
     for key in ('regular_pay_nominal_growth', 'regular_pay_real_growth'):
@@ -118,11 +118,11 @@ def test_pay_windows_round_trip_through_private_store_and_public_projection(tmp_
 
 
 def test_pay_feeds_fail_independently_and_preserve_their_own_last_window(tmp_path):
-    collect(tmp_path, transport=lambda key: fixture(key), clock=lambda: CPI_WHEN)
+    collect(tmp_path, transport=lambda key: fixture_transport(key), clock=lambda: CPI_WHEN)
     def broken(key):
         if key == 'regular_pay_real_growth':
             raise TimeoutError('private source failure')
-        return fixture(key)
+        return fixture_transport(key)
     result = collect(tmp_path, transport=broken, clock=lambda: CPI_WHEN + timedelta(days=1))
     assert result['failed_metrics'] == ['regular_pay_real_growth']
     data = read_generation(tmp_path)
@@ -132,8 +132,23 @@ def test_pay_feeds_fail_independently_and_preserve_their_own_last_window(tmp_pat
     assert data['metrics']['regular_pay_real_growth']['latest']['reference']['start_month'] == '2026-06'
 
 
+def test_rent_level_failure_does_not_hide_growth_and_retains_its_verified_history(tmp_path):
+    collect(tmp_path, transport=lambda key: fixture_transport(key), clock=lambda: CPI_WHEN)
+    def broken(key):
+        if key == 'private_rent_level':
+            raise TimeoutError('level download failure')
+        return fixture_transport(key)
+    result = collect(tmp_path, transport=broken, clock=lambda: CPI_WHEN + timedelta(days=1))
+    assert result['failed_metrics'] == ['private_rent_level']
+    data = read_generation(tmp_path)
+    assert data['metrics']['private_rent_growth']['collection_status'] == 'ok'
+    assert data['metrics']['private_rent_growth']['latest']['value'] == '3.805277'
+    assert data['metrics']['private_rent_level']['collection_status'] == 'degraded'
+    assert data['metrics']['private_rent_level']['latest']['value'] == '1406'
+
+
 def test_pay_revision_keeps_window_identity_and_previous_snapshot(tmp_path):
-    collect(tmp_path, transport=lambda key: fixture(key), clock=lambda: CPI_WHEN)
+    collect(tmp_path, transport=lambda key: fixture_transport(key), clock=lambda: CPI_WHEN)
     first = read_generation(tmp_path)['metrics']['regular_pay_nominal_growth']
     def revised(key):
         body = fixture(key)
@@ -147,14 +162,14 @@ def test_pay_revision_keeps_window_identity_and_previous_snapshot(tmp_path):
 
 
 def test_unemployment_failure_retains_its_verified_window_without_blocking_pay(tmp_path):
-    collect(tmp_path, transport=lambda key: fixture(key), clock=lambda: CPI_WHEN)
+    collect(tmp_path, transport=lambda key: fixture_transport(key), clock=lambda: CPI_WHEN)
     first = read_generation(tmp_path)
     prior = first['metrics']['unemployment']
     def broken(key):
         if key == 'unemployment':
             return fixture(key).replace(b'"date": "2026 JUL", "value": "4.7"',
                                         b'"date": "2026 JUL", "value": ".."', 1)
-        return fixture(key)
+        return fixture_transport(key)
     result = collect(tmp_path, transport=broken, clock=lambda: CPI_WHEN + timedelta(days=1))
     assert result['failed_metrics'] == ['unemployment']
     data = read_generation(tmp_path)
@@ -170,7 +185,7 @@ def test_unemployment_failure_retains_its_verified_window_without_blocking_pay(t
 
 def test_never_collected_unemployment_stays_unavailable_and_not_zero(tmp_path):
     def broken(key):
-        return b'<html>access denied</html>' if key == 'unemployment' else fixture(key)
+        return b'<html>access denied</html>' if key == 'unemployment' else fixture_transport(key)
     result = collect(tmp_path, transport=broken, clock=lambda: CPI_WHEN)
     assert result['failed_metrics'] == ['unemployment']
     member = read_generation(tmp_path)['metrics']['unemployment']
@@ -180,7 +195,7 @@ def test_never_collected_unemployment_stays_unavailable_and_not_zero(tmp_path):
 
 
 def test_unemployment_revision_preserves_rolling_window_and_prior_vintage(tmp_path):
-    collect(tmp_path, transport=lambda key: fixture(key), clock=lambda: CPI_WHEN)
+    collect(tmp_path, transport=lambda key: fixture_transport(key), clock=lambda: CPI_WHEN)
     original = read_generation(tmp_path)['metrics']['unemployment']
     def revised(key):
         body = fixture(key)
@@ -249,7 +264,7 @@ def test_http_protocol_failure_is_isolated_and_last_verified_data_survives(tmp_p
     def transport(key):
         if key == 'cpih':
             raise error_factory()
-        return fixture(key)
+        return fixture_transport(key)
     result = collect(tmp_path, transport=transport, clock=lambda: CPI_WHEN + timedelta(hours=1))
     assert result['failed_metrics'] == ['cpih']
     data = read_generation(tmp_path)
@@ -270,7 +285,7 @@ def test_sqlite_statement_failure_rolls_back_one_metric_and_others_publish(tmp_p
     instance.close()
     def transport(key):
         body = fixture(key)
-        return body.replace(b'"2026 AUG","3.3"', b'"2026 AUG","3.4"') if key == 'cpih' else body
+        return body.replace(b'"2026 AUG","3.3"', b'"2026 AUG","3.4"') if key == 'cpih' else fixture_transport(key)
     result = collect(tmp_path, transport=transport, clock=lambda: CPI_WHEN + timedelta(hours=1))
     assert result['failed_metrics'] == ['cpih']
     data = read_generation(tmp_path)

@@ -4,14 +4,20 @@ from __future__ import annotations
 import csv
 import io
 import json
+from html.parser import HTMLParser
 import re
+import zipfile
+import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from urllib.request import Request, urlopen
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 MAX_BYTES = 2_000_000
+MAX_PIPR_BYTES = 25_000_000
+MAX_SOURCE_PAGE_BYTES = 2_000_000
 PARSER_VERSION = 1
 MONTHS = {name: index for index, name in enumerate(
     ('JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'), 1)}
@@ -88,6 +94,20 @@ DEFINITIONS = {
         'monthly', 'seasonally_adjusted', 'level',
         ONS + '/employmentandlabourmarket/peoplenotinwork/unemployment/timeseries/mgsx/lms',
         ONS + '/employmentandlabourmarket/peoplenotinwork/unemployment/timeseries/mgsx/lms/data'),
+    'private_rent_growth': Definition(
+        'uk.private_rent.annual_growth', 'Annual change',
+        'Price Index of Private Rents, UK: monthly price statistics, Table 1',
+        'Annual percentage change in private rent', 'monthly', 'not_seasonally_adjusted',
+        'year_on_year', ONS + '/economy/inflationandpriceindices/datasets/priceindexofprivaterentsukmonthlypricestatistics',
+        ONS + '/economy/inflationandpriceindices/datasets/priceindexofprivaterentsukmonthlypricestatistics',
+        unit='percent'),
+    'private_rent_level': Definition(
+        'uk.private_rent.monthly_level', 'Rental price',
+        'Price Index of Private Rents, UK: monthly price statistics, Table 1',
+        'Average monthly private rent', 'monthly', 'not_seasonally_adjusted',
+        'level', ONS + '/economy/inflationandpriceindices/datasets/priceindexofprivaterentsukmonthlypricestatistics',
+        ONS + '/economy/inflationandpriceindices/datasets/priceindexofprivaterentsukmonthlypricestatistics',
+        unit='GBP_per_month'),
 }
 
 # Optional metric members: registered public-definition fields the writer is
@@ -98,6 +118,8 @@ OPTIONAL_METRICS = {
     'regular_pay_nominal_growth': {'geography': 'Great Britain', 'window_months': 3},
     'regular_pay_real_growth': {'geography': 'Great Britain', 'window_months': 3, 'deflator': 'CPIH'},
     'unemployment': {'geography': 'United Kingdom', 'age_group': '16 and over', 'window_months': 3},
+    'private_rent_growth': {'geography': 'United Kingdom', 'area_code': 'K02000001', 'release_caveat': 'UK latest two months provisional; Northern Ireland latest two months imputed'},
+    'private_rent_level': {'geography': 'United Kingdom', 'area_code': 'K02000001', 'release_caveat': 'UK latest two months provisional; Northern Ireland latest two months imputed'},
 }
 
 # Keys whose official endpoint is the structured ONS JSON timeseries response
@@ -121,6 +143,8 @@ def fixture_file(key):
         return 'regular_pay_real_a2fa_lms.json'
     if key == 'unemployment':
         return 'unemployment_mgsx_lms.json'
+    if key.startswith('private_rent_'):
+        return 'pipr_uk_monthly_price_statistics.xlsx'
     if key in JSON_TIMESERIES:
         return f'{key}_{definition.series.lower()}_{definition.dataset.lower()}.json'
     return f'{key}.csv'
@@ -309,10 +333,133 @@ def parse_ons_json(definition, body, today):
     return observations, published, next_release
 
 
+def parse_pipr(metric_key, body, today):
+    """Read only the UK national row and two reviewed columns from ONS Table 1."""
+    try:
+        book = zipfile.ZipFile(io.BytesIO(body))
+        if sum(info.file_size for info in book.infolist()) > 120_000_000:
+            raise ValidationError('PIPR workbook expands beyond the reviewed bound')
+        ns = {'m': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main',
+              'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'}
+        workbook = ET.fromstring(book.read('xl/workbook.xml'))
+        sheets = workbook.find('m:sheets', ns)
+        if sheets is None or [node.get('name') for node in sheets] != ['Cover sheet', 'Contents', 'Notes', 'Table 1']:
+            raise ValidationError('Unexpected PIPR workbook sheets')
+        rels = ET.fromstring(book.read('xl/_rels/workbook.xml.rels'))
+        rel_ns = {'p': 'http://schemas.openxmlformats.org/package/2006/relationships'}
+        targets = {rel.get('Id'): rel.get('Target') for rel in rels.findall('p:Relationship', rel_ns)}
+        sheet_id = targets[sheets[-1].get('{%s}id' % ns['r'])].lstrip('/')
+        if not sheet_id.startswith('xl/'):
+            sheet_id = 'xl/' + sheet_id
+        shared_root = ET.fromstring(book.read('xl/sharedStrings.xml'))
+        strings = [''.join(t.text or '' for t in item.findall('.//m:t', ns))
+                   for item in shared_root.findall('m:si', ns)]
+    except ValidationError:
+        raise
+    except (KeyError, OSError, zipfile.BadZipFile, ET.ParseError, IndexError) as exc:
+        raise ValidationError('Invalid PIPR workbook') from exc
+    def values(row):
+        result = {}
+        for cell in row.findall('m:c', ns):
+            ref = cell.get('r')
+            col = re.match(r'[A-Z]+', ref).group()
+            node = cell.find('m:v', ns)
+            raw = node.text if node is not None else ''
+            if cell.get('t') == 'inlineStr':
+                raw = ''.join(node.text or '' for node in cell.findall('m:is//m:t', ns))
+            if cell.get('t') == 's':
+                raw = strings[int(raw)]
+            result[col] = raw
+        return result
+    selected = {}
+    header_seen = False
+    for _, row in ET.iterparse(book.open(sheet_id), events=('end',)):
+        if row.tag != '{%s}row' % ns['m']:
+            continue
+        row_number = int(row.get('r', '0'))
+        if row_number != 3:
+            area = {}
+            for cell in row.findall('m:c', ns):
+                if cell.get('r', '').rstrip('0123456789') not in ('B', 'C'):
+                    continue
+                node = cell.find('m:v', ns)
+                raw = node.text if node is not None else ''
+                if cell.get('t') == 'inlineStr':
+                    raw = ''.join(node.text or '' for node in cell.findall('m:is//m:t', ns))
+                if cell.get('t') == 's':
+                    raw = strings[int(raw)]
+                area[cell.get('r', '').rstrip('0123456789')] = raw
+            if area.get('B') != 'K02000001' or area.get('C') != 'United Kingdom':
+                row.clear()
+                continue
+        cells = values(row)
+        if row_number == 3:
+            if (cells.get('A'), cells.get('B'), cells.get('C')) != (
+                    'Time period', 'Area code', 'Area name'):
+                raise ValidationError('PIPR national row identity changed')
+            column = 'G' if metric_key == 'private_rent_growth' else 'H'
+            expected_column = 'Annual change' if column == 'G' else 'Rental price'
+            if cells.get(column) != expected_column:
+                raise ValidationError('PIPR national columns changed')
+            header_seen = True
+            row.clear()
+            continue
+        if cells.get('B') != 'K02000001' or cells.get('C') != 'United Kingdom':
+            row.clear()
+            continue
+        try:
+            date_value = int(cells['A'])
+            period = (date(1899, 12, 30).fromordinal(date(1899, 12, 30).toordinal() + date_value)).strftime('%Y-%m')
+        except (KeyError, ValueError, OverflowError) as exc:
+            raise ValidationError('Invalid PIPR reference month') from exc
+        if period in selected:
+            raise ValidationError('Duplicate PIPR reference month')
+        selected[period] = cells.get(column)
+        row.clear()
+    if not header_seen:
+        raise ValidationError('Missing PIPR table')
+    if not selected:
+        raise ValidationError('PIPR United Kingdom row unavailable')
+    latest = max(selected)
+    if latest > today.strftime('%Y-%m'):
+        raise ValidationError('Future PIPR reference period')
+    points = []
+    for period, raw in sorted(selected.items()):
+        value, status = (None, 'missing') if raw in (None, '[x]', '[z]', '') else number(raw)
+        if value is not None and metric_key == 'private_rent_growth':
+            value = format(Decimal(value).quantize(Decimal('0.000001')).normalize(), 'f')
+        points.append(Observation(period, value, status, len(points) + 1))
+    if points[-1].value is None:
+        raise ValidationError('Latest UK PIPR observation unavailable')
+    cover = ET.fromstring(book.read('xl/worksheets/sheet1.xml'))
+    cover_text = []
+    for cell in cover.findall('.//m:sheetData/m:row/m:c', ns):
+        node = cell.find('m:v', ns)
+        raw = node.text if node is not None else ''
+        if cell.get('t') == 'inlineStr':
+            raw = ''.join(node.text or '' for node in cell.findall('m:is//m:t', ns))
+        if cell.get('t') == 's':
+            raw = strings[int(raw)]
+        cover_text.append(raw)
+    release = next((re.search(r'originally published at .*? on (\d{1,2} [A-Z][a-z]+ \d{4})', text)
+                    for text in cover_text if 'originally published at' in text), None)
+    if not release:
+        raise ValidationError('Missing PIPR publication date')
+    published = datetime.strptime(release.group(1), '%d %B %Y').date().isoformat()
+    if published > today.isoformat():
+        raise ValidationError('Future PIPR publication date')
+    if points[-1].period > published[:7]:
+        raise ValidationError('PIPR reference month follows release')
+    return Snapshot(DEFINITIONS[metric_key], published, None, tuple(points))
+
+
 def parse(key: str, body: bytes, today: date) -> Snapshot:
     definition = DEFINITIONS[key]
-    if len(body) > MAX_BYTES:
+    max_bytes = MAX_PIPR_BYTES if key.startswith('private_rent_') else MAX_BYTES
+    if len(body) > max_bytes:
         raise ValidationError('Response exceeds size limit')
+    if key.startswith('private_rent_'):
+        return parse_pipr(key, body, today)
     if key in JSON_TIMESERIES:
         observations, published, next_release = parse_ons_json(definition, body, today)
     else:
@@ -392,12 +539,52 @@ def parse(key: str, body: bytes, today: date) -> Snapshot:
 
 def fetch(key: str) -> bytes:
     """One bounded request. Retry scheduling belongs to the caller, not the parser."""
+    if key.startswith('private_rent_'):
+        # The dataset page exposes a versioned workbook link. Select only the
+        # exact current ONS edition path; never follow arbitrary page links.
+        request = Request(DEFINITIONS[key].download_url, headers={
+            'User-Agent': 'FinStats/2.0 (+https://github.com/Fabio-RibeiroB/macro-crew)'})
+        with urlopen(request, timeout=30) as response:
+            if response.status != 200 or urlsplit(response.geturl()).hostname != 'www.ons.gov.uk':
+                raise ValidationError('Unexpected PIPR dataset-page redirect')
+            page = response.read(MAX_SOURCE_PAGE_BYTES + 1)
+        if len(page) > MAX_SOURCE_PAGE_BYTES:
+            raise ValidationError('PIPR dataset page exceeds size limit')
+        class Links(HTMLParser):
+            def __init__(self):
+                HTMLParser.__init__(self)
+                self.hrefs = []
+            def handle_starttag(self, tag, attrs):
+                if tag == 'a':
+                    self.hrefs.extend(value for name, value in attrs if name == 'href')
+        links = Links()
+        links.feed(page.decode('utf-8', 'strict'))
+        sep = r'(?:%2F|/)'
+        pattern = re.compile(r'^/file\?uri=' + sep + r'economy' + sep +
+            r'inflationandpriceindices' + sep + r'datasets' + sep +
+            r'priceindexofprivaterentsukmonthlypricestatistics' + sep +
+            r'[0-9]{1,2}[a-z]+[0-9]{4}' + sep +
+            r'priceindexofprivaterentsukmonthlypricestatistics\.xlsx$')
+        matches = [ONS + href for href in links.hrefs if pattern.fullmatch(href)]
+        if not matches:
+            raise ValidationError('Current ONS PIPR workbook link unavailable')
+        url = matches[0]
+        request = Request(url, headers={
+            'User-Agent': 'FinStats/2.0 (+https://github.com/Fabio-RibeiroB/macro-crew)'})
+        with urlopen(request, timeout=60) as response:
+            if response.status != 200 or urlsplit(response.geturl()).hostname != 'www.ons.gov.uk':
+                raise ValidationError('Unexpected PIPR HTTP status')
+            payload = response.read(MAX_PIPR_BYTES + 1)
+        if len(payload) > MAX_PIPR_BYTES:
+            raise ValidationError('PIPR workbook exceeds size limit')
+        return payload, url
     request = Request(DEFINITIONS[key].download_url, headers={
         'User-Agent': 'FinStats/2.0 (+https://github.com/Fabio-RibeiroB/macro-crew)'})
     with urlopen(request, timeout=30) as response:
         if response.status != 200:
             raise ValidationError(f'Unexpected HTTP status {response.status}')
-        payload = response.read(MAX_BYTES + 1)
-    if len(payload) > MAX_BYTES:
+        max_bytes = MAX_PIPR_BYTES if key.startswith('private_rent_') else MAX_BYTES
+        payload = response.read(max_bytes + 1)
+    if len(payload) > max_bytes:
         raise ValidationError('Response exceeds size limit')
     return payload
