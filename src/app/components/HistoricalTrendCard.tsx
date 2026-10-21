@@ -24,6 +24,7 @@ interface TrendPoint {
   status?: string;
   revision?: string;
   unit?: string;
+  reference?: { kind: string; start_month: string; end_month: string };
 }
 
 interface HistoricalTrendCardProps {
@@ -49,7 +50,7 @@ function formatAxisDate(dateStr: string) {
 
 interface CustomTooltipProps {
   active?: boolean;
-  payload?: Array<{ value: number | null }>;
+  payload?: Array<{ value: number | null; payload?: TrendPoint }>;
   label?: string;
   unit: string;
 }
@@ -76,7 +77,9 @@ function CustomTooltip({ active, payload, label, unit }: CustomTooltipProps) {
       }}
     >
       <p className="text-xs mb-1" style={{ color: "var(--dash-text-4)" }}>
-        {formatPeriod(label)}
+        {payload[0].payload?.reference
+          ? `${formatPeriod(payload[0].payload.reference.start_month)} to ${formatPeriod(payload[0].payload.reference.end_month)}`
+          : formatPeriod(label)}
       </p>
       <p
         className="font-bold"
@@ -288,7 +291,7 @@ export function HistoricalTrendCard({
                 </caption>
                 <thead>
                   <tr>
-                    <th scope="col">Reference period</th>
+                  <th scope="col">Reference period</th>
                     <th scope="col">Value</th>
                     <th scope="col">Revision</th>
                   </tr>
@@ -298,7 +301,9 @@ export function HistoricalTrendCard({
                     const period = point.period ?? point.date ?? "";
                     return (
                       <tr key={period}>
-                        <td>{formatPeriod(period)}</td>
+                        <td>{point.reference
+                          ? `${formatPeriod(point.reference.start_month)} to ${formatPeriod(point.reference.end_month)}`
+                          : formatPeriod(period)}</td>
                         <td>{exactValue(point.value, unit)}</td>
                         <td>{revisionText(point)}</td>
                       </tr>

@@ -46,7 +46,9 @@ def test_delivery_publishes_cpi_headline_with_core_metrics_retained(tmp_path):
     collect(private, transport=fixture, clock=lambda: CPI_WHEN)
     deliver(private, public)
     data = read_public(public)
-    assert set(data['metrics']) == {'bank_rate', 'cpih', 'gdp', 'cpi'}
+    assert set(data['metrics']) == {
+        'bank_rate', 'cpih', 'gdp', 'cpi',
+        'regular_pay_nominal_growth', 'regular_pay_real_growth'}
     cpi = data['metrics']['cpi']
     assert cpi['validation_status'] == 'verified'
     assert cpi['snapshot_evidence_kind'] == 'official_download'
@@ -62,6 +64,14 @@ def test_delivery_publishes_cpi_headline_with_core_metrics_retained(tmp_path):
     assert data['metrics']['cpih']['definition']['series'] == 'L55O'
     assert data['metrics']['gdp']['latest']['value'] == '0.1'
     assert data['metrics']['bank_rate']['latest']['value'] == '3.75'
+    nominal = data['metrics']['regular_pay_nominal_growth']
+    real = data['metrics']['regular_pay_real_growth']
+    assert nominal['latest']['reference'] == real['latest']['reference'] == {
+        'kind': 'rolling_months', 'start_month': '2026-06', 'end_month': '2026-08'}
+    assert nominal['definition']['geography'] == real['definition']['geography'] == 'Great Britain'
+    assert nominal['definition']['unit'] == real['definition']['unit'] == 'percent'
+    assert real['definition']['deflator'] == 'CPIH'
+    assert real['latest']['value'] == '0.6'
 
 
 def test_checked_in_producer_generation_regenerates_byte_identically(tmp_path):
@@ -72,8 +82,12 @@ def test_checked_in_producer_generation_regenerates_byte_identically(tmp_path):
     wire = Path(__file__).parent / 'fixtures' / 'verified'
     manifest = json.loads((public / 'current.json').read_text())
     assert manifest['generation_id'] == 'c' * 32
-    assert (public / 'current.json').read_bytes() == (wire / 'producer-cpi-v1.manifest.json').read_bytes()
-    assert (public / manifest['data_url']).read_bytes() == (wire / 'producer-cpi-v1.json').read_bytes()
+    assert (public / 'current.json').read_bytes() == (wire / 'producer-pay-v1.manifest.json').read_bytes()
+    assert (public / manifest['data_url']).read_bytes() == (wire / 'producer-pay-v1.json').read_bytes()
+    candidate = json.loads((wire / 'producer-pay-v1.json').read_bytes())
+    previous = json.loads((wire / 'producer-cpi-v1.json').read_bytes())
+    for key in ('bank_rate', 'cpih', 'gdp', 'cpi'):
+        assert candidate['metrics'][key] == previous['metrics'][key]
 
 
 def test_shared_wire_fixtures_keep_m1_core_identical_and_add_optional_members():

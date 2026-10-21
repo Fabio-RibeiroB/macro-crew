@@ -67,6 +67,7 @@ def deliver(state_dir, output_dir):
             cutoff = str(year) + last[4:]
             # Five-year browser window; all source observations/vintages stay in SQLite.
             history = [{field: o[field] for field in ('period', 'value', 'status')}
+                       | ({'reference': o['reference']} if o.get('reference') else {})
                        for o in observations if o['period'] >= cutoff]
             member.update(latest=history[-1], history=history, history_window='last_5_years')
             verified += 1

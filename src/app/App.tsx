@@ -27,6 +27,8 @@ import {
   loadVerified,
   percent,
   previousReading,
+  previousPublishedWindow,
+  referenceWindow,
 } from "./data/verified.mjs";
 import {
   NAV_PAGES,
@@ -93,6 +95,16 @@ const topics = {
     caution:
       "One month can be volatile. Early estimates can change as the ONS receives more information.",
   },
+  regular_pay_nominal_growth: {
+    short: "Regular pay growth",
+    Icon: TrendingUp,
+    measurement: "ONS regular pay · annual growth, excluding bonuses",
+    color: "#547b46",
+    detailHref: "/jobs-pay#wages",
+    meaning: "Average regular earnings growth across Great Britain, before inflation.",
+  caution:
+    "This is a three-month average compared with the same period a year earlier; adjacent published windows overlap.",
+  },
 };
 // CPI headlines the inflation card once a verified reading exists; CPIH stays
 // the labelled fallback and the supporting measure on the Prices page.
@@ -148,13 +160,34 @@ function MetricCard({
   compact?: boolean;
 }) {
   const topic = topics[kind];
+  const Tag = compact ? "h2" : "h3";
+  if (!metric) {
+    return (
+      <article className={`fs-stat ${compact ? "fs-stat-compact" : ""}`}>
+        <div className="fs-stat-top">
+          <Tag>{topic.short}</Tag>
+          <topic.Icon size={18} aria-hidden="true" />
+        </div>
+        <p className="fs-number">Not available</p>
+        <p className="fs-measure">{topic.measurement}</p>
+        <p className="fs-period">A verified reading is not available yet.</p>
+        <a className="fs-stat-link" href={topic.detailHref}>
+          See pay details <ArrowRight size={15} aria-hidden="true" />
+        </a>
+      </article>
+    );
+  }
   const status = freshness(metric);
   const previous = previousReading(metric);
+  const isPay = kind === "regular_pay_nominal_growth";
+  const payPrevious = isPay ? previousPublishedWindow(metric) : null;
+  const comparisonPoint = isPay ? payPrevious : previous;
+  const currentWindow = isPay ? referenceWindow(metric.latest) : null;
+  const oldWindow = isPay ? referenceWindow(payPrevious) : null;
   const rateChange = kind === "bank_rate" ? lastRateChange(metric) : null;
-  const delta = previous
-    ? Number(metric.latest.value) - Number(previous.value)
+  const delta = comparisonPoint
+    ? Number(metric.latest.value) - Number(comparisonPoint.value)
     : null;
-  const Tag = compact ? "h2" : "h3";
   return (
     <article
       className={`fs-stat ${compact ? "fs-stat-compact" : ""}`}
@@ -170,7 +203,11 @@ function MetricCard({
         {metric.latest ? (
           <>
             {kind === "bank_rate" ? "Observed" : "For"}{" "}
-            <strong>{formatPeriod(metric.latest.period)}</strong>
+            <strong>
+              {currentWindow
+                ? `${formatPeriod(currentWindow.start_month)} to ${formatPeriod(currentWindow.end_month)}`
+                : formatPeriod(metric.latest.period)}
+            </strong>
           </>
         ) : (
           "A verified reading is not available yet."
@@ -184,14 +221,17 @@ function MetricCard({
             {Math.abs(rateChange.difference) === 1 ? "" : "s"} at the{" "}
             {formatPeriod(rateChange.period)} observation
           </>
-        ) : "The last rate change cannot be established from the available history." : previous && delta !== null ? (
+        ) : "The last rate change cannot be established from the available history." : comparisonPoint && delta !== null ? (
           <>
             <span>
               {Math.abs(delta) < 0.00001
                 ? "Unchanged"
                 : `${delta > 0 ? "+" : "−"}${Math.abs(delta).toFixed(2).replace(/0$/, "")} percentage points`}
             </span>{" "}
-            compared with {formatPeriod(previous.period)}
+            compared with {oldWindow
+              ? `${formatPeriod(oldWindow.start_month)} to ${formatPeriod(oldWindow.end_month)}`
+              : formatPeriod(comparisonPoint.period)}
+            {isPay ? "; these published three-month windows overlap" : ""}
           </>
         ) : (
           "A directly comparable previous reading is not available."
@@ -245,6 +285,62 @@ function MetricCard({
         See {topic.short} details <ArrowRight size={15} aria-hidden="true" />
       </a>
     </article>
+  );
+}
+
+function Wages({ data, loading, error, refresh }: any) {
+  const nominal = data?.metrics?.regular_pay_nominal_growth;
+  const real = data?.metrics?.regular_pay_real_growth;
+  const matching = nominal?.latest && real?.latest &&
+    nominal.latest.reference?.start_month === real.latest.reference?.start_month &&
+    nominal.latest.reference?.end_month === real.latest.reference?.end_month;
+  const relationship = !nominal?.latest || !real?.latest
+    ? "A matched nominal and CPIH-adjusted comparison is unavailable because both series need a current verified window."
+    : matching
+      ? "For the same published three-month window, the ONS also reports regular pay growth adjusted for CPIH. This is the official real-pay series, not an inflation subtraction."
+      : "The official CPIH-adjusted regular-pay figure is retained independently. Its window differs from nominal pay, so the figures are not presented as a matched comparison.";
+  return (
+    <>
+      <Statistics data={data} kinds={["regular_pay_nominal_growth"]} loading={loading} error={error} refresh={refresh} />
+      <section className="fs-container fs-section" id="wages" aria-labelledby="wages-title">
+        <div className="fs-section-heading"><div><p className="fs-eyebrow">Official earnings measure</p><h2 id="wages-title">Regular pay growth</h2></div></div>
+        {real ? (
+          <>
+            <p>{relationship}</p>
+            <div className="fs-stat-grid fs-stat-count-1">
+              <article className="fs-stat">
+                <div className="fs-stat-top"><h3>Real regular pay growth</h3><TrendingUp size={18} aria-hidden="true" /></div>
+                <p className="fs-number">{percent(real.latest?.value)}</p>
+                <p className="fs-measure">Official annual growth, adjusted using CPIH</p>
+                <p className="fs-period">{real.latest?.reference
+                  ? `${formatPeriod(real.latest.reference.start_month)} to ${formatPeriod(real.latest.reference.end_month)}`
+                  : "A verified reading is not available yet."}</p>
+                {matching && <p className="fs-comparison">Secondary context for the same nominal-pay window.</p>}
+                <p className="fs-fresh">{freshness(real).label}</p>
+                <details className="fs-details fs-info"><summary>Source details <ChevronDown size={15} aria-hidden="true" /></summary>
+                  <p>ONS A2FA / LMS · Great Britain · seasonally adjusted regular pay · CPIH-adjusted.</p>
+                  <p>Source publication: {real.source_published_date ? formatPeriod(real.source_published_date) : "not supplied"}. Last successful check: {checkedAt(real.last_successful_check_at)}.</p>
+                  <OfficialLink href={real.definition.source_url}>View official real regular-pay series</OfficialLink>
+                </details>
+              </article>
+            </div>
+          </>
+        ) : <p>The official CPIH-adjusted regular-pay measure is not available yet.</p>}
+        <Suspense fallback={<p role="status">Loading charts…</p>}>
+          <div className="fs-chart-grid fs-chart-count-2">
+            {nominal && <HistoricalTrendCard title="Annual regular-pay growth, before inflation" label="Nominal regular pay" color="#547b46" data={chartPoints(nominal)} />}
+            {real && <HistoricalTrendCard title="Official CPIH-adjusted annual regular-pay growth" label="Real regular pay · CPIH" color="#6b76b5" data={chartPoints(real)} />}
+          </div>
+        </Suspense>
+        <p className="fs-caption">Points are located by the ending month; exact values and chart tooltips show the full rolling three-month window. Consecutive published windows overlap.</p>
+        <details className="fs-details fs-info"><summary>Sources and method <ChevronDown size={15} aria-hidden="true" /></summary>
+          <p>Both series cover Great Britain and are seasonally adjusted annual growth in regular average weekly earnings excluding bonuses. Each observation is the official rolling three-month measure.</p>
+          {nominal && <p><OfficialLink href={nominal.definition.source_url}>ONS KAI9 / LMS nominal regular-pay series</OfficialLink></p>}
+          {real && <p><OfficialLink href={real.definition.source_url}>ONS A2FA / LMS CPIH-adjusted regular-pay series</OfficialLink></p>}
+          <p><OfficialLink href="https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/employmentandemployeetypes/bulletins/averageweeklyearningsingreatbritain/october2026">ONS Average weekly earnings in Great Britain bulletin</OfficialLink> confirms the June–August reference window and CPIH treatment. The source publishes provisional estimates that can later be revised.</p>
+        </details>
+      </section>
+    </>
   );
 }
 
@@ -802,7 +898,7 @@ export default function App({
     pathname ??
       (typeof window === "undefined" ? "/" : window.location.pathname),
   );
-  const needsData = ["overview", "prices", "economy"].includes(page.id);
+  const needsData = ["overview", "prices", "economy", "jobs-pay"].includes(page.id);
   const [snapshot, setSnapshot] = useState(() =>
     refreshSnapshot(initialData, needsData ? "loading" : "idle"),
   );
@@ -1004,7 +1100,7 @@ export default function App({
           <>
             <Statistics
               {...stats}
-              kinds={[inflationKind(data), "bank_rate", "gdp"]}
+              kinds={[inflationKind(data), "bank_rate", "gdp", "regular_pay_nominal_growth"]}
               compact
               overview
             />
@@ -1031,6 +1127,14 @@ export default function App({
             <GrowthGuide />
             <Trends data={data} kinds={["bank_rate", "gdp"]} />
             <Publications reports={reports} reportTime={reportTime} />
+          </>
+        )}
+        {page.id === "jobs-pay" && (
+          <>
+            <PageHeading eyebrow="Jobs & Pay" title={page.title}>
+              What official earnings figures say about regular pay growth.
+            </PageHeading>
+            <Wages {...stats} />
           </>
         )}
         {page.id === "government" && (

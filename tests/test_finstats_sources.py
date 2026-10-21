@@ -181,3 +181,39 @@ def test_cpi_fixture_bytes_and_receipt_remain_the_recorded_excerpt():
     body = fixture('cpi')
     assert hashlib.sha256(body).hexdigest() == receipts['cpi_d7g7_mm23.json']['sha256']
     assert receipts['cpi_d7g7_mm23.json']['url'] == DEFINITIONS['cpi'].download_url
+
+
+@pytest.mark.parametrize(('key', 'series', 'value'), [
+    ('regular_pay_nominal_growth', 'KAI9', '3.7'),
+    ('regular_pay_real_growth', 'A2FA', '0.6'),
+])
+def test_regular_pay_binds_exact_series_and_official_three_month_window(key, series, value):
+    data = parse(key, fixture(key), CPI_TODAY)
+    assert data.definition.series == series
+    assert data.definition.dataset == 'LMS'
+    assert data.definition.adjustment == 'seasonally_adjusted'
+    assert data.observations[-1].period == '2026-08'
+    assert data.observations[-1].value == value
+    assert data.observations[-1].reference == {
+        'kind': 'rolling_months', 'start_month': '2026-06', 'end_month': '2026-08'}
+    assert all(o.reference and o.reference['end_month'] == o.period for o in data.observations)
+
+
+def test_real_pay_blank_unit_exception_is_specific_to_a2fa():
+    real = json.loads(fixture('regular_pay_real_growth'))
+    nominal = json.loads(fixture('regular_pay_nominal_growth'))
+    assert real['description']['unit'] == ''
+    assert parse('regular_pay_real_growth', json.dumps(real).encode(), CPI_TODAY)
+    nominal['description']['unit'] = ''
+    with pytest.raises(ValidationError, match='unit'):
+        parse('regular_pay_nominal_growth', json.dumps(nominal).encode(), CPI_TODAY)
+
+
+def test_regular_pay_crosses_year_boundary_in_reference_windows():
+    body = fixture('regular_pay_nominal_growth')
+    payload = json.loads(body)
+    payload['months'] = [next(row for row in payload['months'] if row['date'] == '2026 JAN')]
+    data = parse('regular_pay_nominal_growth', json.dumps(payload).encode(), CPI_TODAY)
+    assert data.observations[0].period == '2026-01'
+    assert data.observations[0].reference == {
+        'kind': 'rolling_months', 'start_month': '2025-11', 'end_month': '2026-01'}

@@ -24,6 +24,13 @@ export const PAGES = [
     place: "nav",
   },
   {
+    id: "jobs-pay",
+    path: "/jobs-pay",
+    label: "Jobs & Pay",
+    title: "Jobs and pay",
+    place: "nav",
+  },
+  {
     id: "government",
     path: "/government-budget",
     label: "Government",
@@ -52,7 +59,6 @@ export const FOOTER_PAGES = PAGES.filter((page) => page.place === "footer");
 /** Future subject routes from the UI spec. They have no page yet. */
 export const UNPUBLISHED_PATHS = [
   "/housing",
-  "/jobs-pay",
   "/calendar",
   "/wages",
   "/unemployment",

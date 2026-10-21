@@ -17,7 +17,7 @@ test("plain-English pages have stable direct URLs and unique navigation identiti
   assert.equal(new Set(PAGES.map((p) => p.path)).size, PAGES.length);
   assert.deepEqual(
     NAV_PAGES.map((p) => p.label),
-    ["Overview", "Prices", "Economy", "Government"],
+    ["Overview", "Prices", "Economy", "Jobs & Pay", "Government"],
   );
   assert.deepEqual(
     FOOTER_PAGES.map((p) => [p.path, p.label]),
@@ -28,7 +28,7 @@ test("plain-English pages have stable direct URLs and unique navigation identiti
   );
   assert.deepEqual(
     PAGES.map((p) => p.path),
-    ["/", "/prices", "/economy", "/government-budget", "/about", "/sources"],
+    ["/", "/prices", "/economy", "/jobs-pay", "/government-budget", "/about", "/sources"],
   );
   for (const page of PAGES) {
     assert.equal(resolvePage(page.path).id, page.id);
@@ -226,6 +226,7 @@ test("every page renders its own heading, navigation and missing-data content", 
     assert.match(overview, /href="\/economy#interest-rates"/);
     assert.match(overview, /href="\/economy#gdp"/);
     assert.match(overview, /href="\/prices#figures"/);
+    assert.match(overview, /href="\/jobs-pay#wages"/);
     const missing = renderToStaticMarkup(
       createElement(App, { pathname: "/does-not-exist" }),
     );
@@ -370,6 +371,33 @@ test("CPI headlines inflation while CPIH stays labelled supporting data", async 
     );
     assert.match(degradedPrices, /<h3>CPI inflation<\/h3>/);
     assert.match(degradedPrices, /Update delayed · showing last verified figure/);
+  } finally {
+    await server.close();
+  }
+});
+
+test("Jobs & Pay renders official nominal and independently dated CPIH real pay", async () => {
+  const { createServer } = await import("vite");
+  const { createElement } = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+  try {
+    const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
+    const data = JSON.parse(readFileSync(new URL("../fixtures/verified/v1-with-optional.json", import.meta.url), "utf8"));
+    const page = renderToStaticMarkup(createElement(App, { pathname: "/jobs-pay", initialData: data }));
+    assert.match(page, /href="\/jobs-pay"[^>]*aria-current="page"/);
+    assert.match(page, /id="wages"/);
+    assert.match(page, /3\.7%/);
+    assert.match(page, /0\.6%/);
+    assert.match(page, /Official annual growth, adjusted using CPIH/);
+    assert.match(page, /June 2026 to August 2026/);
+    assert.match(page, /KAI9 \/ LMS/);
+    assert.match(page, /A2FA \/ LMS/);
+    assert.match(page, /Average weekly earnings in Great Britain bulletin/);
+    const mismatched = structuredClone(data);
+    mismatched.metrics.regular_pay_real_growth.latest.reference.start_month = "2026-05";
+    const mismatchPage = renderToStaticMarkup(createElement(App, { pathname: "/jobs-pay", initialData: mismatched }));
+    assert.match(mismatchPage, /Its window differs from nominal pay/);
   } finally {
     await server.close();
   }

@@ -95,6 +95,57 @@ def test_cpi_failure_after_success_keeps_last_verified_cpi(tmp_path):
     assert 'temporary outage' not in json.dumps(data)
 
 
+def test_pay_windows_round_trip_through_private_store_and_public_projection(tmp_path):
+    private, public_dir = tmp_path / 'private', tmp_path / 'public'
+    result = collect(private, transport=lambda key: fixture(key), clock=lambda: CPI_WHEN)
+    assert not result['failed_metrics']
+    data = read_generation(private)
+    for key in ('regular_pay_nominal_growth', 'regular_pay_real_growth'):
+        member = data['metrics'][key]
+        assert member['definition']['geography'] == 'Great Britain'
+        assert member['definition']['window_months'] == 3
+        assert member['latest']['reference'] == {
+            'kind': 'rolling_months', 'start_month': '2026-06', 'end_month': '2026-08'}
+        assert member['history'][-1]['reference'] == member['latest']['reference']
+        assert member['latest']['row'] > 0  # Source locator stays in the private shadow.
+    assert data['metrics']['regular_pay_real_growth']['definition']['deflator'] == 'CPIH'
+    from finstats.delivery import deliver
+    deliver(private, public_dir)
+    manifest = json.loads((public_dir / 'current.json').read_text())
+    public = json.loads((public_dir / manifest['data_url']).read_text())
+    for key in ('regular_pay_nominal_growth', 'regular_pay_real_growth'):
+        assert 'row' not in public['metrics'][key]['latest']
+
+
+def test_pay_feeds_fail_independently_and_preserve_their_own_last_window(tmp_path):
+    collect(tmp_path, transport=lambda key: fixture(key), clock=lambda: CPI_WHEN)
+    def broken(key):
+        if key == 'regular_pay_real_growth':
+            raise TimeoutError('private source failure')
+        return fixture(key)
+    result = collect(tmp_path, transport=broken, clock=lambda: CPI_WHEN + timedelta(days=1))
+    assert result['failed_metrics'] == ['regular_pay_real_growth']
+    data = read_generation(tmp_path)
+    assert data['metrics']['regular_pay_nominal_growth']['collection_status'] == 'ok'
+    assert data['metrics']['regular_pay_real_growth']['collection_status'] == 'degraded'
+    assert data['metrics']['regular_pay_real_growth']['latest']['period'] == '2026-08'
+    assert data['metrics']['regular_pay_real_growth']['latest']['reference']['start_month'] == '2026-06'
+
+
+def test_pay_revision_keeps_window_identity_and_previous_snapshot(tmp_path):
+    collect(tmp_path, transport=lambda key: fixture(key), clock=lambda: CPI_WHEN)
+    first = read_generation(tmp_path)['metrics']['regular_pay_nominal_growth']
+    def revised(key):
+        body = fixture(key)
+        return body.replace(b'"date": "2026 AUG", "value": "3.7"',
+                            b'"date": "2026 AUG", "value": "3.8"') if key == 'regular_pay_nominal_growth' else body
+    collect(tmp_path, transport=revised, clock=lambda: CPI_WHEN + timedelta(minutes=1))
+    current = read_generation(tmp_path)['metrics']['regular_pay_nominal_growth']
+    assert current['latest']['value'] == '3.8'
+    assert current['latest']['reference'] == first['latest']['reference']
+    assert current['snapshot_id'] != first['snapshot_id']
+
+
 def test_activation_failure_preserves_previous_complete_generation(tmp_path):
     collect(tmp_path, fixtures=FIXTURES, clock=lambda: WHEN)
     original = read_generation(tmp_path)
@@ -181,7 +232,8 @@ def test_sqlite_statement_failure_rolls_back_one_metric_and_others_publish(tmp_p
     assert data['metrics']['gdp']['collection_status'] == 'ok'
     instance = Store(tmp_path)
     try:
-        assert instance.db.execute('SELECT count(*) FROM snapshot').fetchone()[0] == 4
+        from finstats.sources import DEFINITIONS
+        assert instance.db.execute('SELECT count(*) FROM snapshot').fetchone()[0] == len(DEFINITIONS)
         assert not instance.db.in_transaction
     finally:
         instance.close()

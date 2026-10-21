@@ -66,6 +66,18 @@ DEFINITIONS = {
         'monthly', 'not_seasonally_adjusted', 'year_on_year',
         ONS + '/economy/inflationandpriceindices/timeseries/d7g7/mm23',
         ONS + '/economy/inflationandpriceindices/timeseries/d7g7/mm23/data'),
+    'regular_pay_nominal_growth': Definition(
+        'uk.regular_pay.nominal_annual_growth', 'KAI9', 'LMS',
+        'AWE: Whole Economy Year on Year Three Month Average Growth (%): Seasonally Adjusted Regular Pay Excluding Arrears',
+        'monthly', 'seasonally_adjusted', 'year_on_year',
+        ONS + '/employmentandlabourmarket/peopleinwork/earningsandworkinghours/timeseries/kai9/lms',
+        ONS + '/employmentandlabourmarket/peopleinwork/earningsandworkinghours/timeseries/kai9/lms/data'),
+    'regular_pay_real_growth': Definition(
+        'uk.regular_pay.real_annual_growth', 'A2FA', 'LMS',
+        'AWE: Whole Economy Real Terms Year on Year three Month Growth (%): Seasonally Adjusted Regular Pay',
+        'monthly', 'seasonally_adjusted', 'year_on_year',
+        ONS + '/employmentandlabourmarket/peopleinwork/earningsandworkinghours/timeseries/a2fa/lms',
+        ONS + '/employmentandlabourmarket/peopleinwork/earningsandworkinghours/timeseries/a2fa/lms/data'),
 }
 
 # Optional metric members: registered public-definition fields the writer is
@@ -73,11 +85,13 @@ DEFINITIONS = {
 # rejects the generation. Absent members stay absent, never zero.
 OPTIONAL_METRICS = {
     'cpi': {'geography': 'United Kingdom'},
+    'regular_pay_nominal_growth': {'geography': 'Great Britain', 'window_months': 3},
+    'regular_pay_real_growth': {'geography': 'Great Britain', 'window_months': 3, 'deflator': 'CPIH'},
 }
 
 # Keys whose official endpoint is the structured ONS JSON timeseries response
 # rather than the CSV generator. Recorded-fixture naming follows the same split.
-JSON_TIMESERIES = {'cpi'}
+JSON_TIMESERIES = {'cpi', 'regular_pay_nominal_growth', 'regular_pay_real_growth'}
 
 
 def public_definition(key):
@@ -90,6 +104,10 @@ def public_definition(key):
 def fixture_file(key):
     """Offline recorded-fixture file name; live collection never uses these."""
     definition = DEFINITIONS[key]
+    if key == 'regular_pay_nominal_growth':
+        return 'regular_pay_nominal_kai9_lms.json'
+    if key == 'regular_pay_real_growth':
+        return 'regular_pay_real_a2fa_lms.json'
     if key in JSON_TIMESERIES:
         return f'{key}_{definition.series.lower()}_{definition.dataset.lower()}.json'
     return f'{key}.csv'
@@ -101,6 +119,7 @@ class Observation:
     value: str | None
     status: str
     row: int
+    reference: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -115,7 +134,8 @@ class Snapshot:
         result = asdict(self)
         # Row positions are provenance, not economic changes.
         result['observations'] = [
-            {'period': o.period, 'value': o.value, 'status': o.status}
+            {'period': o.period, 'value': o.value, 'status': o.status,
+             **({'reference': o.reference} if o.reference else {})}
             for o in self.observations]
         return result
 
@@ -208,7 +228,8 @@ def parse_ons_json(definition, body, today):
                             ('datasetId', definition.dataset)]:
         if description.get(field) != expected:
             raise ValidationError(f'Unexpected {field}')
-    if description.get('unit') != '%' or description.get('preUnit') not in ('', None):
+    expected_unit = '' if definition.series == 'A2FA' else '%'
+    if description.get('unit') != expected_unit or description.get('preUnit') not in ('', None):
         raise ValidationError('Unexpected unit')
     published = release_date_london(description.get('releaseDate'))
     next_release = next_release_date(description.get('nextRelease'))
@@ -219,8 +240,16 @@ def parse_ons_json(definition, body, today):
     for index, entry in enumerate(months, 1):
         if not isinstance(entry, dict):
             raise ValidationError('Unrecognised monthly row')
-        period = month_period(entry.get('date'))
-        observations.append(Observation(period, json_number(entry.get('value')), 'observed', index))
+        if definition.series in {'KAI9', 'A2FA'}:
+            period = month_period(entry.get('date'))
+            end_year, end_month = map(int, period.split('-'))
+            start_index = end_year * 12 + end_month - 1 - 2
+            start_month = f'{start_index // 12:04d}-{start_index % 12 + 1:02d}'
+            reference = {'kind': 'rolling_months', 'start_month': start_month, 'end_month': period}
+        else:
+            period = month_period(entry.get('date'))
+            reference = None
+        observations.append(Observation(period, json_number(entry.get('value')), 'observed', index, reference))
     if published > today.isoformat():
         raise ValidationError('Future publication date')
     if next_release and next_release < published:
