@@ -386,7 +386,12 @@ test("Jobs & Pay renders official nominal and independently dated CPIH real pay"
     const data = JSON.parse(readFileSync(new URL("../fixtures/verified/v1-with-optional.json", import.meta.url), "utf8"));
     const page = renderToStaticMarkup(createElement(App, { pathname: "/jobs-pay", initialData: data }));
     assert.match(page, /href="\/jobs-pay"[^>]*aria-current="page"/);
-    assert.match(page, /id="wages"/);
+    const wagesStart = page.indexOf('id="wages"');
+    const nominalValue = page.indexOf('class="fs-number">3.7%', wagesStart);
+    const realValue = page.indexOf('class="fs-number">0.6%', wagesStart);
+    assert.ok(wagesStart >= 0 && nominalValue > wagesStart && realValue > nominalValue,
+      "the #wages target contains the primary nominal figure before the real-pay detail");
+    assert.match(page, /id="figures" class="fs-anchor-alias"/);
     assert.match(page, /3\.7%/);
     assert.match(page, /0\.6%/);
     assert.match(page, /Official annual growth, adjusted using CPIH/);
@@ -398,6 +403,26 @@ test("Jobs & Pay renders official nominal and independently dated CPIH real pay"
     mismatched.metrics.regular_pay_real_growth.latest.reference.start_month = "2026-05";
     const mismatchPage = renderToStaticMarkup(createElement(App, { pathname: "/jobs-pay", initialData: mismatched }));
     assert.match(mismatchPage, /Its window differs from nominal pay/);
+
+    const overview = (source) => renderToStaticMarkup(
+      createElement(App, { pathname: "/", initialData: source }),
+    );
+    const home = overview(data);
+    const payCardAt = home.indexOf("Regular pay growth");
+    const realContextAt = home.indexOf("Official CPIH-adjusted regular pay: 0.6%", payCardAt);
+    assert.ok(realContextAt > payCardAt);
+    assert.match(home.slice(realContextAt, realContextAt + 260), /Great Britain|same published window/);
+    assert.ok(home.indexOf("Regular pay growth") < home.indexOf(">GDP</h2>"),
+      "the Wages card precedes GDP in the homepage subset");
+
+    const mismatchedHomeData = structuredClone(data);
+    mismatchedHomeData.metrics.regular_pay_real_growth.latest.reference.start_month = "2026-05";
+    const mismatchedHome = overview(mismatchedHomeData);
+    assert.match(mismatchedHome, /Official CPIH-adjusted regular pay: 0\.6%[\s\S]{0,200}separate window, not directly matched/);
+
+    const absentRealData = structuredClone(data);
+    absentRealData.metrics.regular_pay_real_growth.latest = null;
+    assert.match(overview(absentRealData), /Official CPIH-adjusted regular pay is currently unavailable/);
   } finally {
     await server.close();
   }

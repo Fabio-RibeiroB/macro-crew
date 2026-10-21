@@ -98,7 +98,7 @@ const topics = {
   regular_pay_nominal_growth: {
     short: "Regular pay growth",
     Icon: TrendingUp,
-    measurement: "ONS regular pay · annual growth, excluding bonuses",
+    measurement: "Great Britain · regular pay annual growth, excluding bonuses",
     color: "#547b46",
     detailHref: "/jobs-pay#wages",
     meaning: "Average regular earnings growth across Great Britain, before inflation.",
@@ -154,10 +154,12 @@ function MetricCard({
   metric,
   kind,
   compact = false,
+  secondaryMetric,
 }: {
   metric: any;
   kind: keyof typeof topics;
   compact?: boolean;
+  secondaryMetric?: any;
 }) {
   const topic = topics[kind];
   const Tag = compact ? "h2" : "h3";
@@ -183,6 +185,7 @@ function MetricCard({
   const payPrevious = isPay ? previousPublishedWindow(metric) : null;
   const comparisonPoint = isPay ? payPrevious : previous;
   const currentWindow = isPay ? referenceWindow(metric.latest) : null;
+  const secondaryWindow = isPay ? referenceWindow(secondaryMetric?.latest) : null;
   const oldWindow = isPay ? referenceWindow(payPrevious) : null;
   const rateChange = kind === "bank_rate" ? lastRateChange(metric) : null;
   const delta = comparisonPoint
@@ -213,6 +216,26 @@ function MetricCard({
           "A verified reading is not available yet."
         )}
       </p>
+      {compact && isPay && (
+        <p className="fs-comparison">
+          {secondaryMetric?.latest?.value != null ? (
+            <>
+              Official CPIH-adjusted regular pay: {percent(secondaryMetric.latest.value)} for{" "}
+              {secondaryWindow
+                ? ` ${formatPeriod(secondaryWindow.start_month)} to ${formatPeriod(secondaryWindow.end_month)}`
+                : ` ${formatPeriod(secondaryMetric.latest.period)}`}
+              {currentWindow && secondaryWindow &&
+              currentWindow.start_month === secondaryWindow.start_month &&
+              currentWindow.end_month === secondaryWindow.end_month
+                ? " (same published window)"
+                : "; separate window, not directly matched to nominal pay"}
+              {secondaryMetric.collection_status !== "ok" ? " · update delayed, showing last verified figure" : ""}
+            </>
+          ) : (
+            "Official CPIH-adjusted regular pay is currently unavailable."
+          )}
+        </p>
+      )}
       <div className="fs-comparison">
         {kind === "bank_rate" ? rateChange ? (
           <>
@@ -300,10 +323,8 @@ function Wages({ data, loading, error, refresh }: any) {
       ? "For the same published three-month window, the ONS also reports regular pay growth adjusted for CPIH. This is the official real-pay series, not an inflation subtraction."
       : "The official CPIH-adjusted regular-pay figure is retained independently. Its window differs from nominal pay, so the figures are not presented as a matched comparison.";
   return (
-    <>
-      <Statistics data={data} kinds={["regular_pay_nominal_growth"]} loading={loading} error={error} refresh={refresh} />
-      <section className="fs-container fs-section" id="wages" aria-labelledby="wages-title">
-        <div className="fs-section-heading"><div><p className="fs-eyebrow">Official earnings measure</p><h2 id="wages-title">Regular pay growth</h2></div></div>
+    <Statistics data={data} kinds={["regular_pay_nominal_growth"]} loading={loading} error={error} refresh={refresh} sectionId="wages" title="Regular pay growth" eyebrow="Official earnings measure" alias="figures">
+        <div>
         {real ? (
           <>
             <p>{relationship}</p>
@@ -339,8 +360,8 @@ function Wages({ data, loading, error, refresh }: any) {
           {real && <p><OfficialLink href={real.definition.source_url}>ONS A2FA / LMS CPIH-adjusted regular-pay series</OfficialLink></p>}
           <p><OfficialLink href="https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/employmentandemployeetypes/bulletins/averageweeklyearningsingreatbritain/october2026">ONS Average weekly earnings in Great Britain bulletin</OfficialLink> confirms the June–August reference window and CPIH treatment. The source publishes provisional estimates that can later be revised.</p>
         </details>
-      </section>
-    </>
+        </div>
+    </Statistics>
   );
 }
 
@@ -393,21 +414,26 @@ function Statistics({
   refresh,
   compact = false,
   overview = false,
+  sectionId,
+  title,
+  eyebrow,
+  alias,
+  children,
 }: any) {
   return (
     <section
       className={`fs-container fs-section ${overview ? "fs-overview" : ""}`}
-      id={overview ? "overview" : "figures"}
+      id={sectionId ?? (overview ? "overview" : "figures")}
       aria-labelledby="figures-title"
     >
-      {overview && <span id="figures" className="fs-anchor-alias" />}
+      {(overview || alias) && <span id={alias ?? "figures"} className="fs-anchor-alias" />}
       <div className="fs-section-heading">
         <div>
-          {!overview && <p className="fs-eyebrow">The latest verified figures</p>}
+          {!overview && <p className="fs-eyebrow">{eyebrow ?? "The latest verified figures"}</p>}
           {overview ? (
-            <h1 id="figures-title">Latest verified figures</h1>
+            <h1 id="figures-title">{title ?? "Latest verified figures"}</h1>
           ) : (
-            <h2 id="figures-title">Latest verified figures</h2>
+            <h2 id="figures-title">{title ?? "Latest verified figures"}</h2>
           )}
           {!overview && (
             <p>Each figure has its own reference period and official source.</p>
@@ -438,6 +464,7 @@ function Statistics({
                 key={kind}
                 kind={kind}
                 metric={data.metrics[kind]}
+                secondaryMetric={kind === "regular_pay_nominal_growth" ? data.metrics.regular_pay_real_growth : undefined}
                 compact={compact}
               />
             ))}
@@ -454,6 +481,7 @@ function Statistics({
           </p>
         )
       )}
+      {children}
     </section>
   );
 }
@@ -1100,7 +1128,7 @@ export default function App({
           <>
             <Statistics
               {...stats}
-              kinds={[inflationKind(data), "bank_rate", "gdp", "regular_pay_nominal_growth"]}
+              kinds={[inflationKind(data), "bank_rate", "regular_pay_nominal_growth", "gdp"]}
               compact
               overview
             />
