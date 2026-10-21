@@ -16,7 +16,8 @@ from uk_macro_crew.utils import get_exa_api_key, save_json_hook
 os.environ["EXA_API_KEY"] = get_exa_api_key()
 
 from uk_macro_crew.llm_config import (
-    DEFAULT_MODEL, ReasoningEffortError, resolve_reasoning_effort,
+    DEFAULT_MODEL, ReasoningEffortError, completion_token_parameter,
+    resolve_reasoning_effort,
 )
 
 
@@ -30,8 +31,7 @@ def build_agent_llm() -> LLM:
     model = (os.getenv("MODEL") or DEFAULT_MODEL).strip() or DEFAULT_MODEL
     effort = resolve_reasoning_effort(model, os.getenv("OPENAI_REASONING_EFFORT"))
 
-    token_parameter = ("max_completion_tokens" if _model_supports_reasoning_effort(model)
-                       else "max_tokens")
+    token_parameter = completion_token_parameter(model)
     llm = LLM(model=model, reasoning_effort=effort or None,
               **{token_parameter: bounded_int("FINSTATS_AI_MAX_OUTPUT_TOKENS", 4096, 8192)},
               timeout=60, max_retries=0)

@@ -1,7 +1,8 @@
 """Model policy tests require no SDK, API credentials or CrewAI imports."""
 import pytest
 from uk_macro_crew.llm_config import (
-    ReasoningEffortError, _bare_model_name, resolve_reasoning_effort,
+    ReasoningEffortError, _bare_model_name, completion_token_parameter,
+    resolve_reasoning_effort,
 )
 
 
@@ -51,3 +52,14 @@ def test_existing_default_empty_override_and_snapshot_remain_supported():
     assert resolve_reasoning_effort('openai/gpt-6-luna-2026-10-01', None) == 'none'
     assert resolve_reasoning_effort('gpt-6-luna', '') == ''
     assert resolve_reasoning_effort('gpt-6-luna', 'HIGH') == 'high'
+
+
+@pytest.mark.parametrize('model,parameter', [
+    ('gpt-6-luna', 'max_completion_tokens'),
+    ('openai/o3-2025-04-16', 'max_completion_tokens'),
+    ('gpt-6-luna-mini', 'max_completion_tokens'),
+    ('gpt-4o-mini', 'max_tokens'),
+    ('ft:gpt-4o-mini-2024-07-18:gpt-5-pro::abc', 'max_tokens'),
+])
+def test_output_limit_is_independent_of_reasoning_override(model, parameter):
+    assert completion_token_parameter(model) == parameter
