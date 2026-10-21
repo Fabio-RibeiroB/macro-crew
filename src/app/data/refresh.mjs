@@ -99,7 +99,7 @@ export function createRefreshController({
       );
       if (!result.accepted) return;
       onData?.(next);
-      onSettled?.();
+      onSettled?.(result.snapshot);
     } catch (error) {
       if (run.timedOut) {
         run.settled = true;
@@ -113,7 +113,7 @@ export function createRefreshController({
         );
         if (!result.accepted) return;
         onError?.(result.snapshot.error);
-        onSettled?.();
+        onSettled?.(result.snapshot);
         return;
       }
       if (run.settled || run.superseded || snapshot.status === "disposed")
@@ -129,19 +129,22 @@ export function createRefreshController({
       );
       if (!result.accepted) return;
       onError?.(result.snapshot.error);
-      onSettled?.();
+      onSettled?.(result.snapshot);
     }
   };
 
   return {
     refresh,
-    /** Leave `loading` before the request settles, including after pagehide. */
+    /**
+     * Leave `loading` before the request settles, including after pagehide.
+     * Settle exactly once with the cancelled snapshot; later results are stale.
+     */
     cancel() {
       if (snapshot.status !== "loading") return;
       const run = current;
       if (run) drop(run, "cancel");
       const result = publish(apply({ type: "cancel" }));
-      if (result.accepted) onSettled?.();
+      if (result.accepted) onSettled?.(result.snapshot);
     },
     dispose() {
       if (snapshot.status === "disposed") return;

@@ -285,3 +285,85 @@ test("a typed verification failure keeps the last figures and does not throw on 
   await owner.refresh();
   assert.equal(calls.length, 2);
 });
+
+function refreshHarness() {
+  const time = clock();
+  const calls = [];
+  const settled = [];
+  const published = [];
+  const errors = [];
+  const owner = createRefreshController({
+    load: (signal) =>
+      new Promise((resolve, reject) => calls.push({ signal, resolve, reject })),
+    onData: (value) => published.push(value),
+    onError: (value) => errors.push(value),
+    onSettled: (snapshot) => settled.push(snapshot),
+    setTimer: (fn, delay) => time.setTimer(fn, delay),
+    clearTimer: (id) => time.clearTimer(id),
+    strict: true,
+  });
+  return { owner, calls, settled, published, errors, time };
+}
+
+test("cancel settles once with a cancelled result and ignores a late resolve", async () => {
+  const h = refreshHarness();
+  const pending = h.owner.refresh();
+  await tick();
+  h.owner.cancel();
+  assert.equal(h.settled.length, 1);
+  assert.equal(h.settled[0].status, "cancelled");
+  assert.equal(h.owner.snapshot.status, "cancelled");
+  h.calls[0].resolve({ id: "late" });
+  await pending;
+  assert.equal(h.settled.length, 1);
+  assert.equal(h.owner.snapshot.status, "cancelled");
+  assert.deepEqual(h.published, []);
+  assert.deepEqual(h.errors, []);
+  h.owner.dispose();
+});
+
+test("cancel ignores a late rejection and never reports it", async () => {
+  const h = refreshHarness();
+  const pending = h.owner.refresh();
+  await tick();
+  h.owner.cancel();
+  h.calls[0].reject(new Error("late failure"));
+  await pending;
+  assert.equal(h.settled.length, 1);
+  assert.equal(h.settled[0].status, "cancelled");
+  assert.equal(h.owner.snapshot.status, "cancelled");
+  assert.equal(h.owner.snapshot.error, "");
+  assert.deepEqual(h.errors, []);
+  h.owner.dispose();
+});
+
+test("cancelling twice settles the run only once", async () => {
+  const h = refreshHarness();
+  const pending = h.owner.refresh();
+  await tick();
+  h.owner.cancel();
+  h.owner.cancel();
+  assert.equal(h.settled.length, 1);
+  assert.equal(h.settled[0].status, "cancelled");
+  await pending;
+  assert.equal(h.settled.length, 1);
+  h.owner.dispose();
+});
+
+test("cancel after the run settled keeps the newer state and does not settle again", async () => {
+  const h = refreshHarness();
+  const pending = h.owner.refresh();
+  await tick();
+  h.calls[0].resolve({ id: "fresh" });
+  await pending;
+  assert.equal(h.settled.length, 1);
+  assert.equal(h.settled[0].status, "success");
+  const settled = h.owner.snapshot;
+  assert.deepEqual(h.published, [{ id: "fresh" }]);
+  h.owner.cancel();
+  h.owner.cancel();
+  assert.equal(h.settled.length, 1);
+  assert.equal(h.owner.snapshot, settled);
+  assert.deepEqual(h.published, [{ id: "fresh" }]);
+  h.owner.dispose();
+});
