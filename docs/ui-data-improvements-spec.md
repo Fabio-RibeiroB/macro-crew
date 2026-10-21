@@ -1,13 +1,23 @@
 # FinStats UK: UI, data and content specification
 
-Status: **Draft for owner review — not approved for implementation.**
+Status: **Approved implementation scope, subject to the explicit gates below.**
 
-Date: 21 October 2026. Revision 2 incorporates the proposed owner amendments.
-Earlier interview decisions are retained except where explicitly revised below.
-Homepage substitutions, Jobs & Pay navigation and the gilt alternative remain
-recommendations for owner review, not decisions already approved.
-Approval of this specification authorises preparing modular GitHub issues; merges,
-production activation and deployment remain separate actions.
+Date: 21 October 2026. Revision 3 reconciles the document with the approved scope
+recorded in PR #22 and the owner's instruction in the development oversight thread
+to adopt this workflow and merge the corrected specification.
+The homepage substitutions and Jobs & Pay grouping are approved. The gilt maturity
+and source choice remains unresolved: #38 must record the specific owner decision
+before #37 implements a yield adapter or UI. Source qualification and material-
+movement policies retain their review gates.
+
+This is the canonical product specification, committed to `main` through PR #22.
+It records agreed outcomes and constraints; it is not an outstanding approval gate
+or a work order to implement the entire project in one run. GitHub issues #23–#42
+are the implementation queue, with one focused PR per issue. Their live state and
+dependencies determine what can start; this document is not a second task tracker.
+Approval authorises scoped implementation. Merging implementation PRs, production
+deployment and paid AI activation still require instructions covering those actions.
+The current instruction covers merging this documentation PR only.
 
 ## 1. Intended outcome
 
@@ -40,11 +50,11 @@ Content order: compact header/navigation, headline figures, upcoming dates, foot
 Remove the hero introduction, Quick read box and topic-exploration blocks.
 No AI commentary or promotional copy is needed on the homepage.
 
-### Everyday relevance review and recommended selection
+### Everyday relevance and approved selection
 
-Recommend replacing Public Debt and 10-year Gilt Yield on the homepage with
+Replace Public Debt and 10-year Gilt Yield on the homepage with
 Household Energy and a combined Petrol & Diesel card, retaining nine cards.
-This is an editorial recommendation based on direct household relevance, not
+This is an editorial choice based on direct household relevance, not
 survey evidence about the audience's preferences.
 
 Inflation describes purchasing power; Bank Rate affects borrowing and saving;
@@ -60,7 +70,7 @@ averages do not describe every local market, and Ofgem's illustrative bill is
 neither an actual average bill nor a UK-wide maximum. Label these limitations.
 The shared Prices page provides detail without adding more top-level pages.
 
-Proposed headline order, preserving Inflation then Bank Rate:
+Approved headline order, preserving Inflation then Bank Rate:
 
 1. Inflation
 2. Bank Rate
@@ -100,16 +110,16 @@ touch and pointer, not hover alone; dismissal returns focus appropriately.
 
 ## 4. Navigation and page structure
 
-Recommended menu: **Overview, Prices, Housing, Jobs & Pay, Economy, Government,
+Approved menu: **Overview, Prices, Housing, Jobs & Pay, Economy, Government,
 Calendar**. Combining labour indicators reduces top-level navigation while keeping
-distinct Wages and Unemployment sections directly accessible. This is a proposed
-revision to the earlier separate-page decision. Use intuitive everyday language;
+distinct Wages and Unemployment sections directly accessible. This supersedes
+the earlier separate-page decision. Use intuitive everyday language;
 ampersands are acceptable when they improve readability, not prohibited by rule.
 About and Sources belong in the footer.
 Collapse navigation when it cannot fit; do not compress seven links into unreadable
 text. Retain accessible menu state, dismissal, focus and current-page indication.
 
-Proposed routes and homepage destinations:
+Routes and homepage destinations:
 
 - Overview: `/`.
 - Prices: `/prices`; Inflation targets `#inflation`, Household Energy targets
@@ -135,7 +145,7 @@ targets must not be hidden under a sticky header.
 ## 5. Statistical definitions and display
 
 Nine cards require more than nine underlying series. Government statistics remain
-in scope despite their removal from the proposed homepage. Every headline,
+in scope despite their removal from the homepage. Every headline,
 secondary and supporting series needs the same provenance and validation.
 
 ### Inflation and Bank Rate
@@ -442,9 +452,11 @@ No visitor-triggered collection, AI calls or backend API is introduced.
 
 ## 11. Demonstrable delivery milestones and modular PRs
 
-These are proposed issue boundaries, not GitHub issues already created. Each
-future issue carries context, exact scope, dependencies, interfaces, acceptance
-criteria, validation and exclusions so a smaller model can work independently.
+GitHub issues [#23–#42](https://github.com/Fabio-RibeiroB/macro-crew/issues)
+track these slices. Each issue carries context, exact scope, dependencies,
+interfaces, acceptance criteria, validation and exclusions so a fresh agent session
+can work independently. Check the live issue state before starting or recreating
+work; some slices have already landed.
 One PR per issue, below **5,000 changed lines** including tests, fixtures and docs;
 aim for 200–1,200. Split any issue approaching the limit. Never omit tests/evidence
 to fit the cap, and do not reformat unrelated files.
@@ -490,7 +502,7 @@ polish can follow, but newly exposed data must already be readable and usable.
 **Demonstration:** land directly on current Inflation (explicitly CPIH until M2),
 Bank Rate and GDP, follow cards to useful sections, and read About/Sources.
 
-Proposed issues/PRs:
+Implementation slices:
 
 1. Shared branding and concise shell: finstats UK/flag, responsive navigation,
    footer, About and purpose copy; expose only functioning routes.
@@ -509,7 +521,7 @@ Complete the shared milestone gate before expanding coverage.
 **Demonstration:** CPI headlines Prices; Jobs & Pay contains distinct working
 Wages and Unemployment sections reached directly from their homepage cards.
 
-Proposed issues/PRs:
+Implementation slices:
 
 1. Qualify CPI/labour contracts and extend writer/reader compatibility for units,
    reference windows, geography and optional staged metric additions. Define the
@@ -528,7 +540,7 @@ Test compatible reader-first rollout and rollback at the shared milestone gate.
 
 **Demonstration:** Rent and House Prices cards open their sections on Housing.
 
-Proposed issues/PRs:
+Implementation slices:
 
 1. Qualify/add private rent growth and monthly pounds end to end; Housing route,
    chart, source definition, national geography and degraded states.
@@ -544,7 +556,7 @@ shared integration/release gate before adding more feeds.
 **Demonstration:** nine household-focused cards; Prices explains the energy cap
 and shows separately labelled petrol/diesel history.
 
-Proposed issues/PRs:
+Implementation slices:
 
 1. Qualify DESNZ weekly downloads/reuse and add both fuel series, pence/litre,
    dated comparisons, combined homepage card and Prices section.
@@ -562,7 +574,7 @@ Test mixed frequencies and effective-date rollover at the shared milestone gate.
 **Demonstration:** next five known events below the homepage cards; Calendar
 shows official upcoming releases and major meetings without duplicate entries.
 
-Proposed issues/PRs:
+Implementation slices:
 
 1. Qualify official schedules and build private event collection/publication:
    source precision, stable IDs, shared releases, cancellations and retention.
@@ -578,7 +590,7 @@ release types as M6 feeds land. Complete the shared milestone gate.
 **Demonstration:** Government has debt/GDP and correctly labelled comparable yield
 history, with official source links, while homepage remains household-focused.
 
-Proposed issues/PRs:
+Implementation slices:
 
 1. Resolve gilt source decision: record actual 2/10/30 availability findings and
    capture reviewed contracts/fixtures for the owner-approved alternative. This
@@ -599,7 +611,7 @@ reported as incomplete scope rather than accepted as a placeholder.
 **Demonstration:** release explanations appear beneath relevant charts and major
 announcement summaries appear within Economy/Government, independently of figures.
 
-Proposed issues/PRs:
+Implementation slices:
 
 1. Evidence pipeline: bounded official publication discovery, verified observation
    bundles, recent-trend/revision comparisons, semantic hashes and versioned
@@ -664,21 +676,23 @@ additional homepage indicators and a wholesale visual redesign.
 
 ## 14. Owner decisions in this revision
 
-The following recommendations are explicit amendments, not silent overrides:
+Approved amendments:
 
 1. Substitute Household Energy and Petrol & Diesel for Public Debt and 10-year
    Gilt Yield on the nine-card homepage; retain full supporting Government data.
 2. Combine Wages and Unemployment under Jobs & Pay with distinct direct anchors.
-3. Use 5/10/20-year nominal par yields as the documented official alternative
-   because the desired 2/10/30 par family has not been qualified. This requires
-   explicit owner approval of the substitution before yield implementation.
+
+Unresolved decision, not covered by general scope approval: 5/10/20-year nominal
+par yields remain a recommended alternative because the desired 2/10/30 par family
+has not been qualified. Record evidence and specific owner approval in #38 before
+starting yield implementation in #37. Public debt work in #36 is independent.
 
 Release-driven explanations and milestone gates are incorporated as requested.
 Exact fuel/yield material-movement policies and any source-definition changes
 remain specific review gates during qualification, not guesses delegated to an
 implementation model. Other milestones can progress without bypassing those gates.
 
-## 15. Official references checked for this draft
+## 15. Official references recorded during specification
 
 - [CPI D7G7](https://www.ons.gov.uk/economy/inflationandpriceindices/timeseries/d7g7).
 - [Average weekly earnings](https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/employmentandemployeetypes/bulletins/averageweeklyearningsingreatbritain/october2026).

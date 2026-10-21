@@ -109,6 +109,22 @@ full legacy compatibility tests are currently a separate offline check.
 * `research_report.json`, `history_report.json` and public copies: retained legacy
   artifacts for compatibility. They are not authoritative current indicators.
 
+Development follows an agreed spec → implementation issues → focused PRs →
+validation workflow. The [FinStats UK specification](docs/ui-data-improvements-spec.md)
+is the canonical agreed scope; GitHub issues #23–#42 hold live progress and
+blocking dependencies. Read both before starting a slice. Update the specification
+when the owner changes scope, and link the affected issues; do not maintain a
+second task checklist or leave an approved spec in a long-lived approval PR.
+Existing `.kiro/specs/` documents concern earlier work and are not competing copies
+of this specification.
+
+Use `docs/adr/NNNN-short-name.md` when a settled decision is hard to reverse,
+surprising without context and involves a real trade-off. Record context, decision
+and consequences; number records sequentially and supersede decisions with a new
+record. Routine copy and branding choices stay in the spec. An unresolved choice
+stays an explicit issue dependency until decided; do not write it as an accepted
+ADR. Commit documentation through reviewed PRs under the same merge rules as code.
+
 Use short-lived branches and focused PRs against `main`. Do not force-push shared
 history or remove branches with unique work. [The cleanup report](docs/repository-cleanup.md)
 lists deletion candidates and remaining owner decisions. Nothing merges or deploys
