@@ -221,8 +221,8 @@ test("every page renders its own heading, navigation and missing-data content", 
     assert.match(overview, /class="fs-number">3\.5%/);
     assert.match(overview, /class="fs-number">4\.5%/);
     assert.match(overview, /Latest evidenced change: \+1\.1 percentage points at the 20 October 2026 observation/);
-    assert.match(overview, /About Inflation/);
-    assert.match(overview, /See Inflation details/);
+    assert.match(overview, /About Inflation \(CPIH\)/);
+    assert.match(overview, /See Inflation \(CPIH\) details/);
     assert.match(overview, /href="\/economy#interest-rates"/);
     assert.match(overview, /href="\/economy#gdp"/);
     assert.match(overview, /href="\/prices#figures"/);
@@ -232,6 +232,144 @@ test("every page renders its own heading, navigation and missing-data content", 
     assert.match(missing, /Page not found/);
     assert.match(missing, /Go to the overview/);
     assert.doesNotMatch(missing, /aria-current="page"/);
+  } finally {
+    await server.close();
+  }
+});
+
+test("CPI headlines inflation while CPIH stays labelled supporting data", async () => {
+  const { createServer } = await import("vite");
+  const { createElement } = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const server = await createServer({
+    server: { middlewareMode: true },
+    appType: "custom",
+  });
+  try {
+    const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
+    const inflationMetric = (series, latestPeriod, latestValue, previousValue) => {
+      const metric = {
+        definition: {
+          metric_id: "uk.cpi.annual_rate",
+          dataset: "MM23",
+          series,
+          frequency: "monthly",
+          comparison: "year_on_year",
+          adjustment: "not_seasonally_adjusted",
+          unit: "percent",
+          version: 1,
+          geography: "United Kingdom",
+          source_url: `https://www.ons.gov.uk/economy/inflationandpriceindices/timeseries/${series.toLowerCase()}/mm23`,
+        },
+        history: [
+          { period: "2026-08", value: previousValue, status: "observed" },
+          { period: latestPeriod, value: latestValue, status: "observed" },
+        ],
+        latest: null,
+        collection_status: "ok",
+        validation_status: "verified",
+        snapshot_evidence_kind: "official_download",
+        last_successful_check_at: "2026-10-21T12:00:00Z",
+      };
+      metric.latest = metric.history.at(-1);
+      return metric;
+    };
+    const withBoth = {
+      published_at: "2026-10-21T12:00:00Z",
+      metrics: {
+        cpi: inflationMetric("D7G7", "2026-09", "3.5", "3.1"),
+        cpih: inflationMetric("L55O", "2026-08", "3.3", "3.5"),
+      },
+    };
+    const prices = renderToStaticMarkup(
+      createElement(App, { pathname: "/prices", initialData: withBoth }),
+    );
+    assert.match(prices, /<h3>CPI inflation<\/h3>/);
+    assert.match(prices, /<h3>Inflation \(CPIH\)<\/h3>/);
+    assert.match(prices, /CPI · change over 12 months/);
+    assert.match(prices, /CPIH · change over 12 months/);
+    assert.match(prices, /\+0\.4 percentage points/);
+    assert.match(prices, /compared with August 2026/);
+    assert.match(prices, /MM23 \/ D7G7/);
+    assert.match(prices, /MM23 \/ L55O/);
+    assert.match(prices, /<h3>CPI and CPIH<\/h3>/);
+    assert.match(prices, /Annual CPI inflation was 3\.5% in September 2026/);
+    assert.doesNotMatch(prices, /Annual CPIH inflation/);
+    const overviewData = {
+      published_at: "2026-10-21T12:00:00Z",
+      metrics: {
+        ...withBoth.metrics,
+        bank_rate: {
+          definition: {
+            dataset: "IADB",
+            series: "IUDBEDR",
+            frequency: "daily",
+            source_url: "https://www.bankofengland.co.uk/",
+          },
+          history: [{ period: "2026-10-20", value: "3.75", status: "observed" }],
+          latest: null,
+          collection_status: "ok",
+          validation_status: "verified",
+          last_successful_check_at: "2026-10-21T12:00:00Z",
+        },
+        gdp: {
+          definition: {
+            dataset: "MGDP",
+            series: "ECYX",
+            frequency: "monthly",
+            source_url: "https://www.ons.gov.uk/",
+          },
+          history: [{ period: "2026-08", value: "0.1", status: "observed" }],
+          latest: null,
+          collection_status: "ok",
+          validation_status: "verified",
+          last_successful_check_at: "2026-10-21T12:00:00Z",
+        },
+      },
+    };
+    for (const key of ["bank_rate", "gdp"])
+      overviewData.metrics[key].latest = overviewData.metrics[key].history.at(-1);
+    const overview = renderToStaticMarkup(
+      createElement(App, { pathname: "/", initialData: overviewData }),
+    );
+    assert.match(overview, /<h2>CPI inflation<\/h2>/);
+    assert.match(overview, /About CPI inflation/);
+    assert.match(overview, /See CPI inflation details/);
+    assert.doesNotMatch(overview, /Inflation \(CPIH\)/);
+    const cpihOnly = {
+      published_at: "2026-10-21T12:00:00Z",
+      metrics: {
+        cpi: {
+          definition: inflationMetric("D7G7", "2026-09", "3.5", "3.1").definition,
+          history: [],
+          latest: null,
+          collection_status: "unavailable",
+          validation_status: "unavailable",
+        },
+        cpih: inflationMetric("L55O", "2026-08", "3.3", "3.5"),
+      },
+    };
+    const fallback = renderToStaticMarkup(
+      createElement(App, { pathname: "/prices", initialData: cpihOnly }),
+    );
+    assert.doesNotMatch(fallback, /<h3>CPI inflation<\/h3>/);
+    assert.match(fallback, /<h3>Inflation \(CPIH\)<\/h3>/);
+    assert.match(fallback, /Annual CPIH inflation was 3\.3% in August 2026/);
+    const degraded = {
+      published_at: "2026-10-21T12:00:00Z",
+      metrics: {
+        cpi: {
+          ...inflationMetric("D7G7", "2026-09", "3.5", "3.1"),
+          collection_status: "degraded",
+        },
+        cpih: inflationMetric("L55O", "2026-08", "3.3", "3.5"),
+      },
+    };
+    const degradedPrices = renderToStaticMarkup(
+      createElement(App, { pathname: "/prices", initialData: degraded }),
+    );
+    assert.match(degradedPrices, /<h3>CPI inflation<\/h3>/);
+    assert.match(degradedPrices, /Update delayed · showing last verified figure/);
   } finally {
     await server.close();
   }

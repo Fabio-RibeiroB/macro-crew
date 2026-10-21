@@ -9,6 +9,7 @@ from finstats.storage import Store
 from tests.test_finstats_sources import fixture
 
 WHEN = datetime(2026, 10, 20, 12, tzinfo=timezone.utc)
+CPI_WHEN = datetime(2026, 10, 21, 12, tzinfo=timezone.utc)
 
 
 @pytest.fixture
@@ -109,6 +110,65 @@ def test_backup_restores_snapshots_and_query_results(store, tmp_path):
         assert restored.latest('gdp')['payload'] == store.latest('gdp')['payload']
     finally:
         restored.close()
+
+
+def test_cpi_json_replay_stores_snapshots_and_evidence(store):
+    first = store.ingest('cpi', fixture('cpi'), CPI_WHEN)
+    assert store.ingest('cpi', fixture('cpi'), CPI_WHEN + timedelta(hours=1)) == first
+    assert store.db.execute('SELECT count(*) FROM snapshot').fetchone()[0] == 1
+    assert store.db.execute('SELECT count(*) FROM attempt').fetchone()[0] == 2
+    observations = store.db.execute(
+        'SELECT period,value FROM observation WHERE snapshot_id=?', (first,)).fetchall()
+    assert ('2026-09', '3.5') in {(o['period'], o['value']) for o in observations}
+    assert len(observations) == 17
+    digest = hashlib.sha256(fixture('cpi')).hexdigest()
+    assert (store.directory / 'raw' / (digest + '.bin')).read_bytes() == fixture('cpi')
+
+
+def test_cpi_revision_is_recorded_and_the_latest_wins(store):
+    first = store.ingest('cpi', fixture('cpi'), CPI_WHEN)
+    revised = fixture('cpi').replace(b'"value": "3.5"', b'"value": "3.6"')
+    second = store.ingest('cpi', revised, CPI_WHEN + timedelta(hours=1))
+    assert second != first
+    assert store.revisions(first, second) == {'2026-09': '0.1'}
+    assert store.latest('cpi')['id'] == second
+    assert store.latest('cpi', known_at=CPI_WHEN)['id'] == first
+
+
+def test_cpi_replayed_original_returns_to_the_original_snapshot(store):
+    first = store.ingest('cpi', fixture('cpi'), CPI_WHEN)
+    revised = fixture('cpi').replace(b'"value": "3.5"', b'"value": "3.6"')
+    store.ingest('cpi', revised, CPI_WHEN + timedelta(minutes=1))
+    replayed = store.ingest('cpi', fixture('cpi'), CPI_WHEN + timedelta(minutes=2))
+    assert replayed == first
+    assert store.latest('cpi')['id'] == first
+
+
+def test_cpi_history_loss_is_rejected_and_last_verified_survives(store):
+    first = store.ingest('cpi', fixture('cpi'), CPI_WHEN)
+    payload = json.loads(fixture('cpi').decode())
+    payload['months'] = [m for m in payload['months'] if m['date'] != '2025 JAN']
+    with pytest.raises(ValidationError, match='history lost'):
+        store.ingest('cpi', json.dumps(payload).encode(), CPI_WHEN + timedelta(hours=1))
+    assert store.latest('cpi')['id'] == first
+    assert store.db.execute("SELECT count(*) FROM attempt WHERE status='rejected'").fetchone()[0] == 1
+
+
+def test_cpi_unknown_value_token_quarantines_the_candidate(store):
+    first = store.ingest('cpi', fixture('cpi'), CPI_WHEN)
+    payload = json.loads(fixture('cpi').decode())
+    for month in payload['months']:
+        if month['date'] == '2026 SEP':
+            month['value'] = '..'
+    with pytest.raises(ValidationError):
+        store.ingest('cpi', json.dumps(payload).encode(), CPI_WHEN + timedelta(hours=1))
+    assert store.latest('cpi')['id'] == first
+
+
+def test_cpi_json_never_accepts_the_csv_generator_route(store):
+    # The CPIH CSV body must not silently become CPI evidence.
+    with pytest.raises(ValidationError):
+        store.ingest('cpi', fixture('cpih'), CPI_WHEN)
 
 
 def test_rejects_naive_collection_time(store):

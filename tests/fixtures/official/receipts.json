@@ -27,7 +27,7 @@
       "sha256": "f05709a7d468e40599e8f9fe385ce8c42667b8bd49264e65b4ec0c6c5e787604",
       "bytes": 122605
     },
-    "trim_note": "Exact recorded values: months from 2025 JAN (latest 2026 SEP), last 12 quarterly points, last 8 previous versions; years, description and structure kept in full. Full response hash recorded above; the hash field covers the retained excerpt."
+    "trim_note": "Exact recorded values: a 17-month representative subset of the contiguous live months[] (2025 JAN-NOV omitting FEB/APR/AUG/DEC, then 2026 JAN-SEP), last 12 quarterly points, last 8 previous versions; years, description and structure kept in full. The live months[] is contiguous; omitted periods are excerpt-selection artefacts retained to exercise gap handling. Full response hash recorded above; the hash field covers the retained excerpt."
   },
   "regular_pay_nominal_kai9_lms.json": {
     "url": "https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/earningsandworkinghours/timeseries/kai9/lms/data",

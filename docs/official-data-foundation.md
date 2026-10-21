@@ -4,7 +4,7 @@ This work preserves FinStats's purpose: the UK economy, explained. Reliable figu
 
 ## Source contracts
 
-`src/finstats/sources.py` has no third-party dependencies or AI imports. It defines Bank Rate (IUDBEDR daily level), annual CPIH (MM23/L55O, monthly periods), and seasonally adjusted monthly real GDP growth (MGDP/ECYX). Published rates are parsed directly as decimal strings, not recalculated from indices. Reference periods, release dates and next-release expectations are distinct. Bank Rate's feed does not establish an announcement timestamp.
+`src/finstats/sources.py` has no third-party dependencies or AI imports. It defines Bank Rate (IUDBEDR daily level), annual CPIH (MM23/L55O, monthly periods), seasonally adjusted monthly real GDP growth (MGDP/ECYX) and annual CPI (MM23/D7G7, monthly periods). CPI uses the qualified ONS JSON `/data` endpoint, not the CSV generator route; its `releaseDate` converts to the Europe/London calendar date and absent months stay gaps. Published rates are parsed directly as decimal strings, not recalculated from indices. Reference periods, release dates and next-release expectations are distinct. Bank Rate's feed does not establish an announcement timestamp.
 
 Recordings in `tests/fixtures/official` retain exact response bytes, URLs, receipt times and hashes. ECYX was compared with the [August 2026 GDP bulletin](https://www.ons.gov.uk/economy/grossdomesticproductgdp/bulletins/gdpmonthlyestimateuk/august2026), released 15 October 2026: June and July monthly growth 0.4%, August 0.1%. Its official GVA title and blank unit field are explicit reviewed exceptions, not general permission to infer units.
 

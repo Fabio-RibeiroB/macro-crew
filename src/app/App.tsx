@@ -10,6 +10,7 @@ import {
   ShoppingBasket,
   Sprout,
   Sun,
+  TrendingUp,
 } from "lucide-react";
 const HistoricalTrendCard = lazy(() =>
   import("./components/HistoricalTrendCard").then((module) => ({
@@ -48,8 +49,19 @@ import {
 import "../styles/friendly.css";
 
 const topics = {
+  cpi: {
+    short: "CPI inflation",
+    Icon: TrendingUp,
+    measurement: "CPI · change over 12 months",
+    color: "#a03b28",
+    detailHref: "/prices#figures",
+    meaning:
+      "CPI measures price changes across everyday goods and services. The Bank of England's 2% target applies to this measure.",
+    caution:
+      "Lower inflation means prices are rising more slowly. It does not usually mean prices are falling.",
+  },
   cpih: {
-    short: "Inflation",
+    short: "Inflation (CPIH)",
     Icon: ShoppingBasket,
     measurement: "CPIH · change over 12 months",
     color: "#b56b43",
@@ -82,7 +94,21 @@ const topics = {
       "One month can be volatile. Early estimates can change as the ONS receives more information.",
   },
 };
-const keys = ["cpih", "bank_rate", "gdp"] as const;
+// CPI headlines the inflation card once a verified reading exists; CPIH stays
+// the labelled fallback and the supporting measure on the Prices page.
+function inflationKind(data: any) {
+  return data?.metrics?.cpi?.latest?.value != null ? "cpi" : "cpih";
+}
+function priceKinds(data: any) {
+  return data?.metrics?.cpi?.latest?.value != null
+    ? (["cpi", "cpih"] as const)
+    : (["cpih"] as const);
+}
+function priceTrendKinds(data: any) {
+  return ["cpi", "cpih"].filter(
+    (kind) => (data?.metrics?.[kind]?.history?.length ?? 0) > 0,
+  );
+}
 function checkedAt(value: string | null) {
   return value
     ? new Date(value).toLocaleString("en-GB", {
@@ -373,7 +399,10 @@ function Trends({ data, kinds }: any) {
 }
 
 function PriceGuide({ data }: any) {
-  const inflation = data?.metrics.cpih.latest;
+  const cpi = data?.metrics?.cpi?.latest;
+  const cpih = data?.metrics?.cpih?.latest;
+  const headline = cpi ?? cpih;
+  const headlineLabel = cpi ? "CPI" : "CPIH";
   return (
     <section className="fs-everyday">
       <div className="fs-container fs-reading-grid">
@@ -381,8 +410,8 @@ function PriceGuide({ data }: any) {
           <p className="fs-eyebrow">What it means for you</p>
           <h2>What inflation means for your shopping bill</h2>
           <p>
-            {inflation
-              ? `Annual CPIH inflation was ${percent(inflation.value)} in ${formatPeriod(inflation.period)}. ${Number(inflation.value) > 0 ? "Average prices were higher than a year earlier." : Number(inflation.value) < 0 ? "Average prices were lower than a year earlier." : "Average prices were unchanged from a year earlier."}`
+            {headline
+              ? `Annual ${headlineLabel} inflation was ${percent(headline.value)} in ${formatPeriod(headline.period)}. ${Number(headline.value) > 0 ? "Average prices were higher than a year earlier." : Number(headline.value) < 0 ? "Average prices were lower than a year earlier." : "Average prices were unchanged from a year earlier."}`
               : "Inflation measures how average prices change over time."}{" "}
             Your own experience depends on what you buy.
           </p>
@@ -400,15 +429,16 @@ function PriceGuide({ data }: any) {
           </OfficialLink>
         </article>
         <aside className="fs-context-card">
-          <h3>What does CPIH mean?</h3>
+          <h3>CPI and CPIH</h3>
           <p>
-            The Consumer Prices Index including owner occupiers’ housing costs
-            tracks a broad basket of goods, services and housing costs. It is an
-            average, not every household’s inflation rate.
+            The Consumer Prices Index (CPI) covers everyday goods and services,
+            and the Bank of England’s 2% target applies to it. The CPI figure
+            above shows its annual change when a verified reading is available.
           </p>
           <p>
-            The Bank of England’s 2% target applies to a different measure, CPI.
-            Don’t compare this CPIH reading directly with that target.
+            CPIH also includes owner occupiers’ housing costs, so its readings
+            differ from CPI and should not be compared directly with the 2%
+            target.
           </p>
           <p className="fs-caption">
             Food, fuel and energy breakdowns are not yet part of our verified
@@ -669,11 +699,11 @@ function About() {
       <article>
         <h2>What is published now</h2>
         <p>
-          The verified figures are UK-wide: CPIH from the Office for National
-          Statistics, Bank Rate from the Bank of England, and monthly real GDP
-          from the Office for National Statistics. Each figure shows its
-          reference period, unit and source. A time when finstats UK checked a
-          feed is not a new official release.
+          The verified figures are UK-wide: CPI and CPIH from the Office for
+          National Statistics, Bank Rate from the Bank of England, and monthly
+          real GDP from the Office for National Statistics. Each figure shows
+          its reference period, unit and source. A time when finstats UK
+          checked a feed is not a new official release.
         </p>
         <p>
           Wages, unemployment, housing, energy and other measures stay off the
@@ -972,7 +1002,12 @@ export default function App({
       <main id="main-content" tabIndex={-1}>
         {page.id === "overview" && (
           <>
-            <Statistics {...stats} kinds={keys} compact overview />
+            <Statistics
+              {...stats}
+              kinds={[inflationKind(data), "bank_rate", "gdp"]}
+              compact
+              overview
+            />
           </>
         )}
         {page.id === "prices" && (
@@ -980,9 +1015,9 @@ export default function App({
             <PageHeading eyebrow="Prices & everyday costs" title={page.title}>
               The pace of price rises matters. So does what your income can buy.
             </PageHeading>
-            <Statistics {...stats} kinds={["cpih"]} />
+            <Statistics {...stats} kinds={priceKinds(data)} />
             <PriceGuide data={data} />
-            <Trends data={data} kinds={["cpih"]} />
+            <Trends data={data} kinds={priceTrendKinds(data)} />
           </>
         )}
         {page.id === "economy" && (
