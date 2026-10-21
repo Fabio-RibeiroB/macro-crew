@@ -1,5 +1,4 @@
 import os
-import re
 from crewai import Agent, Crew, LLM, Process, Task
 from crewai.project import CrewBase, agent, crew, task, after_kickoff
 from crewai.agents.agent_builder.base_agent import BaseAgent
@@ -16,56 +15,20 @@ from uk_macro_crew.utils import get_exa_api_key, save_json_hook
 
 os.environ["EXA_API_KEY"] = get_exa_api_key()
 
-# OpenAI retires gpt-4o, gpt-4o-mini, gpt-4.1 and gpt-4.1-mini on 2027-01-14.
-# The migration guide recommends gpt-6-luna for those workloads. It is also the
-# cost-appropriate choice here: cheaper per token than gpt-4o-mini, and aimed
-# at repeated structured work such as this collection pipeline.
-# https://help.openai.com/en/articles/20001600
-DEFAULT_MODEL = "gpt-6-luna"
-# Chat Completions function calling on gpt-6-luna only works at effort "none",
-# which is also the migration guide's starting point for GPT-4.x apps.
-DEFAULT_REASONING_EFFORT = "none"
-
-_O_SERIES_MODEL = re.compile(r"^o\d")
-_GPT_GENERATION = re.compile(r"^gpt-(\d+)")
-
-
-def _bare_model_name(model: str) -> str:
-    """Return the model id without a provider prefix."""
-    name = model.rsplit("/", 1)[-1].strip().lower()
-    if name.startswith("ft:"):
-        parts = name.split(":")
-        # ft:<org>:<base>:<id>
-        if len(parts) >= 3 and parts[2]:
-            name = parts[2]
-    return name
-
-
-def _model_supports_reasoning_effort(model: str) -> bool:
-    """True for o-series and GPT generation 5+, which accept reasoning_effort."""
-    name = _bare_model_name(model)
-    if _O_SERIES_MODEL.match(name):
-        return True
-    generation = _GPT_GENERATION.match(name)
-    return generation is not None and int(generation.group(1)) >= 5
+from uk_macro_crew.llm_config import (
+    DEFAULT_MODEL, ReasoningEffortError, resolve_reasoning_effort,
+)
 
 
 def build_agent_llm() -> LLM:
     """Build the shared agent LLM.
 
     ``MODEL`` overrides the default. ``OPENAI_REASONING_EFFORT`` overrides the
-    effort sent to models that accept it; an empty value omits the parameter.
+    per-model effort; an empty value omits the parameter. An explicit value
+    the model does not accept raises ``ReasoningEffortError``.
     """
     model = (os.getenv("MODEL") or DEFAULT_MODEL).strip() or DEFAULT_MODEL
-    configured_effort = os.getenv("OPENAI_REASONING_EFFORT")
-    if configured_effort is None:
-        effort = (
-            DEFAULT_REASONING_EFFORT
-            if _model_supports_reasoning_effort(model)
-            else ""
-        )
-    else:
-        effort = configured_effort.strip()
+    effort = resolve_reasoning_effort(model, os.getenv("OPENAI_REASONING_EFFORT"))
 
     token_parameter = ("max_completion_tokens" if _model_supports_reasoning_effort(model)
                        else "max_tokens")
