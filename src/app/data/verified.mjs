@@ -215,6 +215,32 @@ export function previousReading(metric) {
   }
   return previous;
 }
+/** Return the latest change directly established by adjacent Bank Rate points. */
+export function lastRateChange(metric) {
+  if (!metric?.history || metric.history.length < 2) return null;
+  for (let i = metric.history.length - 1; i > 0; i--) {
+    const current = metric.history[i];
+    const previous = metric.history[i - 1];
+    // An explicit missing observation breaks the evidence chain. Do not bridge it.
+    if (current.value === null || previous.value === null) return null;
+    const difference = Number(current.value) - Number(previous.value);
+    if (difference !== 0) {
+      // A change spanning an unobserved weekday has no evidenced date.
+      const date = new Date(`${previous.period}T00:00:00Z`);
+      date.setUTCDate(date.getUTCDate() + 1);
+      const end = new Date(`${current.period}T00:00:00Z`);
+      while (date < end) {
+        const weekday = date.getUTCDay();
+        if (weekday !== 0 && weekday !== 6) return null;
+        date.setUTCDate(date.getUTCDate() + 1);
+      }
+      return { period: current.period, difference };
+    }
+    // Equal observed values across an unobserved weekday are not themselves
+    // treated as a change or date; keep looking for a directly evidenced one.
+  }
+  return null;
+}
 export function chartPoints(metric) {
   const points = [];
   for (const point of metric.history) {

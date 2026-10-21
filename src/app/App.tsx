@@ -21,6 +21,7 @@ import {
   formatPeriod,
   freshness,
   legacyReports,
+  lastRateChange,
   reportLabel,
   loadVerified,
   percent,
@@ -123,6 +124,7 @@ function MetricCard({
   const topic = topics[kind];
   const status = freshness(metric);
   const previous = previousReading(metric);
+  const rateChange = kind === "bank_rate" ? lastRateChange(metric) : null;
   const delta = previous
     ? Number(metric.latest.value) - Number(previous.value)
     : null;
@@ -149,7 +151,14 @@ function MetricCard({
         )}
       </p>
       <div className="fs-comparison">
-        {previous && delta !== null ? (
+        {kind === "bank_rate" ? rateChange ? (
+          <>
+            Latest evidenced change: {rateChange.difference > 0 ? "+" : "−"}
+            {Math.abs(rateChange.difference).toFixed(2).replace(/\.?0+$/, "")} percentage point
+            {Math.abs(rateChange.difference) === 1 ? "" : "s"} at the{" "}
+            {formatPeriod(rateChange.period)} observation
+          </>
+        ) : "The last rate change cannot be established from the available history." : previous && delta !== null ? (
           <>
             <span>
               {Math.abs(delta) < 0.00001

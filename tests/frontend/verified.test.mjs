@@ -7,6 +7,7 @@ import {
   parseDataset,
   loadVerified,
   previousReading,
+  lastRateChange,
   chartPoints,
   freshness,
   legacyReports,
@@ -178,6 +179,75 @@ test("missing months break a chart and prevent false previous-month comparisons"
     chartPoints(metric).map((p) => p.value),
     [3.1, null, 3.3],
   );
+});
+
+test("Bank Rate reports the date of the latest evidenced transition", () => {
+  const metric = sample().data.metrics.bank_rate;
+  metric.history = [
+    { period: "2026-10-14", value: "4.00", status: "observed" },
+    { period: "2026-10-15", value: "3.75", status: "observed" },
+    { period: "2026-10-16", value: "3.75", status: "observed" },
+    { period: "2026-10-19", value: "3.75", status: "observed" },
+  ];
+  assert.deepEqual(lastRateChange(metric), {
+    period: "2026-10-15",
+    difference: -0.25,
+  });
+});
+
+test("repeated Bank Rate observations do not count as changes", () => {
+  const metric = sample().data.metrics.bank_rate;
+  metric.history = [
+    { period: "2026-10-16", value: "3.75", status: "observed" },
+    { period: "2026-10-19", value: "3.75", status: "observed" },
+  ];
+  assert.equal(lastRateChange(metric), null);
+});
+
+test("a gap before a possible Bank Rate transition prevents bridging it", () => {
+  const metric = sample().data.metrics.bank_rate;
+  metric.history = [
+    { period: "2026-10-14", value: "4.00", status: "observed" },
+    { period: "2026-10-15", value: null, status: "missing" },
+    { period: "2026-10-16", value: "3.75", status: "observed" },
+    { period: "2026-10-19", value: "3.75", status: "observed" },
+  ];
+  assert.equal(lastRateChange(metric), null);
+});
+
+test("a skipped working date does not establish when Bank Rate changed", () => {
+  const metric = sample().data.metrics.bank_rate;
+  metric.history = [
+    { period: "2026-10-16", value: "4.00", status: "observed" },
+    { period: "2026-10-20", value: "3.75", status: "observed" },
+  ];
+  assert.equal(lastRateChange(metric), null);
+});
+
+test("a routine bank-holiday gap after an evidenced change does not erase it", () => {
+  const metric = sample().data.metrics.bank_rate;
+  metric.history = [
+    { period: "2025-12-17", value: "4.00", status: "observed" },
+    { period: "2025-12-18", value: "3.75", status: "observed" },
+    { period: "2025-12-24", value: "3.75", status: "observed" },
+    { period: "2025-12-29", value: "3.75", status: "observed" },
+    { period: "2026-08-28", value: "3.75", status: "observed" },
+    { period: "2026-09-01", value: "3.75", status: "observed" },
+  ];
+  assert.deepEqual(lastRateChange(metric), {
+    period: "2025-12-18",
+    difference: -0.25,
+  });
+});
+
+test("insufficient Bank Rate history does not imply a change date", () => {
+  const metric = sample().data.metrics.bank_rate;
+  metric.history = [
+    { period: "2026-10-19", value: "3.75", status: "observed" },
+  ];
+  assert.equal(lastRateChange(metric), null);
+  metric.history = [];
+  assert.equal(lastRateChange(metric), null);
 });
 
 test("stale checks and missed releases stay visible even when numbers are valid", () => {
