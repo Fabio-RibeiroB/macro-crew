@@ -28,6 +28,32 @@ def test_replay_records_attempts_without_duplicate_vintages(store):
     assert (store.directory / 'raw' / (digest + '.bin')).read_bytes() == fixture('gdp')
 
 
+def test_existing_store_reopen_and_replay_preserves_definitions_and_semantic_hash(tmp_path):
+    directory = tmp_path / 'existing'
+    original = Store(directory)
+    snapshot_id = original.ingest('gdp', fixture('gdp'), WHEN)
+    stored_definition = original.db.execute(
+        "SELECT content FROM definition WHERE key='gdp'").fetchone()['content']
+    stored_snapshot = original.db.execute(
+        'SELECT semantic_hash,payload FROM snapshot WHERE id=?', (snapshot_id,)
+    ).fetchone()
+    original.close()
+
+    reopened = Store(directory)
+    try:
+        assert reopened.ingest('gdp', fixture('gdp'), WHEN + timedelta(hours=1)) == snapshot_id
+        assert reopened.db.execute(
+            "SELECT content FROM definition WHERE key='gdp'").fetchone()['content'] == stored_definition
+        replayed = reopened.db.execute(
+            'SELECT semantic_hash,payload FROM snapshot WHERE id=?', (snapshot_id,)
+        ).fetchone()
+        assert tuple(replayed) == tuple(stored_snapshot)
+        assert reopened.db.execute('SELECT count(*) FROM snapshot').fetchone()[0] == 1
+        assert reopened.db.execute('SELECT count(*) FROM receipt').fetchone()[0] == 2
+    finally:
+        reopened.close()
+
+
 def test_revision_and_local_knowledge_time_are_preserved(store):
     first = store.ingest('gdp', fixture('gdp'), WHEN)
     corrected = fixture('gdp').replace(b'"2026 AUG","0.1"', b'"2026 AUG","0.2"')

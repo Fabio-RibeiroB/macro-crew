@@ -95,3 +95,26 @@ missing data, unsafe links, fixture contamination and checksum errors. CI now ru
 these tests and a Vite build as well as the Python core suite. Python delivery
 tests exercise privacy, permissions under umask 0077, partial failure, activation
 failure and path/hash guards. Desktop/mobile browser checks use the T3 preview.
+
+## Additive v1 compatibility and rollback rehearsal
+
+The reviewed additive-v1 contract keeps the existing envelope, manifest,
+generation checksum and three core metric objects unchanged. Optional registered
+metrics are members of the same `metrics` object and generation. The shared
+synthetic wire fixtures under `tests/fixtures/verified/` exercise the M1 core-only
+payload and the candidate additive payload; their labels and values are test data,
+not an official export. The frontend tests run the candidate reader against both
+fixtures and verify its checksum, definitions, card/history identity, and optional
+metric validation. A test-only copy of the accepted M1 reader also validates the
+additive fixture using its frozen three-core contract; the M1 presentation consumes
+only `bank_rate`, `cpih` and `gdp`.
+
+Offline rollback rehearsal uses the same one-generation pointer flow. Before
+activation, retain the prior `current.json` and immutable generation. A failed
+generation write or manifest replacement must leave that pointer readable; after
+frontend rollback, the older reader continues using that same v1 generation and
+ignores unconsumed optional members. No second pointer, per-metric fallback or
+database downgrade is involved. Tests cover partial-source retention, fixture
+rejection, public-field projection, source and public checksums, failed manifest
+replacement, and existing-store replay. These tests prove the compatibility and
+rollback mechanics only; they do not activate new feeds or qualify their sources.
