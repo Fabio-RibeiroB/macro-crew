@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict
 import hashlib
 import json
 from pathlib import Path
@@ -12,7 +11,7 @@ import time
 from urllib.parse import urlsplit
 
 from finstats.__main__ import collect
-from finstats.sources import DEFINITIONS
+from finstats.sources import DEFINITIONS, public_definition
 from finstats.storage import atomic_write, encode
 
 PUBLIC_FIELDS = (
@@ -48,10 +47,10 @@ def deliver(state_dir, output_dir):
     verified = 0
     for key, definition in DEFINITIONS.items():
         metric = data['metrics'][key]
-        if metric['definition'] != asdict(definition):
+        if metric['definition'] != public_definition(key):
             raise ValueError('Source definition mismatch')
         member = {name: metric[name] for name in PUBLIC_FIELDS if name in metric}
-        member['definition'] = asdict(definition)
+        member['definition'] = public_definition(key)
         if metric['validation_status'] == 'unavailable':
             member.update(latest=None, history=[])
         elif metric['validation_status'] == 'verified':

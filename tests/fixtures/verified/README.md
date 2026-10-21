@@ -16,6 +16,15 @@ the unchanged three core metric members plus reviewed optional metric members.
   point and `geography` (`Great Britain` for pay, `United Kingdom` for CPI and
   unemployment); real pay declares `deflator: "CPIH"`. The unemployment history
   includes a year-boundary window (`2026-01` covering `2025-11` to `2026-01`).
+- `producer-cpi-v1.json` + `producer-cpi-v1.manifest.json`: actual candidate
+  producer output, not hand-written test data. It is produced by the real
+  collect → publish → deliver pipeline over the recorded official fixtures in
+  `tests/fixtures/official/` with a fixed clock (2026-10-21T12:00Z) and a
+  fixed generation id, so it contains all four metrics with `mode: "official"`.
+  The Python suite regenerates both files through the same pipeline and asserts
+  byte-identity; the frontend suite loads them through the real reader.
+  Values mirror the recorded official excerpts and are test artifacts, never
+  deployed live figures.
 
 Tests may mutate copies of these fixtures in memory; checked-in bytes are never
 modified by a test run. A recorded fixture can never become public official data.

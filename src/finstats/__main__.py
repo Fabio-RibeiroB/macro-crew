@@ -11,7 +11,7 @@ import sqlite3
 import sys
 
 from finstats.publication import publish
-from finstats.sources import DEFINITIONS, fetch
+from finstats.sources import DEFINITIONS, fetch, fixture_file
 from finstats.storage import Store, utc_now
 
 
@@ -39,9 +39,9 @@ def collect(directory, transport=fetch, clock=utc_now, fixtures=None):
                 when = clock()
                 try:
                     if fixtures:
-                        body = (Path(fixtures) / f'{key}.csv').read_bytes()
+                        body = (Path(fixtures) / fixture_file(key)).read_bytes()
                         kind = 'recorded_fixture'
-                        url = f'fixture:{key}.csv'
+                        url = f'fixture:{fixture_file(key)}'
                     else:
                         body = transport(key)
                         kind = 'official_download'

@@ -74,6 +74,31 @@ Recorded contract facts (exact observations from the responses):
   vintages. Per-dataset OGL reuse exceptions and full population notes remain
   open questions for the future adapters (issues #27–#29).
 
+## Recorded CPI facts the D7G7 adapter binds to (issue #27)
+
+The CPI adapter parses only the qualified JSON `/data` endpoint; the CPIH CSV
+generator route is never substituted. Parsed contract facts from this recording:
+
+- `description` binds the series: title `CPI ANNUAL RATE 00: ALL ITEMS 2015=100`,
+  `cdid` `D7G7`, `datasetId` `MM23`, unit `%` with a blank `preUnit`. `keyNote`
+  is "Change over 12 months", matching `year_on_year`.
+- Geography is the United Kingdom: the [September 2026 CPI bulletin](https://www.ons.gov.uk/economy/inflationandpriceindices/bulletins/consumerpriceinflation/september2026)
+  is "Consumer price inflation, UK", and CPI is a UK-wide measure. This is the
+  reviewed `geography` for the public definition.
+- The recorded `months[]` omits 2025 FEB, APR, AUG and DEC while the CPIH CSV
+  (L55O) records those months. The JSON endpoint represents those periods by
+  absence, so the adapter keeps only present months; the reader keeps the gaps
+  visible and never invents or zero-fills them. Absent expected months also
+  make previous-month comparisons unavailable rather than guessed.
+- Value tokens are decimal strings. No non-numeric missing token was recorded,
+  so an empty, `..` or other unknown token quarantines the candidate feed; it
+  never becomes zero or a synthetic "missing" observation.
+- `releaseDate` (`2026-10-20T23:00:00.000Z`) converts to the Europe/London
+  calendar date 2026-10-21; `nextRelease` (`18 November 2026`) parses to
+  `2026-11-18`. Unrecognised formats fail collection rather than guessing.
+- `years` and `quarters` arrays stay out of monthly history; `versions[]` and
+  per-point `updateDate` are retained privately and never order vintages.
+
 Official cross-checks retrieved 21 October 2026:
 
 - [Average weekly earnings in Great Britain: October 2026](https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/employmentandemployeetypes/bulletins/averageweeklyearningsingreatbritain/october2026):

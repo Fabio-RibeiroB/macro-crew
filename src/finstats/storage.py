@@ -11,7 +11,7 @@ from pathlib import Path
 import sqlite3
 import tempfile
 
-from finstats.sources import DEFINITIONS, ValidationError, parse
+from finstats.sources import DEFINITIONS, ValidationError, parse, public_definition
 
 
 def utc_now():
@@ -94,8 +94,8 @@ class Store:
             );
         ''')
         with self.db:
-            for key, definition in DEFINITIONS.items():
-                content = encode(asdict(definition)).decode()
+            for key in DEFINITIONS:
+                content = encode(public_definition(key)).decode()
                 existing = self.db.execute('SELECT content FROM definition WHERE key=?', (key,)).fetchone()
                 if existing and existing['content'] != content:
                     raise ValueError('Metric definition changed: explicit migration required')

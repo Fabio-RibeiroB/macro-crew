@@ -6,14 +6,15 @@ import json
 
 import pytest
 
-from finstats.sources import DEFINITIONS, ValidationError, parse
+from finstats.sources import DEFINITIONS, ValidationError, fixture_file, parse
 
 FIXTURES = Path(__file__).parent / 'fixtures' / 'official'
 TODAY = date(2026, 10, 20)
+CPI_TODAY = date(2026, 10, 21)  # The recorded CPI release is dated 21 October.
 
 
 def fixture(key):
-    return (FIXTURES / f'{key}.csv').read_bytes()
+    return (FIXTURES / fixture_file(key)).read_bytes()
 
 
 def test_recorded_bytes_match_receipts():
@@ -82,3 +83,100 @@ def test_missing_historical_observation_is_not_zero_and_extremes_are_preserved()
     assert data.observations[0].value is None
     assert data.observations[0].status == 'missing'
     assert data.observations[1].value == '-20.1234'
+
+
+def test_cpi_is_uk_annual_rate_from_the_qualified_json_endpoint():
+    data = parse('cpi', fixture('cpi'), CPI_TODAY)
+    definition = data.definition
+    assert definition.metric_id == 'uk.cpi.annual_rate'
+    assert definition.series == 'D7G7'
+    assert definition.dataset == 'MM23'
+    assert definition.comparison == 'year_on_year'
+    assert definition.adjustment == 'not_seasonally_adjusted'
+    assert definition.source_url == 'https://www.ons.gov.uk/economy/inflationandpriceindices/timeseries/d7g7/mm23'
+    assert definition.download_url == 'https://www.ons.gov.uk/economy/inflationandpriceindices/timeseries/d7g7/mm23/data'
+    assert data.observations[-1].period == '2026-09'
+    assert data.observations[-1].value == '3.5'
+    assert all(o.status == 'observed' for o in data.observations)
+    assert all(len(o.period) == 7 for o in data.observations)
+
+
+def test_cpi_release_date_converts_to_london_calendar_date():
+    # The recorded releaseDate is 2026-10-20T23:00:00.000Z; UTC slicing would
+    # give 20 October, but the UK calendar release is 21 October (BST midnight).
+    data = parse('cpi', fixture('cpi'), CPI_TODAY)
+    assert data.published_date == '2026-10-21'
+    assert data.next_release == '2026-11-18'
+    assert data.observations[-1].period <= data.published_date[:7]
+
+
+def test_cpi_keeps_recorded_monthly_gaps_and_never_invents_periods():
+    # The recorded D7G7 months[] omits 2025 FEB/APR/AUG/DEC; the endpoint
+    # represents those periods by absence. Only present months may be observed.
+    data = parse('cpi', fixture('cpi'), CPI_TODAY)
+    periods = [o.period for o in data.observations]
+    assert periods[:4] == ['2025-01', '2025-03', '2025-05', '2025-06']
+    assert '2025-02' not in periods
+    assert '2026-08' in periods
+    assert len({o.period for o in data.observations}) == len(data.observations)
+
+
+def test_cpi_ignores_annual_and_quarterly_arrays_but_keeps_their_months():
+    payload = json.loads(fixture('cpi').decode())
+    assert payload['years'] and payload['quarters']
+    data = parse('cpi', fixture('cpi'), CPI_TODAY)
+    assert all('Q' not in o.period for o in data.observations)
+
+
+@pytest.mark.parametrize('old,new', [
+    (b'"title": "CPI ANNUAL RATE 00: ALL ITEMS 2015=100"', b'"title": "CPIH ANNUAL RATE 00: ALL ITEMS 2015=100"'),
+    (b'"cdid": "D7G7"', b'"cdid": "L55O"'),
+    (b'"datasetId": "MM23"', b'"datasetId": "OTHER"'),
+    (b'"unit": "%"', b'"unit": "index"'),
+    (b'"preUnit": ""', '"preUnit": "\u00a3"'.encode()),
+    (b'"uri": "/economy/inflationandpriceindices/timeseries/d7g7/mm23"',
+     b'"uri": "/economy/inflationandpriceindices/timeseries/l55o/mm23"'),
+    (b'"type": "timeseries"', b'"type": "dataset"'),
+])
+def test_cpi_rejects_wrong_identity_units_and_series_binding(old, new):
+    assert old in fixture('cpi')
+    with pytest.raises(ValidationError):
+        parse('cpi', fixture('cpi').replace(old, new), CPI_TODAY)
+
+
+@pytest.mark.parametrize('old,new', [
+    (b'"releaseDate": "2026-10-20T23:00:00.000Z"', b'"releaseDate": "2026-11-19T23:00:00.000Z"'),
+    (b'"releaseDate": "2026-10-20T23:00:00.000Z"', b'"releaseDate": "21-10-2026"'),
+    (b'"nextRelease": "18 November 2026"', b'"nextRelease": "Q4 2026"'),
+    (b'"date": "2026 SEP"', b'"date": "2026 XXX"'),
+    (b'"date": "2026 SEP"', b'"date": "2026 AUG"'),
+])
+def test_cpi_rejects_bad_dates_and_duplicate_periods(old, new):
+    assert old in fixture('cpi')
+    with pytest.raises(ValidationError):
+        parse('cpi', fixture('cpi').replace(old, new), CPI_TODAY)
+
+
+@pytest.mark.parametrize('token', [b'""', b'".."', b'"NaN"', b'"3,5"'])
+def test_cpi_unknown_value_tokens_quarantine_the_feed(token):
+    body = fixture('cpi').replace(b'"value": "3.5"', b'"value": ' + token)
+    with pytest.raises(ValidationError):
+        parse('cpi', body, CPI_TODAY)
+
+
+@pytest.mark.parametrize('body', [b'', b'<html>Access denied</html>', b'{"years":['])
+def test_cpi_invalid_json_response_never_becomes_empty_success(body):
+    with pytest.raises(ValidationError):
+        parse('cpi', body, CPI_TODAY)
+
+
+def test_cpi_collection_before_the_release_is_rejected_not_published():
+    with pytest.raises(ValidationError, match='Future publication date'):
+        parse('cpi', fixture('cpi'), TODAY)
+
+
+def test_cpi_fixture_bytes_and_receipt_remain_the_recorded_excerpt():
+    receipts = json.loads((FIXTURES / 'receipts.json').read_text())
+    body = fixture('cpi')
+    assert hashlib.sha256(body).hexdigest() == receipts['cpi_d7g7_mm23.json']['sha256']
+    assert receipts['cpi_d7g7_mm23.json']['url'] == DEFINITIONS['cpi'].download_url

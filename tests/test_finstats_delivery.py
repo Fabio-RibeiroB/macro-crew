@@ -2,6 +2,7 @@ import hashlib
 import json
 from pathlib import Path
 import stat
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -9,7 +10,7 @@ from finstats.__main__ import collect
 from finstats.delivery import deliver, main
 from finstats.storage import atomic_write
 from tests.test_finstats_sources import FIXTURES, fixture
-from tests.test_finstats_storage import WHEN
+from tests.test_finstats_storage import CPI_WHEN, WHEN
 
 
 def prepared(tmp_path):
@@ -38,6 +39,41 @@ def test_public_delivery_is_readable_official_and_contains_no_private_files(tmp_
     assert 'source_row' not in json.dumps(data)
     assert 'raw/' not in json.dumps(data)
     assert str(private) not in json.dumps(data)
+
+
+def test_delivery_publishes_cpi_headline_with_core_metrics_retained(tmp_path):
+    private, public = tmp_path / 'private', tmp_path / 'public'
+    collect(private, transport=fixture, clock=lambda: CPI_WHEN)
+    deliver(private, public)
+    data = read_public(public)
+    assert set(data['metrics']) == {'bank_rate', 'cpih', 'gdp', 'cpi'}
+    cpi = data['metrics']['cpi']
+    assert cpi['validation_status'] == 'verified'
+    assert cpi['snapshot_evidence_kind'] == 'official_download'
+    assert cpi['latest'] == {'period': '2026-09', 'value': '3.5', 'status': 'observed'}
+    assert cpi['latest'] == cpi['history'][-1]
+    assert cpi['definition']['geography'] == 'United Kingdom'
+    assert cpi['definition']['series'] == 'D7G7'
+    assert cpi['source_download_url'].endswith('/economy/inflationandpriceindices/timeseries/d7g7/mm23/data')
+    assert cpi['source_published_date'] == '2026-10-21'
+    assert cpi['next_release_date'] == '2026-11-18'
+    assert len(cpi['history']) == 17
+    assert data['metrics']['cpih']['latest']['value'] == '3.3'
+    assert data['metrics']['cpih']['definition']['series'] == 'L55O'
+    assert data['metrics']['gdp']['latest']['value'] == '0.1'
+    assert data['metrics']['bank_rate']['latest']['value'] == '3.75'
+
+
+def test_checked_in_producer_generation_regenerates_byte_identically(tmp_path):
+    private, public = tmp_path / 'private', tmp_path / 'public'
+    with patch('finstats.publication.uuid4', return_value=SimpleNamespace(hex='c' * 32)):
+        collect(private, transport=fixture, clock=lambda: CPI_WHEN)
+        deliver(private, public)
+    wire = Path(__file__).parent / 'fixtures' / 'verified'
+    manifest = json.loads((public / 'current.json').read_text())
+    assert manifest['generation_id'] == 'c' * 32
+    assert (public / 'current.json').read_bytes() == (wire / 'producer-cpi-v1.manifest.json').read_bytes()
+    assert (public / manifest['data_url']).read_bytes() == (wire / 'producer-cpi-v1.json').read_bytes()
 
 
 def test_shared_wire_fixtures_keep_m1_core_identical_and_add_optional_members():

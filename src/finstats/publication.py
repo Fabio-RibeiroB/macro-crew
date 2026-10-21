@@ -1,14 +1,13 @@
 """Consistent immutable shadow exports; a single manifest activates a generation."""
 from __future__ import annotations
 
-from dataclasses import asdict
 import hashlib
 import json
 from pathlib import Path
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-from finstats.sources import DEFINITIONS
+from finstats.sources import DEFINITIONS, public_definition
 from finstats.storage import atomic_write, encode, timestamp
 
 
@@ -40,7 +39,7 @@ def publish(store, when):
         health_data = health(store, when)
         for key, definition in DEFINITIONS.items():
             selected = store.latest(key)
-            member = {'definition': asdict(definition), **health_data['metrics'][key]}
+            member = {'definition': public_definition(key), **health_data['metrics'][key]}
             if selected is None:
                 member.update({'validation_status': 'unavailable', 'latest': None, 'history': []})
             else:

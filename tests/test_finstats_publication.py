@@ -11,7 +11,7 @@ from finstats.__main__ import collect, collector_lock, main
 from finstats.publication import publish
 from finstats.storage import Store
 from tests.test_finstats_sources import FIXTURES, fixture
-from tests.test_finstats_storage import WHEN
+from tests.test_finstats_storage import CPI_WHEN, WHEN
 
 
 def read_generation(directory):
@@ -24,9 +24,9 @@ def read_generation(directory):
     return data
 
 
-def test_offline_cli_publishes_three_consistent_metrics_without_ai(tmp_path):
+def test_offline_cli_publishes_core_and_cpi_without_ai(tmp_path):
     with patch.dict('os.environ', {'OPENAI_API_KEY': '', 'EXA_API_KEY': ''}):
-        result = collect(tmp_path, fixtures=FIXTURES, clock=lambda: WHEN)
+        result = collect(tmp_path, fixtures=FIXTURES, clock=lambda: CPI_WHEN)
     assert not result['failed_metrics']
     data = read_generation(tmp_path)
     assert data['mode'] == 'shadow'
@@ -34,6 +34,9 @@ def test_offline_cli_publishes_three_consistent_metrics_without_ai(tmp_path):
         assert member['snapshot_evidence_kind'] == 'recorded_fixture'
         assert member['last_successful_check_at'] is None  # Not a live freshness claim.
         assert member['latest'] == member['history'][-1]
+    assert data['metrics']['cpi']['latest']['value'] == '3.5'
+    assert data['metrics']['cpi']['definition']['geography'] == 'United Kingdom'
+    assert data['metrics']['cpi']['source_published_date'] == '2026-10-21'
     assert not (tmp_path / 'research_report.json').exists()
     assert not (tmp_path / 'history_report.json').exists()
 
@@ -57,12 +60,39 @@ def test_failed_source_keeps_last_verified_figures_and_other_sources_publish(tmp
 def test_first_run_missing_source_is_unavailable_not_zero(tmp_path):
     def broken(key):
         return b'<html>access denied</html>' if key == 'gdp' else fixture(key)
-    result = collect(tmp_path, transport=broken, clock=lambda: WHEN)
+    result = collect(tmp_path, transport=broken, clock=lambda: CPI_WHEN)
     assert result['failed_metrics'] == ['gdp']
     member = read_generation(tmp_path)['metrics']['gdp']
     assert member['latest'] is None
     assert member['history'] == []
     assert member['validation_status'] == 'unavailable'
+
+
+def test_cpi_never_collected_is_unavailable_not_zero(tmp_path):
+    def broken(key):
+        return b'<html>access denied</html>' if key == 'cpi' else fixture(key)
+    result = collect(tmp_path, transport=broken, clock=lambda: CPI_WHEN)
+    assert result['failed_metrics'] == ['cpi']
+    member = read_generation(tmp_path)['metrics']['cpi']
+    assert member['latest'] is None
+    assert member['history'] == []
+    assert member['validation_status'] == 'unavailable'
+    assert member['definition']['geography'] == 'United Kingdom'
+    assert read_generation(tmp_path)['metrics']['cpih']['latest']['value'] == '3.3'
+
+
+def test_cpi_failure_after_success_keeps_last_verified_cpi(tmp_path):
+    collect(tmp_path, transport=lambda key: fixture(key), clock=lambda: CPI_WHEN)
+    def broken(key):
+        if key == 'cpi':
+            raise TimeoutError('temporary outage')
+        return fixture(key)
+    result = collect(tmp_path, transport=broken, clock=lambda: CPI_WHEN + timedelta(days=2))
+    assert result['failed_metrics'] == ['cpi']
+    data = read_generation(tmp_path)
+    assert data['metrics']['cpi']['latest']['value'] == '3.5'
+    assert data['metrics']['cpi']['collection_status'] == 'degraded'
+    assert 'temporary outage' not in json.dumps(data)
 
 
 def test_activation_failure_preserves_previous_complete_generation(tmp_path):
@@ -117,21 +147,22 @@ def test_cli_returns_failure_for_partial_collection_and_rejects_production_paths
     lambda: http.client.BadStatusLine('invalid response'),
 ])
 def test_http_protocol_failure_is_isolated_and_last_verified_data_survives(tmp_path, error_factory):
-    collect(tmp_path, fixtures=FIXTURES, clock=lambda: WHEN)
+    collect(tmp_path, fixtures=FIXTURES, clock=lambda: CPI_WHEN)
     def transport(key):
         if key == 'cpih':
             raise error_factory()
         return fixture(key)
-    result = collect(tmp_path, transport=transport, clock=lambda: WHEN + timedelta(hours=1))
+    result = collect(tmp_path, transport=transport, clock=lambda: CPI_WHEN + timedelta(hours=1))
     assert result['failed_metrics'] == ['cpih']
     data = read_generation(tmp_path)
     assert data['metrics']['cpih']['latest']['value'] == '3.3'
     assert data['metrics']['cpih']['collection_status'] == 'degraded'
+    assert data['metrics']['cpi']['collection_status'] == 'ok'
     assert data['metrics']['gdp']['collection_status'] == 'ok'
 
 
 def test_sqlite_statement_failure_rolls_back_one_metric_and_others_publish(tmp_path):
-    collect(tmp_path, fixtures=FIXTURES, clock=lambda: WHEN)
+    collect(tmp_path, fixtures=FIXTURES, clock=lambda: CPI_WHEN)
     instance = Store(tmp_path)
     instance.db.executescript("""
         CREATE TRIGGER reject_cpih BEFORE INSERT ON observation
@@ -142,7 +173,7 @@ def test_sqlite_statement_failure_rolls_back_one_metric_and_others_publish(tmp_p
     def transport(key):
         body = fixture(key)
         return body.replace(b'"2026 AUG","3.3"', b'"2026 AUG","3.4"') if key == 'cpih' else body
-    result = collect(tmp_path, transport=transport, clock=lambda: WHEN + timedelta(hours=1))
+    result = collect(tmp_path, transport=transport, clock=lambda: CPI_WHEN + timedelta(hours=1))
     assert result['failed_metrics'] == ['cpih']
     data = read_generation(tmp_path)
     assert data['metrics']['cpih']['latest']['value'] == '3.3'
@@ -150,7 +181,7 @@ def test_sqlite_statement_failure_rolls_back_one_metric_and_others_publish(tmp_p
     assert data['metrics']['gdp']['collection_status'] == 'ok'
     instance = Store(tmp_path)
     try:
-        assert instance.db.execute('SELECT count(*) FROM snapshot').fetchone()[0] == 3
+        assert instance.db.execute('SELECT count(*) FROM snapshot').fetchone()[0] == 4
         assert not instance.db.in_transaction
     finally:
         instance.close()
