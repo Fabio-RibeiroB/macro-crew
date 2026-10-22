@@ -950,6 +950,44 @@
 .fs-stat-compact .fs-number {
   margin-top: 8px;
 }
+.fs-fuel-value {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: 8px;
+  border-bottom: 1px solid var(--fs-line);
+}
+.fs-fuel-value h4 {
+  margin: 8px 0 2px;
+  font-size: 12px;
+}
+.fs-fuel-value .fs-number {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 28px;
+  line-height: 1.2;
+  margin: 2px 0;
+  white-space: nowrap;
+}
+.fs-fuel-value .fs-measure,
+.fs-fuel-value .fs-comparison {
+  grid-column: 1 / -1;
+}
+.fs-fuel-value .fs-measure {
+  min-height: 0;
+  margin: 0;
+}
+.fs-fuel-value .fs-comparison {
+  min-height: 0;
+  padding: 3px 0 6px;
+  margin: 0;
+  border: 0;
+  line-height: 1.35;
+}
+.fs-fuel-value .fs-fresh {
+  grid-column: 1 / -1;
+  margin: 0 0 4px;
+}
 .fs-stat-compact .fs-comparison {
   min-height: 0;
   padding: 8px 0;
@@ -979,7 +1017,8 @@
   .fs-overview .fs-text-button {
     padding: 5px 0;
   }
-  .fs-overview .fs-stat-count-7 {
+  .fs-overview .fs-stat-count-7,
+  .fs-overview .fs-stat-count-8 {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 10px;
   }

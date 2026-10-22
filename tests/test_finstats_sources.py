@@ -10,7 +10,8 @@ import xml.etree.ElementTree as ET
 import pytest
 
 from finstats.sources import (
-    DEFINITIONS, ValidationError, fixture_file, parse,
+    DEFINITIONS, FUEL_SOURCE_URL, ValidationError, fixture_file,
+    parse, parse_fuel_release_page,
 )
 
 FIXTURES = Path(__file__).parent / 'fixtures' / 'official'
@@ -38,6 +39,14 @@ def fixture_transport(key):
             'evidence_kind': page_receipt['evidence_kind'],
         }
         return body, receipt['originalURL'], receipt['source_published_date'], page
+    if key in {'petrol_price', 'diesel_price'}:
+        page_body = (FIXTURES / 'desnz_weekly_road_fuel_prices_release_2026-10-20.html').read_bytes()
+        published, url = parse_fuel_release_page(page_body)
+        return body, url, published, {
+            'body': page_body, 'url': FUEL_SOURCE_URL,
+            'retrieved_at': '2026-10-21T22:27:25.784643Z',
+            'evidence_kind': 'official_download',
+        }
     return body
 
 
@@ -45,6 +54,51 @@ def test_recorded_bytes_match_receipts():
     receipts = json.loads((FIXTURES / 'receipts.json').read_text())
     for name, receipt in receipts.items():
         assert hashlib.sha256((FIXTURES / name).read_bytes()).hexdigest() == receipt['sha256']
+
+
+def test_desnz_fuel_receipt_binds_release_page_to_exact_current_csv():
+    receipt = json.loads((FIXTURES / 'desnz_weekly_road_fuel_prices_receipt.json').read_text())
+    page = (FIXTURES / receipt['release_page']['file']).read_bytes()
+    csv = (FIXTURES / receipt['csv']['file']).read_bytes()
+    assert hashlib.sha256(page).hexdigest() == receipt['release_page']['sha256']
+    assert hashlib.sha256(csv).hexdigest() == receipt['csv']['sha256']
+    assert len(csv) == receipt['csv']['bytes']
+    published, url = parse_fuel_release_page(page)
+    assert published == receipt['source_published_date'] == receipt['release_page']['parsed_publication_date']
+    assert url == receipt['csv']['url']
+
+
+def test_desnz_fuel_columns_keep_two_independent_weekly_pence_series():
+    body = fixture('petrol_price')
+    petrol = parse('petrol_price', body, date(2026, 10, 22))
+    diesel = parse('diesel_price', body, date(2026, 10, 22))
+    assert len(petrol.observations) == 460
+    assert petrol.observations[-1].period == diesel.observations[-1].period == '2026-10-19'
+    assert petrol.observations[-1].value == '174.57'
+    assert diesel.observations[-1].value == '199.33'
+    assert petrol.observations[-2].value == '175.28'
+    assert diesel.observations[-2].value == '200.04'
+    assert petrol.observations[-1].reference == {
+        'kind': 'weekly_observation', 'date': '2026-10-19'}
+    assert petrol.definition.unit == diesel.definition.unit == 'pence_per_litre'
+    assert petrol.definition.frequency == diesel.definition.frequency == 'weekly'
+
+
+def test_desnz_fuel_rejects_wrong_columns_unknown_tokens_and_unavailable_latest():
+    body = fixture('petrol_price')
+    wrong_source = body.replace(b'ULSP (Ultra low sulphur unleaded petrol) Pump price', b'Wholesale price', 1)
+    with pytest.raises(ValidationError, match='headers'):
+        parse('petrol_price', wrong_source, date(2026, 10, 22))
+    unknown = body.replace(b'19/10/2026,174.57', b'19/10/2026,unknown', 1)
+    with pytest.raises(ValidationError, match='Unrecognised numerical value'):
+        parse('petrol_price', unknown, date(2026, 10, 22))
+    missing = body.replace(b'19/10/2026,174.57', b'19/10/2026,..', 1)
+    with pytest.raises(ValidationError, match='Latest DESNZ weekly fuel observation unavailable'):
+        parse('petrol_price', missing, date(2026, 10, 22))
+    historical_missing = body.replace(b'12/10/2026,175.28', b'12/10/2026,..', 1)
+    snapshot = parse('petrol_price', historical_missing, date(2026, 10, 22))
+    assert snapshot.observations[-2].value is None
+    assert snapshot.observations[-2].status == 'missing'
 
 
 def test_recorded_uk_hpi_average_price_contract_and_display_precision():

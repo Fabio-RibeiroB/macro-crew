@@ -61,7 +61,10 @@ def deliver(state_dir, output_dir):
             if metric['snapshot_evidence_kind'] != 'official_download':
                 raise ValueError('Recorded fixtures cannot become public official data')
             url = urlsplit(metric['source_download_url'])
-            if url.scheme != 'https' or (url.hostname != urlsplit(definition.download_url).hostname and not (key.startswith('house_price_') and url.hostname == 'publicdata.landregistry.gov.uk')):
+            approved_host = url.hostname == urlsplit(definition.download_url).hostname
+            approved_host |= key.startswith('house_price_') and url.hostname == 'publicdata.landregistry.gov.uk'
+            approved_host |= key in {'petrol_price', 'diesel_price'} and url.hostname == 'assets.publishing.service.gov.uk'
+            if url.scheme != 'https' or not approved_host:
                 raise ValueError('Unexpected official download URL')
             if key.startswith('private_rent_') and not re.fullmatch(
                     r'/file\?uri=(?:%2F|/)economy(?:%2F|/)inflationandpriceindices(?:%2F|/)datasets(?:%2F|/)priceindexofprivaterentsukmonthlypricestatistics(?:%2F|/)[0-9]{1,2}[a-z]+[0-9]{4}(?:%2F|/)priceindexofprivaterentsukmonthlypricestatistics\.xlsx',
@@ -70,6 +73,14 @@ def deliver(state_dir, output_dir):
             if key.startswith('house_price_') and not re.fullmatch(
                     r'/market-trend-data/house-price-index-data/Average-prices-[0-9]{4}-[0-9]{2}\.csv', url.path):
                 raise ValueError('Unexpected UK HPI source CSV URL')
+            if key in {'petrol_price', 'diesel_price'} and (
+                    url.hostname != 'assets.publishing.service.gov.uk' or
+                    not re.fullmatch(r'/media/[a-f0-9]+/CSV__2018_-__\.csv', url.path)):
+                raise ValueError('Unexpected DESNZ weekly fuel CSV URL')
+            if key in {'petrol_price', 'diesel_price'} and (
+                    metric['source_published_date'] is None or
+                    metric['source_published_date'] > metric['retrieved_at'][:10]):
+                raise ValueError('Missing or future DESNZ source publication date')
             if key.startswith('house_price_') and (metric['source_published_date'] is None or metric['source_published_date'] > metric['retrieved_at'][:10]):
                 raise ValueError('Missing or future UK HPI source release date')
             observations = metric['history']

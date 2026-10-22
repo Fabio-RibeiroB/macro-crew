@@ -141,6 +141,28 @@ export const OPTIONAL_METRICS = {
     source_url: "https://www.gov.uk/government/collections/uk-house-price-index-reports",
     download_url: "https://www.gov.uk/government/statistical-data-sets/uk-house-price-index-data-downloads", house_price_download: true,
   },
+  petrol_price: {
+    metric_id: "uk.road_fuel.unleaded_petrol_price", series: "ULSP pump price",
+    dataset: "Weekly road fuel prices", title: "UK average unleaded petrol pump price",
+    frequency: "weekly", comparison: "previous_comparable_observation",
+    adjustment: "not_applicable", unit: "pence_per_litre", version: 1,
+    geography: "United Kingdom", reference_kind: "weekly_observation",
+    sampling_basis: "Monday morning or next working morning on bank holidays",
+    price_basis: "retail pump price including source tax treatment",
+    source_url: "https://www.gov.uk/government/statistics/weekly-road-fuel-prices",
+    download_url: "https://www.gov.uk/government/statistics/weekly-road-fuel-prices",
+  },
+  diesel_price: {
+    metric_id: "uk.road_fuel.diesel_price", series: "ULSD pump price",
+    dataset: "Weekly road fuel prices", title: "UK average diesel pump price",
+    frequency: "weekly", comparison: "previous_comparable_observation",
+    adjustment: "not_applicable", unit: "pence_per_litre", version: 1,
+    geography: "United Kingdom", reference_kind: "weekly_observation",
+    sampling_basis: "Monday morning or next working morning on bank holidays",
+    price_basis: "retail pump price including source tax treatment",
+    source_url: "https://www.gov.uk/government/statistics/weekly-road-fuel-prices",
+    download_url: "https://www.gov.uk/government/statistics/weekly-road-fuel-prices",
+  },
 };
 const fail = (message) => {
   throw new Error(message);
@@ -234,6 +256,10 @@ function validateDefinition(definition, spec) {
     fail("Unexpected optional metric release caveat");
   if (spec.house_price_download !== undefined && definition.house_price_download !== spec.house_price_download)
     fail("Unexpected UK HPI source qualification");
+  for (const field of ["reference_kind", "sampling_basis", "price_basis"]) {
+    if (spec[field] !== undefined ? definition[field] !== spec[field] : definition[field] !== undefined)
+      fail("Unexpected optional metric source basis");
+  }
   if (spec.window_months !== undefined) {
     if (definition.window_months !== spec.window_months)
       fail("Unexpected optional metric window");
@@ -254,6 +280,18 @@ function validateDefinition(definition, spec) {
   }
 }
 function validateReference(point, spec) {
+  if (spec.reference_kind === "weekly_observation") {
+    const reference = point.reference;
+    if (
+      !object(reference) ||
+      Object.keys(reference).sort().join(",") !== "date,kind" ||
+      reference.kind !== "weekly_observation" ||
+      !isoDate(reference.date) ||
+      reference.date !== point.period ||
+      new Date(`${reference.date}T00:00:00Z`).getUTCDay() !== 1
+    ) fail("Invalid weekly observation reference");
+    return;
+  }
   if (spec.window_months === undefined) {
     if (point.reference !== undefined)
       fail("Unexpected reference metadata");
@@ -298,6 +336,7 @@ function validateOptionalMetric(metric, spec) {
     !(spec.table_download
       ? piprDownloadUrl(metric.source_download_url)
       : spec.house_price_download ? hpiDownloadUrl(metric.source_download_url)
+      : spec.frequency === "weekly" ? fuelDownloadUrl(metric.source_download_url)
       : metric.source_download_url === spec.download_url) ||
     !/^[a-f0-9]{64}$/.test(metric.source_sha256) ||
     !instant(metric.retrieved_at)
@@ -312,6 +351,8 @@ function validateOptionalMetric(metric, spec) {
     !isoDate(metric.source_published_date)
   )
     fail("Invalid release date");
+  if (spec.frequency === "weekly" && metric.source_published_date === null)
+    fail("Missing DESNZ release date");
   if (metric.next_release_date !== null && !isoDate(metric.next_release_date))
     fail("Invalid expected release date");
   if (!metric.history.length) fail("Empty verified history");
@@ -331,7 +372,8 @@ function validateOptionalMetric(metric, spec) {
   if (
     metric.latest.value === null ||
     metric.latest.period !== end.period ||
-    metric.latest.value !== end.value
+    metric.latest.value !== end.value ||
+    JSON.stringify(metric.latest.reference ?? null) !== JSON.stringify(end.reference ?? null)
   )
     fail("Card and chart disagree");
 }
@@ -348,6 +390,13 @@ function hpiDownloadUrl(value) {
     const url = new URL(value);
     return url.protocol === "https:" && url.hostname === "publicdata.landregistry.gov.uk" &&
       /^\/market-trend-data\/house-price-index-data\/Average-prices-[0-9]{4}-[0-9]{2}\.csv$/.test(url.pathname);
+  } catch { return false; }
+}
+function fuelDownloadUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === "assets.publishing.service.gov.uk" &&
+      /^\/media\/[a-f0-9]+\/CSV__2018_-__\.csv$/.test(url.pathname);
   } catch { return false; }
 }
 export function parseDataset(value, manifest) {
@@ -485,6 +534,11 @@ export function previousReading(metric) {
     date.setUTCMonth(date.getUTCMonth() + 1);
     if (date.toISOString().slice(0, 7) !== metric.latest.period) return null;
   }
+  if (metric.definition.frequency === "weekly") {
+    const date = new Date(`${previous.period}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + 7);
+    if (date.toISOString().slice(0, 10) !== metric.latest.period) return null;
+  }
   return previous;
 }
 /** Return the latest change directly established by adjacent Bank Rate points. */
@@ -516,6 +570,14 @@ export function lastRateChange(metric) {
 export function chartPoints(metric) {
   const points = [];
   for (const point of metric.history) {
+    if (metric.definition.frequency === "weekly" && points.length) {
+      const date = new Date(`${points.at(-1).date}T00:00:00Z`);
+      date.setUTCDate(date.getUTCDate() + 7);
+      while (date.toISOString().slice(0, 10) < point.period) {
+        points.push({ date: date.toISOString().slice(0, 10), value: null });
+        date.setUTCDate(date.getUTCDate() + 7);
+      }
+    }
     if (metric.definition.frequency === "monthly" && points.length) {
       const date = new Date(`${points.at(-1).date}-01T00:00:00Z`);
       date.setUTCMonth(date.getUTCMonth() + 1);

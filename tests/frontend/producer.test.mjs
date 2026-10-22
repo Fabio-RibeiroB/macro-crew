@@ -23,10 +23,10 @@ const manifest = JSON.parse(
   readFileSync(new URL("producer-pay-v1.manifest.json", WIRE), "utf8"),
 );
 
-function fileFetcher(data) {
+function fileFetcher(data, selectedManifest = manifest) {
   return async (url) =>
     url.endsWith("current.json")
-      ? { ok: true, json: async () => manifest }
+      ? { ok: true, json: async () => selectedManifest }
       : {
           ok: true,
           arrayBuffer: async () => data.buffer.slice(
@@ -35,6 +35,60 @@ function fileFetcher(data) {
           ),
         };
 }
+
+test("DESNZ petrol and diesel render as two weekly UK prices with direct history and source", async () => {
+  const fuelBytes = readFileSync(new URL("producer-fuel-v1.json", WIRE));
+  const fuelManifest = JSON.parse(readFileSync(new URL("producer-fuel-v1.manifest.json", WIRE), "utf8"));
+  const producer = await loadVerified("/", fileFetcher(fuelBytes, fuelManifest));
+  const petrol = producer.metrics.petrol_price;
+  const diesel = producer.metrics.diesel_price;
+  assert.equal(petrol.latest.value, "174.57");
+  assert.equal(diesel.latest.value, "199.33");
+  assert.equal(petrol.definition.unit, "pence_per_litre");
+  assert.equal(petrol.latest.period, "2026-10-19");
+  assert.equal(previousReading(petrol).period, "2026-10-12");
+  const { createServer } = await import("vite");
+  const { createElement } = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+  try {
+    const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
+    const home = renderToStaticMarkup(createElement(App, { pathname: "/", initialData: producer }));
+    const card = [...home.matchAll(/<article class="fs-stat fs-stat-compact\b[\s\S]*?<\/article>/g)]
+      .map(([markup]) => markup).find((markup) => markup.includes("<h2>Petrol &amp; Diesel</h2>"));
+    assert.ok(card);
+    assert.match(card, /Unleaded petrol/);
+    assert.match(card, /174\.57p/);
+    assert.match(card, /Change −0\.71p per litre compared with 12 October 2026/);
+    assert.match(card, /Diesel/);
+    assert.match(card, /199\.33p/);
+    assert.match(card, /Change −0\.71p per litre compared with 12 October 2026/);
+    assert.match(card, /href="\/prices#petrol-diesel"/);
+    const delayed = renderToStaticMarkup(createElement(App, {
+      pathname: "/", initialData: { ...producer, metrics: {
+        ...producer.metrics,
+        petrol_price: { ...petrol, collection_status: "degraded" },
+      } },
+    }));
+    const delayedCard = [...delayed.matchAll(/<article class="fs-stat fs-stat-compact\b[\s\S]*?<\/article>/g)]
+      .map(([markup]) => markup).find((markup) => markup.includes("<h2>Petrol &amp; Diesel</h2>"));
+    assert.match(delayedCard, /Update delayed · showing last verified figure/);
+    const prices = renderToStaticMarkup(createElement(App, { pathname: "/prices", initialData: producer }));
+    assert.match(prices, /id="petrol-diesel"/);
+    assert.ok(prices.indexOf('id="petrol-diesel"') < prices.indexOf("<h3>CPI inflation</h3>"),
+      "the direct fuel fragment precedes asynchronously populated Prices cards");
+    assert.match(prices, /DESNZ Weekly road fuel prices CSV/);
+    assert.match(prices, /Monday morning, or the next working morning on a bank holiday/);
+    assert.match(prices, /UK average, not a local forecourt quote/);
+    const { HistoricalTrendCard } = await server.ssrLoadModule("/src/app/components/HistoricalTrendCard.tsx");
+    const chart = renderToStaticMarkup(createElement(HistoricalTrendCard, {
+      title: "UK average unleaded petrol pump price", label: "Unleaded petrol · pence per litre",
+      unit: "p", unitDescription: "pence per litre", data: chartPoints(petrol).slice(-3),
+    }));
+    assert.match(chart, /Exact values in pence per litre/);
+    assert.match(chart, /UK average unleaded petrol pump price/);
+  } finally { await server.close(); }
+});
 
 test("producer output passes the manifest checksum and the full reader contract", async () => {
   assert.equal(createHash("sha256").update(bytes).digest("hex"), manifest.sha256);

@@ -265,6 +265,43 @@ def test_corrupt_pipr_is_quarantined_and_other_metrics_still_deliver(tmp_path):
     assert public['metrics']['private_rent_level']['collection_status'] == 'degraded'
 
 
+def test_petrol_feed_failure_keeps_its_verified_history_and_diesel_independent(tmp_path):
+    private = tmp_path / 'fuel-state'
+    collect(private, transport=fixture_transport, clock=lambda: CPI_WHEN)
+    store = Store(private)
+    try:
+        before_petrol = store.latest('petrol_price')['id']
+        petrol_attempt = store.latest('petrol_price')['receipt_id']
+        before_diesel = store.latest('diesel_price')['id']
+    finally:
+        store.close()
+
+    def petrol_header_failure(key):
+        fetched = fixture_transport(key)
+        if key == 'petrol_price':
+            body, url, published, page = fetched
+            return body.replace(b'ULSP (Ultra low sulphur unleaded petrol) Pump price', b'wrong source', 1), url, published, page
+        return fetched
+
+    result = collect(private, transport=petrol_header_failure, clock=lambda: CPI_WHEN + timedelta(days=1))
+    assert result['failed_metrics'] == ['petrol_price']
+    store = Store(private)
+    try:
+        petrol = store.latest('petrol_price')
+        diesel = store.latest('diesel_price')
+        assert petrol['id'] == before_petrol
+        assert diesel['id'] == before_diesel
+        assert len(json.loads(petrol['payload'])['observations']) == 460
+        rejected = store.db.execute("SELECT id FROM attempt WHERE key='petrol_price' AND status='rejected' ORDER BY id DESC LIMIT 1").fetchone()
+        assert rejected is not None
+        receipt = json.loads((private / 'fuel-receipts' / f"{petrol_attempt}.json").read_text())
+        assert receipt['metric_key'] == 'petrol_price'
+        assert receipt['source_csv_url'].startswith('https://assets.publishing.service.gov.uk/media/')
+        assert receipt['release_page_url'] == 'https://www.gov.uk/government/statistics/weekly-road-fuel-prices'
+    finally:
+        store.close()
+
+
 def test_pay_revision_keeps_window_identity_and_previous_snapshot(tmp_path):
     collect(tmp_path, transport=lambda key: fixture_transport(key), clock=lambda: CPI_WHEN)
     first = read_generation(tmp_path)['metrics']['regular_pay_nominal_growth']

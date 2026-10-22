@@ -1,0 +1,27 @@
+{
+  "evidence_kind": "recorded_fixture",
+  "source_url": "https://www.gov.uk/government/statistics/weekly-road-fuel-prices",
+  "source_published_date": "2026-10-20",
+  "release_page": {
+    "file": "desnz_weekly_road_fuel_prices_release_2026-10-20.html",
+    "url": "https://www.gov.uk/government/statistics/weekly-road-fuel-prices",
+    "sha256": "1944dd8022576f278771559915039345c9f0576b7d69f444a13be8bab5697de7",
+    "retrieved_at": "2026-10-21T22:27:25.784643Z",
+    "parsed_publication_date": "2026-10-20"
+  },
+  "csv": {
+    "file": "desnz_weekly_road_fuel_prices_2026-10-20.csv",
+    "url": "https://assets.publishing.service.gov.uk/media/6ad63e7d49ba86d6c953cc40/CSV__2018_-__.csv",
+    "bytes": 20502,
+    "sha256": "077d97956f07d931153e6e9695232f99cee58c12a7426ade55452b3b1f8abc92",
+    "retrieved_at": "2026-10-21T22:27:39.969053Z"
+  },
+  "workbook": {
+    "file": "desnz_weekly_road_fuel_prices_2026-10-20.xlsx",
+    "url": "https://assets.publishing.service.gov.uk/media/6ad63e71e5db84746b479882/Weekly_Fuel_Prices_19-10-26.xlsx",
+    "bytes": 261039,
+    "sha256": "dbe582dacc719f54b147ad6d11b5cd276098b8996457accf2526e1a3ba4bdf91",
+    "retrieved_at": "2026-10-21T22:28:10.669939Z",
+    "methodology_note": "Sales-weighted UK averages from six companies, around 60% of market volume using 2022 sales; sampling is Monday morning or the next working morning on bank holidays. Pump prices and duty/VAT evidence are retained separately; no price is recomputed."
+  }
+}

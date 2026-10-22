@@ -14,7 +14,7 @@ import tempfile
 
 from finstats.sources import (
     DEFINITIONS, MAX_SOURCE_PAGE_BYTES, ValidationError, parse,
-    parse_hpi_release_page, public_definition,
+    FUEL_SOURCE_URL, parse_fuel_release_page, parse_hpi_release_page, public_definition,
 )
 
 
@@ -155,6 +155,17 @@ class Store:
             return
         atomic_write(path, body)
 
+    def _write_fuel_evidence_receipt(self, attempt_id, receipt):
+        path = self.directory / 'fuel-receipts' / f'{attempt_id}.json'
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        path.parent.chmod(0o700)
+        body = encode(receipt)
+        if path.exists():
+            if path.read_bytes() != body:
+                raise OSError('DESNZ source receipt is immutable')
+            return
+        atomic_write(path, body)
+
     def failed(self, key, when, error, source_url=None, evidence_kind='official_download'):
         with self.db:
             self.db.execute('''INSERT INTO attempt
@@ -256,6 +267,52 @@ class Store:
                     raise ValidationError('UK HPI release page publication date disagrees with source receipt')
                 if page_csv_url != source_url:
                     raise ValidationError('UK HPI release page CSV link disagrees with source URL')
+                candidate = replace(candidate, published_date=source_published_date)
+            if key in {'petrol_price', 'diesel_price'}:
+                if source_published_date is None:
+                    raise ValidationError('DESNZ release date missing from source receipt')
+                try:
+                    datetime.strptime(source_published_date, '%Y-%m-%d')
+                except (TypeError, ValueError) as exc:
+                    raise ValidationError('Invalid DESNZ release date') from exc
+                if source_published_date > when.date().isoformat():
+                    raise ValidationError('Future DESNZ release date')
+                if candidate.observations[-1].period > source_published_date:
+                    raise ValidationError('DESNZ reference week follows its release date')
+                if not isinstance(release_page_evidence, dict):
+                    raise ValidationError('DESNZ release page evidence missing from receipt')
+                page_body = release_page_evidence.get('body')
+                page_url = release_page_evidence.get('url')
+                retrieved_at = release_page_evidence.get('retrieved_at')
+                page_kind = release_page_evidence.get('evidence_kind')
+                if not isinstance(page_body, bytes) or len(page_body) > MAX_SOURCE_PAGE_BYTES:
+                    raise ValidationError('Invalid DESNZ release page bytes')
+                if page_kind not in ('official_download', 'recorded_fixture') or page_kind != evidence_kind:
+                    raise ValidationError('DESNZ release page evidence kind disagrees with CSV')
+                if page_url != FUEL_SOURCE_URL:
+                    raise ValidationError('Unexpected DESNZ release page URL')
+                try:
+                    page_time = datetime.fromisoformat(retrieved_at.replace('Z', '+00:00'))
+                except (AttributeError, TypeError, ValueError) as exc:
+                    raise ValidationError('Invalid DESNZ release page retrieval time') from exc
+                if page_time.tzinfo is None or page_time.utcoffset() is None:
+                    raise ValidationError('Invalid DESNZ release page retrieval time')
+                if page_kind == 'official_download' and page_time.astimezone(timezone.utc) > when.astimezone(timezone.utc):
+                    raise ValidationError('Future DESNZ release page retrieval time')
+                page_digest = self._archive_raw(page_body)
+                page_published, page_csv_url = parse_fuel_release_page(page_body)
+                if page_published != source_published_date or page_csv_url != source_url:
+                    raise ValidationError('DESNZ release evidence disagrees with CSV receipt')
+                self._write_fuel_evidence_receipt(attempt_id, {
+                    'schema_version': 1, 'source': 'DESNZ weekly road fuel prices',
+                    'attempt_id': attempt_id, 'metric_key': key,
+                    'source_csv_url': source_url, 'source_csv_sha256': digest,
+                    'source_published_date': source_published_date,
+                    'release_page_url': page_url, 'release_page_sha256': page_digest,
+                    'release_page_retrieved_at': timestamp(page_time),
+                    'release_page_evidence_kind': page_kind,
+                    'parsed_published_date': page_published, 'parsed_csv_url': page_csv_url,
+                })
                 candidate = replace(candidate, published_date=source_published_date)
             if key.startswith('private_rent_') and evidence_kind == 'official_download':
                 edition = re.search(r'(?:%2F|/)([0-9]{1,2}[a-z]+[0-9]{4})(?:%2F|/)', source_url or '')

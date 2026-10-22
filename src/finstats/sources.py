@@ -20,6 +20,7 @@ MAX_BYTES = 2_000_000
 MAX_PIPR_BYTES = 25_000_000
 MAX_SOURCE_PAGE_BYTES = 2_000_000
 MAX_HPI_BYTES = 10_000_000
+MAX_FUEL_BYTES = 2_000_000
 PARSER_VERSION = 1
 MONTHS = {name: index for index, name in enumerate(
     ('JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'), 1)}
@@ -122,6 +123,20 @@ DEFINITIONS = {
         'year_on_year', 'https://www.gov.uk/government/collections/uk-house-price-index-reports',
         'https://www.gov.uk/government/statistical-data-sets/uk-house-price-index-data-downloads',
         unit='percent'),
+    'petrol_price': Definition(
+        'uk.road_fuel.unleaded_petrol_price', 'ULSP pump price',
+        'Weekly road fuel prices', 'UK average unleaded petrol pump price',
+        'weekly', 'not_applicable', 'previous_comparable_observation',
+        'https://www.gov.uk/government/statistics/weekly-road-fuel-prices',
+        'https://www.gov.uk/government/statistics/weekly-road-fuel-prices',
+        unit='pence_per_litre'),
+    'diesel_price': Definition(
+        'uk.road_fuel.diesel_price', 'ULSD pump price',
+        'Weekly road fuel prices', 'UK average diesel pump price',
+        'weekly', 'not_applicable', 'previous_comparable_observation',
+        'https://www.gov.uk/government/statistics/weekly-road-fuel-prices',
+        'https://www.gov.uk/government/statistics/weekly-road-fuel-prices',
+        unit='pence_per_litre'),
 }
 
 # Optional metric members: registered public-definition fields the writer is
@@ -136,6 +151,8 @@ OPTIONAL_METRICS = {
     'private_rent_level': {'geography': 'United Kingdom', 'area_code': 'K02000001', 'release_caveat': 'UK latest two months provisional; Northern Ireland latest two months imputed'},
     'house_price_level': {'geography': 'United Kingdom', 'area_code': 'K02000001', 'release_caveat': 'Recent observations provisional and subject to revision', 'house_price_download': True},
     'house_price_growth': {'geography': 'United Kingdom', 'area_code': 'K02000001', 'release_caveat': 'Recent observations provisional and subject to revision', 'house_price_download': True},
+    'petrol_price': {'geography': 'United Kingdom', 'reference_kind': 'weekly_observation', 'sampling_basis': 'Monday morning or next working morning on bank holidays', 'price_basis': 'retail pump price including source tax treatment'},
+    'diesel_price': {'geography': 'United Kingdom', 'reference_kind': 'weekly_observation', 'sampling_basis': 'Monday morning or next working morning on bank holidays', 'price_basis': 'retail pump price including source tax treatment'},
 }
 
 # Keys whose official endpoint is the structured ONS JSON timeseries response
@@ -163,6 +180,8 @@ def fixture_file(key):
         return 'pipr_uk_monthly_price_statistics.xlsx'
     if key.startswith('house_price_'):
         return 'uk_hpi_average_prices.csv'
+    if key in {'petrol_price', 'diesel_price'}:
+        return 'desnz_weekly_road_fuel_prices_2026-10-20.csv'
     if key in JSON_TIMESERIES:
         return f'{key}_{definition.series.lower()}_{definition.dataset.lower()}.json'
     return f'{key}.csv'
@@ -547,6 +566,79 @@ def _parse_hpi(key, body, today):
         for period, values in sorted(selected.items())))
 
 
+FUEL_SOURCE_URL = 'https://www.gov.uk/government/statistics/weekly-road-fuel-prices'
+FUEL_ASSET_HOST = 'assets.publishing.service.gov.uk'
+FUEL_COLUMNS = {
+    'petrol_price': 'ULSP (Ultra low sulphur unleaded petrol) Pump price in pence/litre',
+    'diesel_price': 'ULSD (Ultra low sulphur diesel) Pump price in pence/litre',
+}
+
+
+def parse_fuel_release_page(body):
+    """Select the current, explicitly named CSV from the bounded GOV.UK page."""
+    if not isinstance(body, bytes) or len(body) > MAX_SOURCE_PAGE_BYTES:
+        raise ValidationError('DESNZ release page exceeds size limit')
+    try:
+        text = body.decode('utf-8', 'strict')
+    except UnicodeError as exc:
+        raise ValidationError('Invalid UTF-8 DESNZ release page') from exc
+    match = re.search(r'"dateModified"\s*:\s*"([^\"]+)"', text)
+    if not match:
+        raise ValidationError('DESNZ release publication date unavailable')
+    try:
+        published = datetime.fromisoformat(match.group(1).replace('Z', '+00:00'))
+    except ValueError as exc:
+        raise ValidationError('Invalid DESNZ release publication date') from exc
+    if published.tzinfo is None or published.utcoffset() is None:
+        raise ValidationError('Invalid DESNZ release publication date')
+    published_date = published.astimezone(LONDON).date().isoformat()
+    # Only the current CSV attachment family on the official asset host is allowed.
+    current = re.search(
+        r'"name"\s*:\s*"Weekly road fuel prices \(CSV\) 2018 to ([0-9]{4})"\s*,\s*'
+        r'"contentUrl"\s*:\s*"(https://assets\.publishing\.service\.gov\.uk/media/[a-f0-9]+/CSV__2018_-__\.csv)"',
+        text)
+    if not current:
+        raise ValidationError('Current DESNZ weekly fuel CSV attachment unavailable')
+    return published_date, current[2]
+
+
+def parse_fuel(key, body, today):
+    if len(body) > MAX_FUEL_BYTES:
+        raise ValidationError('DESNZ fuel CSV exceeds size limit')
+    try:
+        rows = list(csv.DictReader(io.StringIO(body.decode('utf-8-sig'), newline=''), strict=True))
+    except (UnicodeError, csv.Error) as exc:
+        raise ValidationError('Invalid DESNZ fuel CSV') from exc
+    column = FUEL_COLUMNS[key]
+    expected = ['Date', *FUEL_COLUMNS.values(),
+        'ULSP (Ultra low sulphur unleaded petrol) Duty rate in pence/litre',
+        'ULSD (Ultra low sulphur diesel) Duty rate in pence/litre',
+        'ULSP (Ultra low sulphur unleaded petrol) VAT percentage rate',
+        'ULSD (Ultra low sulphur diesel) VAT percentage rate']
+    # Header contract includes both prices and the duty/VAT evidence columns.
+    if not rows or list(rows[0]) != expected:
+        raise ValidationError('Unexpected DESNZ fuel CSV headers')
+    observations = []
+    for index, row in enumerate(rows, 2):
+        if None in row or any(value is None for value in row.values()):
+            raise ValidationError('Unexpected DESNZ fuel CSV row width')
+        try:
+            observed = datetime.strptime(row['Date'], '%d/%m/%Y').date()
+        except (TypeError, ValueError) as exc:
+            raise ValidationError('Invalid DESNZ weekly reference date') from exc
+        if observed.weekday() != 0:
+            raise ValidationError('DESNZ weekly reference date is not Monday')
+        value, status = number(row[column])
+        observations.append(Observation(observed.isoformat(), value, status, index,
+            {'kind': 'weekly_observation', 'date': observed.isoformat()}))
+    observations.sort(key=lambda point: point.period)
+    if not observations or len({point.period for point in observations}) != len(observations):
+        raise ValidationError('Empty or duplicate DESNZ weekly history')
+    if observations[-1].period > today.isoformat() or observations[-1].value is None:
+        raise ValidationError('Latest DESNZ weekly fuel observation unavailable')
+    return Snapshot(DEFINITIONS[key], None, None, tuple(observations))
+
+
 def parse(key: str, body: bytes, today: date) -> Snapshot:
     definition = DEFINITIONS[key]
     max_bytes = MAX_PIPR_BYTES if key.startswith('private_rent_') else MAX_HPI_BYTES if key.startswith('house_price_') else MAX_BYTES
@@ -556,6 +648,8 @@ def parse(key: str, body: bytes, today: date) -> Snapshot:
         return parse_pipr(key, body, today)
     if key.startswith('house_price_'):
         return parse_hpi(key, body, today)
+    if key in FUEL_COLUMNS:
+        return parse_fuel(key, body, today)
     if key in JSON_TIMESERIES:
         observations, published, next_release = parse_ons_json(definition, body, today)
     else:
@@ -625,7 +719,7 @@ def parse(key: str, body: bytes, today: date) -> Snapshot:
     cutoff = today.isoformat() if definition.frequency == 'daily' else today.strftime('%Y-%m')
     if observations[-1].period > cutoff:
         raise ValidationError('Future reference period')
-    if published and observations[-1].period > published[:7]:
+    if published and definition.frequency == 'monthly' and observations[-1].period > published[:7]:
         raise ValidationError('Reference month follows release')
     if observations[-1].value is None:
         raise ValidationError('Latest observation unavailable')
@@ -680,6 +774,28 @@ def recorded_hpi_release_evidence(source_url, source_published_date, retrieved_a
 
 def fetch(key: str) -> bytes:
     """One bounded request. Retry scheduling belongs to the caller, not the parser."""
+    if key in FUEL_COLUMNS:
+        request = Request(FUEL_SOURCE_URL, headers={
+            'User-Agent': 'FinStats/2.0 (+https://github.com/Fabio-RibeiroB/macro-crew)'})
+        with urlopen(request, timeout=30) as response:
+            if response.status != 200 or response.geturl() != FUEL_SOURCE_URL:
+                raise ValidationError('Unexpected DESNZ weekly fuel release page response')
+            page = response.read(MAX_SOURCE_PAGE_BYTES + 1)
+        if len(page) > MAX_SOURCE_PAGE_BYTES:
+            raise ValidationError('DESNZ release page exceeds size limit')
+        published_date, url = parse_fuel_release_page(page)
+        retrieved_at = datetime.now(timezone.utc).isoformat(timespec='microseconds').replace('+00:00', 'Z')
+        request = Request(url, headers={
+            'User-Agent': 'FinStats/2.0 (+https://github.com/Fabio-RibeiroB/macro-crew)'})
+        with urlopen(request, timeout=60) as response:
+            if response.status != 200 or response.geturl() != url:
+                raise ValidationError('Unexpected DESNZ fuel CSV response')
+            payload = response.read(MAX_FUEL_BYTES + 1)
+        if len(payload) > MAX_FUEL_BYTES:
+            raise ValidationError('DESNZ fuel CSV exceeds size limit')
+        page_evidence = {'body': page, 'url': FUEL_SOURCE_URL,
+                         'retrieved_at': retrieved_at, 'evidence_kind': 'official_download'}
+        return payload, url, published_date, page_evidence
     if key.startswith('private_rent_'):
         # The dataset page exposes a versioned workbook link. Select only the
         # exact current ONS edition path; never follow arbitrary page links.

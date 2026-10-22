@@ -29,7 +29,8 @@ row (K02000001); its latest two months are provisional and Northern Ireland inpu
 are imputed for those months. Labour figures retain their
 full three-month reference windows. UK House Price Index average price in pounds
 and annual change are separate UK-national series from HM Land Registry's
-Average price CSV. These describe integrated source coverage; the
+Average price CSV, alongside DESNZ weekly UK-average unleaded petrol and diesel
+pump prices as separate pence-per-litre series. These describe integrated source coverage; the
 [M2 acceptance record](docs/m2-acceptance.md) and [M3 rollout qualification](docs/m3-acceptance.md)
 record point-in-time evidence, not deployment.
 Reference period, official release date and FinStats check time are separate.
@@ -145,6 +146,7 @@ after review. Never build over the served `dist` directory.
 
 Further reading: [methodology and architecture](docs/architecture-assessment.md),
 [official data details](docs/official-data-foundation.md),
+[M4 fuel qualification and rollout note](docs/m4-fuel-acceptance.md),
 [deployment and rollback](docs/dashboard-cutover.md),
 [release tracking](docs/releases.md),
 [frontend development](FRONTEND.md), [agent instructions](AGENTS.md).

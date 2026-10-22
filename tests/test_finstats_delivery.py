@@ -42,7 +42,14 @@ def test_public_delivery_is_readable_official_and_contains_no_private_files(tmp_
     assert 'raw/' not in json.dumps(data)
     assert str(private) not in json.dumps(data)
     receipts = [json.loads(path.read_text()) for path in (private / 'receipts').glob('*.json')]
-    assert len(receipts) == 2
+    assert len(receipts) == 2  # UK HPI release receipts remain isolated by source.
+    fuel_receipts = [json.loads(path.read_text()) for path in (private / 'fuel-receipts').glob('*.json')]
+    assert {receipt['metric_key'] for receipt in fuel_receipts} == {'petrol_price', 'diesel_price'}
+    for receipt in fuel_receipts:
+        assert receipt['release_page_url'] == 'https://www.gov.uk/government/statistics/weekly-road-fuel-prices'
+        assert receipt['source_csv_url'].startswith('https://assets.publishing.service.gov.uk/media/')
+        assert hashlib.sha256((private / 'raw' / f"{receipt['release_page_sha256']}.bin").read_bytes()).hexdigest() == receipt['release_page_sha256']
+        assert hashlib.sha256((private / 'raw' / f"{receipt['source_csv_sha256']}.bin").read_bytes()).hexdigest() == receipt['source_csv_sha256']
     store = Store(private)
     try:
         for receipt in receipts:
@@ -150,7 +157,7 @@ def test_delivery_publishes_cpi_headline_with_core_metrics_retained(tmp_path):
         'bank_rate', 'cpih', 'gdp', 'cpi',
         'regular_pay_nominal_growth', 'regular_pay_real_growth', 'unemployment',
         'private_rent_growth', 'private_rent_level',
-        'house_price_level', 'house_price_growth'}
+        'house_price_level', 'house_price_growth', 'petrol_price', 'diesel_price'}
     cpi = data['metrics']['cpi']
     assert cpi['validation_status'] == 'verified'
     assert cpi['snapshot_evidence_kind'] == 'official_download'
@@ -166,6 +173,11 @@ def test_delivery_publishes_cpi_headline_with_core_metrics_retained(tmp_path):
     assert data['metrics']['cpih']['definition']['series'] == 'L55O'
     assert data['metrics']['gdp']['latest']['value'] == '0.1'
     assert data['metrics']['bank_rate']['latest']['value'] == '3.75'
+    assert data['metrics']['petrol_price']['latest']['value'] == '174.57'
+    assert data['metrics']['diesel_price']['latest']['value'] == '199.33'
+    assert data['metrics']['petrol_price']['latest']['period'] == '2026-10-19'
+    assert data['metrics']['diesel_price']['latest']['reference'] == {
+        'kind': 'weekly_observation', 'date': '2026-10-19'}
     nominal = data['metrics']['regular_pay_nominal_growth']
     real = data['metrics']['regular_pay_real_growth']
     assert nominal['latest']['reference'] == real['latest']['reference'] == {
@@ -218,9 +230,9 @@ def test_checked_in_producer_generation_regenerates_byte_identically(tmp_path):
     wire = Path(__file__).parent / 'fixtures' / 'verified'
     manifest = json.loads((public / 'current.json').read_text())
     assert manifest['generation_id'] == 'c' * 32
-    assert (public / 'current.json').read_bytes() == (wire / 'producer-pay-v1.manifest.json').read_bytes()
-    assert (public / manifest['data_url']).read_bytes() == (wire / 'producer-pay-v1.json').read_bytes()
-    candidate = json.loads((wire / 'producer-pay-v1.json').read_bytes())
+    assert (public / 'current.json').read_bytes() == (wire / 'producer-fuel-v1.manifest.json').read_bytes()
+    assert (public / manifest['data_url']).read_bytes() == (wire / 'producer-fuel-v1.json').read_bytes()
+    candidate = json.loads((wire / 'producer-fuel-v1.json').read_bytes())
     previous = json.loads((wire / 'producer-cpi-v1.json').read_bytes())
     for key in ('bank_rate', 'cpih', 'gdp', 'cpi'):
         current_core = dict(candidate['metrics'][key])
