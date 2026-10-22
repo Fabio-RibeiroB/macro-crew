@@ -179,3 +179,46 @@ def test_no_current_cap_is_unavailable_but_keeps_expired_history_and_siblings(tm
         assert public['metrics']['bank_rate']['latest']['value'] == '3.75'
     finally:
         store.close()
+
+
+def test_expired_fixture_cap_is_not_projected_even_with_official_sibling(tmp_path):
+    store = Store(tmp_path)
+    try:
+        store.ingest('household_energy', BODY,
+                     datetime(2026, 10, 22, tzinfo=timezone.utc),
+                     source_url=DEFINITIONS['household_energy'].download_url,
+                     evidence_kind='recorded_fixture')
+        store.ingest('bank_rate', (FIXTURES / 'bank_rate.csv').read_bytes(),
+                     datetime(2026, 10, 22, tzinfo=timezone.utc),
+                     source_url=DEFINITIONS['bank_rate'].download_url,
+                     evidence_kind='official_download')
+        store.failed('household_energy', datetime(2027, 1, 1, tzinfo=timezone.utc), 'TimeoutError')
+        publish(store, datetime(2027, 1, 1, tzinfo=timezone.utc))
+        public_dir = tmp_path.with_name(tmp_path.name + '-public')
+        with pytest.raises(ValueError, match='Recorded fixtures cannot be published'):
+            deliver(tmp_path, public_dir)
+        assert not (public_dir / 'current.json').exists()
+    finally:
+        store.close()
+
+
+def test_never_collected_empty_energy_is_publishable_with_official_sibling(tmp_path):
+    store = Store(tmp_path)
+    try:
+        store.ingest('bank_rate', (FIXTURES / 'bank_rate.csv').read_bytes(),
+                     datetime(2026, 10, 22, tzinfo=timezone.utc),
+                     source_url=DEFINITIONS['bank_rate'].download_url,
+                     evidence_kind='official_download')
+        store.failed('household_energy', datetime(2026, 10, 22, tzinfo=timezone.utc), 'TimeoutError')
+        publish(store, datetime(2026, 10, 22, tzinfo=timezone.utc))
+        public_dir = tmp_path.with_name(tmp_path.name + '-public')
+        deliver(tmp_path, public_dir)
+        manifest = json.loads((public_dir / 'current.json').read_text())
+        public = json.loads((public_dir / manifest['data_url']).read_text())
+        energy = public['metrics']['household_energy']
+        assert energy['validation_status'] == 'unavailable'
+        assert energy['latest'] is None
+        assert energy['history'] == []
+        assert public['metrics']['bank_rate']['latest']['value'] == '3.75'
+    finally:
+        store.close()

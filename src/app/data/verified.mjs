@@ -416,6 +416,8 @@ function validateOptionalMetric(metric, spec) {
   if (metric.validation_status === "unavailable") {
     if (metric.latest !== null) fail("Unavailable metric has a latest value");
     if (spec.metric_id === "uk.energy_price_cap.typical_dual_fuel_bill") {
+      if ((metric.history.length || metric.upcoming_period != null) && !hasOfficialProvenance(metric, spec))
+        fail("Missing official provenance for retained Ofgem values");
       metric.history.forEach((point) => {
         validatePoint(point, spec.frequency);
         validateReference(point, spec);
@@ -433,14 +435,7 @@ function validateOptionalMetric(metric, spec) {
   }
   if (
     metric.validation_status !== "verified" ||
-    metric.snapshot_evidence_kind !== "official_download" ||
-    !(spec.table_download
-      ? piprDownloadUrl(metric.source_download_url)
-      : spec.house_price_download ? hpiDownloadUrl(metric.source_download_url)
-      : spec.frequency === "weekly" ? fuelDownloadUrl(metric.source_download_url)
-      : metric.source_download_url === spec.download_url) ||
-    !/^[a-f0-9]{64}$/.test(metric.source_sha256) ||
-    !instant(metric.retrieved_at)
+    !hasOfficialProvenance(metric, spec)
   )
     fail("Missing official provenance");
   if (spec.quality_note !== undefined &&
@@ -496,6 +491,16 @@ function validateOptionalMetric(metric, spec) {
         fail("Invalid upcoming Ofgem period");
     }
   }
+}
+function hasOfficialProvenance(metric, spec) {
+  return metric.snapshot_evidence_kind === "official_download" &&
+    (spec.table_download
+      ? piprDownloadUrl(metric.source_download_url)
+      : spec.house_price_download ? hpiDownloadUrl(metric.source_download_url)
+      : spec.frequency === "weekly" ? fuelDownloadUrl(metric.source_download_url)
+      : metric.source_download_url === spec.download_url) &&
+    /^[a-f0-9]{64}$/.test(metric.source_sha256) &&
+    instant(metric.retrieved_at);
 }
 function piprDownloadUrl(value) {
   try {

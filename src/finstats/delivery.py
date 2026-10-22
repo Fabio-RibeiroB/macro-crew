@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from datetime import datetime
 from pathlib import Path
 import re
 import sys
@@ -23,6 +24,28 @@ PUBLIC_FIELDS = (
     'parser_version', 'vintage_ordering', 'snapshot_evidence_kind',
     'quality_note', 'quality_source_url', 'upcoming_period',
 )
+
+
+def validate_energy_provenance(metric, state):
+    if metric.get('snapshot_evidence_kind') != 'official_download':
+        raise ValueError('Recorded fixtures cannot be published as official Ofgem history')
+    if metric.get('source_download_url') != DEFINITIONS['household_energy'].download_url:
+        raise ValueError('Unexpected Ofgem source page URL')
+    digest = metric.get('source_sha256')
+    if not isinstance(digest, str) or not re.fullmatch('[a-f0-9]{64}', digest):
+        raise ValueError('Missing Ofgem source hash')
+    retrieved_at = metric.get('retrieved_at')
+    if not isinstance(retrieved_at, str) or not retrieved_at.endswith('Z'):
+        raise ValueError('Missing Ofgem source retrieval time')
+    try:
+        retrieved = datetime.fromisoformat(retrieved_at[:-1] + '+00:00')
+    except ValueError as exc:
+        raise ValueError('Invalid Ofgem source retrieval time') from exc
+    if retrieved.utcoffset() is None:
+        raise ValueError('Invalid Ofgem source retrieval time')
+    archived = state / 'raw' / f'{digest}.bin'
+    if archived.is_symlink() or not archived.is_file() or hashlib.sha256(archived.read_bytes()).hexdigest() != digest:
+        raise ValueError('Ofgem source archive is missing or failed integrity check')
 
 
 def deliver(state_dir, output_dir, event_failure_sink=None, event_unqualified_sink=None):
@@ -56,6 +79,10 @@ def deliver(state_dir, output_dir, event_failure_sink=None, event_unqualified_si
             raise ValueError('Unemployment quality evidence mismatch')
         member = {name: metric[name] for name in PUBLIC_FIELDS if name in metric}
         member['definition'] = public_definition(key)
+        if key == 'household_energy' and (
+                metric.get('latest') is not None or metric.get('history') or
+                metric.get('upcoming_period') is not None):
+            validate_energy_provenance(metric, state)
         if metric['validation_status'] == 'unavailable':
             if key == 'household_energy':
                 history = metric.get('history', [])

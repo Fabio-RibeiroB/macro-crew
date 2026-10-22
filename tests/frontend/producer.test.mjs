@@ -113,6 +113,41 @@ test("strict reader keeps announced Ofgem periods separate and accepts date-boun
   const unavailable = await withWire(noCurrentData);
   assert.equal(unavailable.metrics.household_energy.latest, null);
   assert.equal(unavailable.metrics.household_energy.history[0].reference.period_status, "expired");
+
+  const corruptions = [
+    (cap) => { cap.snapshot_evidence_kind = "recorded_fixture"; },
+    (cap) => { cap.source_download_url = "https://example.com/fake-ofgem.html"; },
+    (cap) => { delete cap.source_sha256; },
+    (cap) => { delete cap.retrieved_at; },
+  ];
+  for (const corrupt of corruptions) {
+    const candidate = JSON.parse(JSON.stringify(noCurrentData));
+    corrupt(candidate.metrics.household_energy);
+    await assert.rejects(() => withWire(candidate));
+  }
+
+  const upcomingOnly = JSON.parse(energyBytes.toString("utf8"));
+  const upcomingMetric = upcomingOnly.metrics.household_energy;
+  upcomingMetric.validation_status = "unavailable";
+  upcomingMetric.latest = null;
+  upcomingMetric.history = [];
+  upcomingMetric.upcoming_period = announced;
+  const upcomingState = await withWire(upcomingOnly);
+  assert.equal(upcomingState.metrics.household_energy.upcoming_period.value, "1750");
+  upcomingMetric.snapshot_evidence_kind = "recorded_fixture";
+  await assert.rejects(() => withWire(upcomingOnly));
+
+  const neverCollected = JSON.parse(energyBytes.toString("utf8"));
+  const emptyMetric = neverCollected.metrics.household_energy;
+  emptyMetric.validation_status = "unavailable";
+  emptyMetric.latest = null;
+  emptyMetric.history = [];
+  emptyMetric.upcoming_period = null;
+  for (const field of ["snapshot_evidence_kind", "source_download_url", "source_sha256", "retrieved_at"])
+    delete emptyMetric[field];
+  const cold = await withWire(neverCollected);
+  assert.equal(cold.metrics.household_energy.latest, null);
+  assert.equal(cold.metrics.household_energy.history.length, 0);
 });
 
 function fileFetcher(data, selectedManifest = manifest) {
