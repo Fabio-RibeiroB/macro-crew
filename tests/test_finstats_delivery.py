@@ -46,7 +46,7 @@ def test_public_delivery_is_readable_official_and_contains_no_private_files(tmp_
     store = Store(private)
     try:
         for receipt in receipts:
-            assert receipt['release_page_evidence_kind'] == 'recorded_fixture'
+            assert receipt['release_page_evidence_kind'] == 'official_download'
             page = (private / 'raw' / f"{receipt['release_page_sha256']}.bin").read_bytes()
             csv = (private / 'raw' / f"{receipt['source_csv_sha256']}.bin").read_bytes()
             assert hashlib.sha256(page).hexdigest() == receipt['release_page_sha256']
@@ -204,8 +204,16 @@ def test_delivery_publishes_cpi_headline_with_core_metrics_retained(tmp_path):
 
 def test_checked_in_producer_generation_regenerates_byte_identically(tmp_path):
     private, public = tmp_path / 'private', tmp_path / 'public'
+    calls = 0
+    def producer_clock():
+        nonlocal calls
+        calls += 1
+        # Keep the nine established source timestamps byte-identical. The
+        # retained release page was captured the following day, so only the two
+        # HPI ingests and final publication use that later controlled time.
+        return CPI_WHEN - timedelta(days=1) if calls <= 18 else CPI_WHEN
     with patch('finstats.publication.uuid4', return_value=SimpleNamespace(hex='c' * 32)):
-        collect(private, transport=fixture_transport, clock=lambda: CPI_WHEN)
+        collect(private, transport=fixture_transport, clock=producer_clock)
         deliver(private, public)
     wire = Path(__file__).parent / 'fixtures' / 'verified'
     manifest = json.loads((public / 'current.json').read_text())
@@ -215,7 +223,12 @@ def test_checked_in_producer_generation_regenerates_byte_identically(tmp_path):
     candidate = json.loads((wire / 'producer-pay-v1.json').read_bytes())
     previous = json.loads((wire / 'producer-cpi-v1.json').read_bytes())
     for key in ('bank_rate', 'cpih', 'gdp', 'cpi'):
-        assert candidate['metrics'][key] == previous['metrics'][key]
+        current_core = dict(candidate['metrics'][key])
+        previous_core = dict(previous['metrics'][key])
+        # This field depends on the publication clock, unlike core source data.
+        current_core.pop('release_status', None)
+        previous_core.pop('release_status', None)
+        assert current_core == previous_core
 
 
 def test_shared_wire_fixtures_keep_m1_core_identical_and_add_optional_members():
@@ -246,6 +259,38 @@ def test_fixture_replay_cannot_be_published_as_official(tmp_path):
     with pytest.raises(ValueError, match='fixtures'):
         deliver(private, public)
     assert not (public / 'current.json').exists()
+
+
+def test_mocked_collection_cannot_publish_hpi_backed_by_recorded_page(tmp_path):
+    from finstats.sources import recorded_hpi_release_evidence
+
+    private, public = tmp_path / 'private', tmp_path / 'public'
+    def transport(key):
+        values = fixture_transport(key)
+        if key.startswith('house_price_'):
+            body, url, published, _ = values
+            return (body, url, published,
+                    recorded_hpi_release_evidence(url, published, '2026-10-21T23:06:23Z'))
+        return values
+
+    result = collect(private, transport=transport, clock=lambda: CPI_WHEN)
+    assert result['failed_metrics'] == ['house_price_level', 'house_price_growth']
+    store = Store(private)
+    try:
+        for key in ('house_price_level', 'house_price_growth'):
+            assert store.latest(key) is None
+            assert store.db.execute(
+                "SELECT status FROM attempt WHERE key=? ORDER BY id DESC LIMIT 1", (key,),
+            ).fetchone()[0] == 'rejected'
+    finally:
+        store.close()
+    deliver(private, public)
+    data = read_public(public)
+    for key in ('house_price_level', 'house_price_growth'):
+        assert data['metrics'][key]['validation_status'] == 'unavailable'
+        assert data['metrics'][key]['latest'] is None
+        assert data['metrics'][key]['history'] == []
+    assert data['metrics']['gdp']['latest']['value'] is not None
 
 
 def test_invalid_source_hash_or_path_never_replaces_public_manifest(tmp_path):

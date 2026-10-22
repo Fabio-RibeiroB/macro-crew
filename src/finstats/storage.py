@@ -214,8 +214,8 @@ class Store:
                     raise ValidationError('UK HPI release page exceeds size limit')
                 if page_kind not in ('official_download', 'recorded_fixture'):
                     raise ValidationError('Invalid UK HPI release page evidence kind')
-                if evidence_kind == 'recorded_fixture' and page_kind != 'recorded_fixture':
-                    raise ValidationError('Fixture source requires labelled fixture release page evidence')
+                if page_kind != evidence_kind:
+                    raise ValidationError('UK HPI release page evidence kind disagrees with snapshot evidence kind')
                 if not isinstance(page_url, str) or not re.fullmatch(
                     r'https://www\.gov\.uk/government/statistical-data-sets/uk-house-price-index-data-downloads-[a-z]+-[0-9]{4}(?:--[0-9]+)?',
                     page_url,

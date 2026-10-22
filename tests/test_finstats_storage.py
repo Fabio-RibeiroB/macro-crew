@@ -9,7 +9,7 @@ from finstats.storage import Store
 from tests.test_finstats_sources import fixture
 
 WHEN = datetime(2026, 10, 20, 12, tzinfo=timezone.utc)
-CPI_WHEN = datetime(2026, 10, 21, 12, tzinfo=timezone.utc)
+CPI_WHEN = datetime(2026, 10, 22, 12, tzinfo=timezone.utc)
 
 
 @pytest.fixture
@@ -112,7 +112,8 @@ def test_hpi_truncated_edition_rejects_and_retains_prior_snapshot(store, tmp_pat
     from finstats.sources import recorded_hpi_release_evidence
     july_page = recorded_hpi_release_evidence(july_url, '2026-07-31', '2026-10-20T00:00:00Z')
     prior_id = store.ingest(key, body, CPI_WHEN, source_url=july_url,
-                            source_published_date='2026-07-31', release_page_evidence=july_page)
+                            source_published_date='2026-07-31', release_page_evidence=july_page,
+                            evidence_kind='recorded_fixture')
     prior = store.latest(key)
     prior_history = store.db.execute(
         'SELECT period,value,status,source_row FROM observation WHERE snapshot_id=? ORDER BY period',
@@ -124,7 +125,8 @@ def test_hpi_truncated_edition_rejects_and_retains_prior_snapshot(store, tmp_pat
     with pytest.raises(ValidationError, match='latest reference period does not match'):
         store.ingest(key, body, CPI_WHEN, source_url=august_url,
                      source_published_date='2026-10-21', release_page_evidence=recorded_hpi_release_evidence(
-                         august_url, '2026-10-21', '2026-10-20T00:00:00Z'))
+                         august_url, '2026-10-21', '2026-10-20T00:00:00Z'),
+                     evidence_kind='recorded_fixture')
 
     current = store.latest(key)
     assert current['id'] == prior_id
@@ -145,13 +147,46 @@ def test_hpi_truncated_edition_rejects_and_retains_prior_snapshot(store, tmp_pat
         with pytest.raises(ValidationError, match='latest reference period does not match'):
             cold.ingest(key, body, CPI_WHEN, source_url=august_url,
                         source_published_date='2026-10-21', release_page_evidence=recorded_hpi_release_evidence(
-                            august_url, '2026-10-21', '2026-10-20T00:00:00Z'))
+                            august_url, '2026-10-21', '2026-10-20T00:00:00Z'),
+                        evidence_kind='recorded_fixture')
         assert cold.latest(key) is None
         assert cold.db.execute(
             "SELECT status FROM attempt WHERE key=? ORDER BY id DESC LIMIT 1", (key,),
         ).fetchone()['status'] == 'rejected'
     finally:
         cold.close()
+
+
+@pytest.mark.parametrize('with_prior', [False, True])
+def test_recorded_hpi_page_cannot_back_official_snapshot(store, with_prior):
+    from finstats.sources import recorded_hpi_release_evidence
+    from tests.test_finstats_sources import fixture_transport
+
+    body, url, published, official_page = fixture_transport('house_price_level')
+    prior_id = None
+    if with_prior:
+        prior_id = store.ingest(
+            'house_price_level', body, CPI_WHEN, source_url=url,
+            source_published_date=published, release_page_evidence=official_page,
+        )
+    prior_receipts = store.db.execute('SELECT count(*) FROM receipt').fetchone()[0]
+    prior_sidecars = len(list((store.directory / 'receipts').glob('*.json')))
+
+    with pytest.raises(ValidationError, match='evidence kind disagrees'):
+        store.ingest(
+            'house_price_level', body, CPI_WHEN + timedelta(days=1), source_url=url,
+            source_published_date=published,
+            release_page_evidence=recorded_hpi_release_evidence(
+                url, published, '2026-10-22T00:00:00Z'),
+        )
+
+    if with_prior:
+        assert store.latest('house_price_level')['id'] == prior_id
+    else:
+        assert store.latest('house_price_level') is None
+    assert store.db.execute('SELECT count(*) FROM receipt').fetchone()[0] == prior_receipts
+    assert store.db.execute("SELECT status FROM attempt ORDER BY id DESC LIMIT 1").fetchone()[0] == 'rejected'
+    assert len(list((store.directory / 'receipts').glob('*.json'))) == prior_sidecars
 
 
 def test_metrics_fail_independently_and_no_ai_is_required(store):

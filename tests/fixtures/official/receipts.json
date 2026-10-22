@@ -103,5 +103,14 @@
     "sha256": "9048402914cceb2214a1f48246f499683585aa2af2f007cb7e160b696b2cd790",
     "url": "https://publicdata.landregistry.gov.uk/market-trend-data/house-price-index-data/Average-prices-2026-08.csv?utm_medium=GOV.UK&utm_source=datadownload&utm_campaign=average_price&utm_term=9.30_21_10_26",
     "retrieved_at": "2026-10-21T23:06:23.965378+00:00"
+  },
+  "uk_hpi_release_page_2026-08.html": {
+    "source": "HM Land Registry UK HPI release page (exact recorded official page bytes; used by controlled test transport)",
+    "url": "https://www.gov.uk/government/statistical-data-sets/uk-house-price-index-data-downloads-august-2026--2",
+    "retrieved_at": "2026-10-22T10:02:14.116197Z",
+    "sha256": "9d826f197ee6072e360a40b3f9ec6938f548c8b3506d6ceaa794aa24612de9b4",
+    "content_type": "text/html; charset=utf-8",
+    "evidence_kind": "official_download",
+    "fixture_role": "controlled fixture transport evidence; paired with reduced HPI CSV fixture"
   }
 }

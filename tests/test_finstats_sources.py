@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 import pytest
 
 from finstats.sources import (
-    DEFINITIONS, ValidationError, fixture_file, parse, recorded_hpi_release_evidence,
+    DEFINITIONS, ValidationError, fixture_file, parse,
 )
 
 FIXTURES = Path(__file__).parent / 'fixtures' / 'official'
@@ -23,13 +23,20 @@ def fixture(key):
 
 
 def fixture_transport(key):
+    """Controlled test transport: reduced data fixtures and retained page evidence."""
     body = fixture(key)
     if key.startswith('private_rent_'):
         return body, ('https://www.ons.gov.uk/file?uri=%2Feconomy%2Finflationandpriceindices%2Fdatasets%2Fpriceindexofprivaterentsukmonthlypricestatistics%2F21october2026%2Fpriceindexofprivaterentsukmonthlypricestatistics.xlsx')
     if key.startswith('house_price_'):
         receipt = json.loads((FIXTURES / 'receipts.json').read_text())['uk_hpi_average_prices.csv']
-        page = recorded_hpi_release_evidence(
-            receipt['originalURL'], receipt['source_published_date'], '2026-10-20T00:00:00Z')
+        page_receipt = json.loads((FIXTURES / 'receipts.json').read_text())[
+            'uk_hpi_release_page_2026-08.html']
+        page = {
+            'body': (FIXTURES / 'uk_hpi_release_page_2026-08.html').read_bytes(),
+            'url': page_receipt['url'],
+            'retrieved_at': page_receipt['retrieved_at'],
+            'evidence_kind': page_receipt['evidence_kind'],
+        }
         return body, receipt['originalURL'], receipt['source_published_date'], page
     return body
 
