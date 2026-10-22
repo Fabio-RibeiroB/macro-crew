@@ -33,8 +33,10 @@ unemployment/vacancy releases are not linked.
 All six configured providers currently have bounded, reviewed date adapters:
 BoE confirmed MPC dates; OBR EFO publication-card “Next release”; HM Treasury's
 explicit Budget-date correspondence; DESNZ dated page-update notices; and
-Ofgem price-cap article rows under “Energy price cap level dates” that explicitly
-say when levels will be announced and identify their effective period. Only
+Ofgem price-cap article rows under “Energy price cap level dates” that state the
+deadline (“announced by”), note that Ofgem may publish earlier, and identify the
+effective period. Ofgem events label this as a date-only deadline, not an exact
+announcement day. Only
 dates found in those source structures are emitted. A recognized source with no
 dated upcoming event reports an empty list and `unknown_dates: true`; an
 unrecognized or changed source structure fails closed and retains the prior

@@ -29,6 +29,10 @@ def test_recorded_sources_preserve_precision_dst_dedup_and_changes(tmp_path):
     assert p['obr']['events'][0]['date']=='2026-10-28'
     assert p['hm_treasury']['events'][0]['date']=='2026-10-28'
     assert [e['date'] for e in p['ofgem_energy']['events']]==['2026-11-25','2027-02-23','2027-05-26']
+    first_cap=p['ofgem_energy']['events'][0]
+    assert first_cap['title']=='Ofgem price cap level announcement due by 25 November 2026; Ofgem may publish earlier (effective period 1 January 2027 to 31 March 2027)'
+    assert first_cap['linked_indicators']==['uk.energy_price_cap.typical_dual_fuel_bill']
+    assert first_cap['status']=='scheduled' and first_cap['time'] is None and first_cap['time_precision']=='date'
     with pytest.raises(ValueError,match='fixture'):
         public_events(tmp_path)
 

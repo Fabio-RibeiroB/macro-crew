@@ -1154,7 +1154,10 @@ export default function App({
       (typeof window === "undefined" ? "/" : window.location.pathname),
   );
   const needsData = ["overview", "prices", "economy", "jobs-pay", "housing", "government"].includes(page.id);
+<<<<<<< HEAD
   const needsEvents = ["overview", "calendar", "prices", "economy", "jobs-pay", "housing", "government"].includes(page.id);
+=======
+>>>>>>> ca2d9213a41f157b8b1ceebe1df457a7769fa926
   const [snapshot, setSnapshot] = useState(() =>
     refreshSnapshot(initialData, needsData ? "loading" : "idle"),
   );

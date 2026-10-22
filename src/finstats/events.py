@@ -26,7 +26,7 @@ SOURCES = {
 INDICATORS = {
     'boe_mpc':['uk.bank_rate.daily'],
     'desnz_fuel':['uk.road_fuel.unleaded_petrol_price','uk.road_fuel.diesel_price'],
-    'ofgem_energy':['uk.energy.price_cap'],
+    'ofgem_energy':['uk.energy_price_cap.typical_dual_fuel_bill'],
     'obr':['uk.public_debt.net_debt_gdp'],
     'hm_treasury':['uk.public_debt.net_debt_gdp'],
 }
@@ -219,7 +219,12 @@ def _parse_ofgem(body,today):
     for match in matches:
         announcement=_date(match.group(1)); start=_date(match.group(2)); end=_date(match.group(3))
         if announcement>=today.isoformat():
-            found.append(event('ofgem:price-cap:'+start, f'Ofgem price cap announcement for {start} to {end}', announcement,None,'scheduled','ofgem_energy',INDICATORS['ofgem_energy'],SOURCES['ofgem_energy'][0]))
+            deadline=date.fromisoformat(announcement).strftime('%d %B %Y').lstrip('0')
+            start_label=date.fromisoformat(start).strftime('%d %B %Y').lstrip('0')
+            end_label=date.fromisoformat(end).strftime('%d %B %Y').lstrip('0')
+            title=(f'Ofgem price cap level announcement due by {deadline}; '
+                   f'Ofgem may publish earlier (effective period {start_label} to {end_label})')
+            found.append(event('ofgem:price-cap:'+start, title, announcement,None,'scheduled','ofgem_energy',INDICATORS['ofgem_energy'],SOURCES['ofgem_energy'][0]))
     return found
 
 def _paths(state):
