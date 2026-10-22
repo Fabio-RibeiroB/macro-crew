@@ -45,12 +45,24 @@ def test_semantic_text_hash_ignores_html_whitespace_and_noncontent():
     assert first == second
     assert semantic_fingerprint({"text": first}) == semantic_fingerprint({"text": second})
     assert canonical_official_text("<main><p>Inflation was 3.6%.</p></main>") != first
+    nested = canonical_official_text(
+        "<main><article><header><h1>Release title A</h1></header>"
+        "<p>Body text</p></article></main>"
+    )
+    nested_title_correction = canonical_official_text(
+        "<main><article><header><h1>Release title B</h1></header>"
+        "<p>Body text</p></article></main>"
+    )
+    assert nested == "Release title A Body text"
+    assert semantic_fingerprint({"text": nested}) != semantic_fingerprint(
+        {"text": nested_title_correction}
+    )
     with pytest.raises(ValueError, match="unambiguous"):
         canonical_official_text("<div><p>Unscoped page content</p></div>")
     for malformed in (
-        "<main><article>Nested scope</article></main>",
+        "<main><p>First</p></main><article><p>Second</p></article>",
         "<main><p>Unclosed publication scope</p>",
-        "<main><p>Mismatched scope</p></article>",
+        "<main><article><p>Mismatched scope</p></main></article>",
     ):
         with pytest.raises(ValueError, match="unambiguous"):
             canonical_official_text(malformed)

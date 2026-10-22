@@ -64,32 +64,31 @@ class _VisibleText(HTMLParser):
     """Extract visible text while discarding markup and non-content elements."""
 
     _DROP = {"script", "style", "noscript", "svg"}
-    _CHROME = {"nav", "header", "footer"}
-
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self.parts: list[str] = []
         self.drop_depth = 0
         self.chrome_depth = 0
         self.scope_tags: list[str] = []
-        self.scopes = 0
+        self.outer_scopes = 0
         self.in_scope = False
         self.invalid_scope_nesting = False
 
     def handle_starttag(self, tag, attrs):
         tag = tag.lower()
         if tag in {"main", "article"}:
-            self.scopes += 1
+            if not self.scope_tags:
+                self.outer_scopes += 1
             self.scope_tags.append(tag)
             self.in_scope = True
-        if tag in self._CHROME:
+        if tag in {"nav", "footer"} or (tag == "header" and not self.scope_tags):
             self.chrome_depth += 1
         if tag in self._DROP:
             self.drop_depth += 1
 
     def handle_endtag(self, tag):
         tag = tag.lower()
-        if tag in self._CHROME and self.chrome_depth:
+        if (tag in {"nav", "footer"} or (tag == "header" and not self.scope_tags)) and self.chrome_depth:
             self.chrome_depth -= 1
         if tag in {"main", "article"}:
             if not self.scope_tags or self.scope_tags[-1] != tag:
@@ -120,7 +119,7 @@ def canonical_official_text(value: str | bytes) -> str:
         parser = _VisibleText()
         parser.feed(value)
         parser.close()
-        if (parser.scopes != 1 or parser.scope_tags
+        if (parser.outer_scopes != 1 or parser.scope_tags
                 or parser.invalid_scope_nesting):
             raise ValueError("official HTML requires one unambiguous main or article scope")
         parts = parser.parts
