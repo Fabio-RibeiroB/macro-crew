@@ -1,21 +1,33 @@
 # M3 rollout qualification — 22 October 2026
 
 **Status:** qualified for the documented reader-first rollout; not deployed.
-Production remains `deploy-2026-10-22.1`. Qualified runtime source is `b079cd6a1e34b83195cedd50db7f5b391275537a`,
-including the HPI edition-month completeness check. Use the final merged PR #60
-commit containing that runtime revision and its documentation corrections; do not
-deploy the earlier `8d7e3df` qualification snapshot.
+Production remains `deploy-2026-10-22.1`. Runtime `b079cd6` added the HPI
+edition-month completeness check. The current qualified runtime is
+`31b15822c699f600738a2d9ddf6d76ad9ae79b69`; the final PR #60 head contains this
+runtime and the following documentation correction. This remains rollout
+qualification, not deployment.
 
 ## Compatibility and collection evidence
 
-- A fresh temporary official collection at `b079cd6`, using a new copy of the
-  production database, collected all 11 feeds with no failures. All members were
-  verified with successful status, and the public manifest SHA-256 matched.
-  Its immutable generation was `58e1e1ee222349ba82dc2c76ec034569`; the final
-  HPI edition-month guard accepted August 2026 at £273,037 and 0.9%.
-  State/output live under `/tmp/finstats-m3-b079cd6/`, outside served paths. No production files, services, timers or
+- A fresh official collect-and-deliver at runtime `31b1582`, against a new
+  isolated copy of the temporary production database, collected all 11 feeds
+  with no failures. All 11 public members were verified and `ok`; generation
+  `78727b47ea5848559b6c30a973b038e9` was delivered successfully. The preserved
+  database copy was not modified. No production files, services, timers or
   databases were changed.
-- Candidate reader `b079cd6` accepts the actual production nine-feed payload.
+- The accepted HPI attempts retain the exact CSV and GOV.UK release page in the
+  private content-addressed `raw/<sha256>.bin` archive. Each
+  `receipts/<attempt_id>.json` sidecar binds the metric key, CSV URL/hash, release
+  page URL/hash/retrieval timestamp, parsed publication date and selected CSV
+  link to the accepted SQLite receipt. The page and CSV hashes matched their
+  archived bytes; parsed date `2026-10-21` and selected URL matched the supplied
+  receipt. The public delivery contains none of the page evidence fields.
+  Release page: `https://www.gov.uk/government/statistical-data-sets/uk-house-price-index-data-downloads-august-2026--2`
+  (SHA-256 `9d826f197ee6072e360a40b3f9ec6938f548c8b3506d6ceaa794aa24612de9b4`,
+  retrieved `2026-10-22T10:02:14.116197Z`). CSV:
+  `https://publicdata.landregistry.gov.uk/market-trend-data/house-price-index-data/Average-prices-2026-08.csv?utm_medium=GOV.UK&utm_source=datadownload&utm_campaign=average_price&utm_term=9.30_21_10_26`
+  (SHA-256 `dde90f4ca1aeca2749a6fe61f00c4f3daef58c1bec232b6da1130a16d6686c90`).
+- Candidate reader `8d7e3df` accepts the actual production nine-feed payload.
   The currently deployed reader at `98226c2` rejects the candidate eleven-feed
   payload with `Error('Unknown metric')`.
 - The frozen M1 compatibility test accepts the additive payload under its
@@ -24,11 +36,14 @@ deploy the earlier `8d7e3df` qualification snapshot.
 
 ## Build and staging evidence
 
-- Combined checks for the candidate: 159 frontend tests and 180 core tests
-  passed on `b079cd6`; all four CI checks passed on that runtime revision.
+- Checks for runtime `31b1582`: 126 focused source/storage/publication/delivery
+  tests and the full dependency-light core suite (185 tests) passed. The
+  frontend suite (159 tests), build and browser evidence remain from `8d7e3df`;
+  frontend release inputs are unchanged. CI will run all four required checks
+  for the final PR head; no final-head CI result is claimed here.
 - Frontend build/browser evidence was collected at `8d7e3df`, using the clean
   external release `/tmp/finstats-m3-8d7e3df/release` staged at `127.0.0.1:8179`.
-  A Git comparison from that revision to `b079cd6` shows no changes to `src/app`,
+  A Git comparison from that revision to `31b1582` shows no changes to `src/app`,
   `src/styles`, `public`, build scripts/configuration or npm manifests/lockfile.
   That unchanged frontend artifact is reused; it is not claimed to be rebuilt
   from the later collector revision. The collector is qualified separately below.
