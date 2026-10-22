@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import gzip
 from contextlib import contextmanager
 import fcntl
 from http.client import HTTPException
@@ -42,9 +43,15 @@ def collect(directory, transport=fetch, clock=utc_now, fixtures=None, event_coll
                 release_page_evidence = None
                 try:
                     if fixtures:
-                        body = (Path(fixtures) / fixture_file(key)).read_bytes()
+                        fixture_name = fixture_file(key)
+                        body = (Path(fixtures) / fixture_name).read_bytes()
+                        # Only the explicitly compressed archived Ofgem fixture is
+                        # expanded here, at the fixture transport boundary. The
+                        # bytes sent to Store.ingest are the original HTTP body.
+                        if key == 'household_energy' and fixture_name.endswith('.html.gz'):
+                            body = gzip.decompress(body)
                         kind = 'recorded_fixture'
-                        url = f'fixture:{fixture_file(key)}'
+                        url = f'fixture:{fixture_name}'
                         source_published_date = None
                         if key.startswith('house_price_'):
                             receipt = json.loads((Path(fixtures) / 'receipts.json').read_text()).get(fixture_file(key), {})

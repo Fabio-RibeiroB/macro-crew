@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from datetime import datetime
 from pathlib import Path
 import re
 import sys
@@ -21,8 +22,30 @@ PUBLIC_FIELDS = (
     'publication_time_precision', 'source_published_at', 'next_release_date',
     'release_status', 'retrieved_at', 'source_download_url', 'source_sha256',
     'parser_version', 'vintage_ordering', 'snapshot_evidence_kind',
-    'quality_note', 'quality_source_url',
+    'quality_note', 'quality_source_url', 'upcoming_period',
 )
+
+
+def validate_energy_provenance(metric, state):
+    if metric.get('snapshot_evidence_kind') != 'official_download':
+        raise ValueError('Recorded fixtures cannot be published as official Ofgem history')
+    if metric.get('source_download_url') != DEFINITIONS['household_energy'].download_url:
+        raise ValueError('Unexpected Ofgem source page URL')
+    digest = metric.get('source_sha256')
+    if not isinstance(digest, str) or not re.fullmatch('[a-f0-9]{64}', digest):
+        raise ValueError('Missing Ofgem source hash')
+    retrieved_at = metric.get('retrieved_at')
+    if not isinstance(retrieved_at, str) or not retrieved_at.endswith('Z'):
+        raise ValueError('Missing Ofgem source retrieval time')
+    try:
+        retrieved = datetime.fromisoformat(retrieved_at[:-1] + '+00:00')
+    except ValueError as exc:
+        raise ValueError('Invalid Ofgem source retrieval time') from exc
+    if retrieved.utcoffset() is None:
+        raise ValueError('Invalid Ofgem source retrieval time')
+    archived = state / 'raw' / f'{digest}.bin'
+    if archived.is_symlink() or not archived.is_file() or hashlib.sha256(archived.read_bytes()).hexdigest() != digest:
+        raise ValueError('Ofgem source archive is missing or failed integrity check')
 
 
 def deliver(state_dir, output_dir, event_failure_sink=None, event_unqualified_sink=None):
@@ -56,8 +79,18 @@ def deliver(state_dir, output_dir, event_failure_sink=None, event_unqualified_si
             raise ValueError('Unemployment quality evidence mismatch')
         member = {name: metric[name] for name in PUBLIC_FIELDS if name in metric}
         member['definition'] = public_definition(key)
+        if key == 'household_energy' and (
+                metric.get('latest') is not None or metric.get('history') or
+                metric.get('upcoming_period') is not None):
+            validate_energy_provenance(metric, state)
         if metric['validation_status'] == 'unavailable':
-            member.update(latest=None, history=[])
+            if key == 'household_energy':
+                history = metric.get('history', [])
+                if any(point.get('reference', {}).get('period_status') != 'expired' for point in history):
+                    raise ValueError('Unavailable Ofgem history contains a non-expired period')
+                member.update(latest=None, history=history, history_window='last_5_years')
+            else:
+                member.update(latest=None, history=[])
         elif metric['validation_status'] == 'verified':
             if metric['snapshot_evidence_kind'] != 'official_download':
                 raise ValueError('Recorded fixtures cannot become public official data')
@@ -66,10 +99,13 @@ def deliver(state_dir, output_dir, event_failure_sink=None, event_unqualified_si
             approved_host |= key.startswith('house_price_') and url.hostname == 'publicdata.landregistry.gov.uk'
             approved_host |= key in {'petrol_price', 'diesel_price'} and url.hostname == 'assets.publishing.service.gov.uk'
             approved_host |= key.startswith('gilt_') and url.hostname == 'www.bankofengland.co.uk'
+            approved_host |= key == 'household_energy' and url.hostname == 'www.ofgem.gov.uk'
             if url.scheme != 'https' or not approved_host:
                 raise ValueError('Unexpected official download URL')
             if key.startswith('gilt_') and metric['source_download_url'] != definition.download_url:
                 raise ValueError('Unexpected BoE gilt download URL')
+            if key == 'household_energy' and metric['source_download_url'] != definition.download_url:
+                raise ValueError('Unexpected Ofgem source page URL')
             if key.startswith('private_rent_') and not re.fullmatch(
                     r'/file\?uri=(?:%2F|/)economy(?:%2F|/)inflationandpriceindices(?:%2F|/)datasets(?:%2F|/)priceindexofprivaterentsukmonthlypricestatistics(?:%2F|/)[0-9]{1,2}[a-z]+[0-9]{4}(?:%2F|/)priceindexofprivaterentsukmonthlypricestatistics\.xlsx',
                     url.path + ('?' + url.query if url.query else '')):

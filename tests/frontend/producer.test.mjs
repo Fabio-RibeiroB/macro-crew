@@ -23,6 +23,142 @@ const manifest = JSON.parse(
   readFileSync(new URL("producer-pay-v1.manifest.json", WIRE), "utf8"),
 );
 
+test("Ofgem live smoke producer output passes the strict reader and renders assumptions", async () => {
+  const energyBytes = readFileSync(new URL("producer-energy-v1.json", WIRE));
+  const energyManifest = JSON.parse(readFileSync(new URL("producer-energy-v1.manifest.json", WIRE), "utf8"));
+  const data = await loadVerified("/", fileFetcher(energyBytes, energyManifest));
+  const energy = data.metrics.household_energy;
+  assert.equal(energy.latest.value, "1723");
+  assert.equal(energy.latest.reference.effective_start, "2026-10-01");
+  assert.equal(energy.latest.reference.effective_end, "2026-12-31");
+  assert.equal(energy.latest.reference.comparison_status, "not_comparable_tax_change");
+  assert.equal(data.metrics.bank_rate.validation_status, "unavailable");
+  const { createServer } = await import("vite");
+  const { createElement } = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+  try {
+    const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
+    const home = renderToStaticMarkup(createElement(App, { pathname: "/", initialData: data }));
+    assert.match(home, /<h2>Household energy<\/h2>/);
+    assert.match(home, /£1,723/);
+    assert.match(home, /No direct comparison: Ofgem says the tax treatment changed/);
+    const prices = renderToStaticMarkup(createElement(App, { pathname: "/prices", initialData: data }));
+    assert.match(prices, /id="household-energy"/);
+    assert.match(prices, /2,500 kWh of single-rate electricity and 9,500 kWh of gas/);
+    assert.match(prices, /26\.32p\/kWh and 54\.83p\/day/);
+    assert.match(prices, /7\.97p\/kWh and 29\.68p\/day/);
+    assert.match(prices, /not supplied on this rates page/);
+    assert.match(prices, /No next cap announcement is currently published/);
+    const future = structuredClone(data);
+    future.metrics.household_energy.upcoming_period = {
+      ...energy.latest, value: "1750", period: "2027-01-01",
+      reference: { ...energy.latest.reference, effective_start: "2027-01-01", effective_end: "2027-03-31", period_status: "announced" },
+    };
+    const announced = renderToStaticMarkup(createElement(App, { pathname: "/prices", initialData: future }));
+    assert.match(announced, /Announced upcoming cap: £1,750/);
+    assert.doesNotMatch(announced, /No next cap announcement is currently published/);
+  } finally { await server.close(); }
+});
+
+test("strict reader keeps announced Ofgem periods separate and accepts date-bound activation", async () => {
+  const energyBytes = readFileSync(new URL("producer-energy-v1.json", WIRE));
+  const energyManifest = JSON.parse(readFileSync(new URL("producer-energy-v1.manifest.json", WIRE), "utf8"));
+  const withWire = async (candidate) => {
+    const bytes = Buffer.from(JSON.stringify(candidate));
+    const selectedManifest = { ...energyManifest, sha256: createHash("sha256").update(bytes).digest("hex") };
+    return loadVerified("/", fileFetcher(bytes, selectedManifest));
+  };
+  const announcedData = JSON.parse(energyBytes.toString("utf8"));
+  const metric = announcedData.metrics.household_energy;
+  const announced = {
+    ...metric.latest,
+    period: "2027-01-01",
+    value: "1750",
+    reference: {
+      ...metric.latest.reference,
+      effective_start: "2027-01-01",
+      effective_end: "2027-03-31",
+      period_status: "announced",
+      comparison_status: "compare_only_same_basis",
+      electricity: { unit_rate_p_per_kwh: "27.00", standing_charge_p_per_day: "55.00" },
+      gas: { unit_rate_p_per_kwh: "8.00", standing_charge_p_per_day: "30.00" },
+    },
+  };
+  metric.upcoming_period = announced;
+  const before = await withWire(announcedData);
+  assert.equal(before.metrics.household_energy.latest.value, "1723");
+  assert.equal(before.metrics.household_energy.upcoming_period.value, "1750");
+  assert.match(before.metrics.household_energy.latest.reference.tax_treatment, /1 October 2026 to 31 March 2027/);
+  assert.equal(before.metrics.household_energy.latest.reference.comparison_status, "not_comparable_tax_change");
+  assert.equal(before.metrics.household_energy.upcoming_period.reference.comparison_status, "compare_only_same_basis");
+
+  for (const status of ["effective", "expired", "announced"]) {
+    const invalidData = JSON.parse(JSON.stringify(announcedData));
+    const invalidPoint = status === "announced"
+      ? invalidData.metrics.household_energy.upcoming_period
+      : invalidData.metrics.household_energy.latest;
+    invalidPoint.reference.effective_end = "2026-09-30";
+    invalidPoint.reference.period_status = status;
+    await assert.rejects(() => withWire(invalidData));
+  }
+
+  const activatedData = JSON.parse(JSON.stringify(announcedData));
+  const activeMetric = activatedData.metrics.household_energy;
+  activeMetric.history[0].reference.period_status = "expired";
+  const active = { ...activeMetric.upcoming_period, reference: { ...activeMetric.upcoming_period.reference, period_status: "effective" } };
+  activeMetric.history.push(active);
+  activeMetric.latest = active;
+  activeMetric.upcoming_period = null;
+  const after = await withWire(activatedData);
+  assert.equal(after.metrics.household_energy.latest.value, "1750");
+  assert.equal(after.metrics.household_energy.latest.reference.period_status, "effective");
+
+  const noCurrentData = JSON.parse(energyBytes.toString("utf8"));
+  const noCurrent = noCurrentData.metrics.household_energy;
+  noCurrent.validation_status = "unavailable";
+  noCurrent.latest = null;
+  noCurrent.history[0].reference.period_status = "expired";
+  const unavailable = await withWire(noCurrentData);
+  assert.equal(unavailable.metrics.household_energy.latest, null);
+  assert.equal(unavailable.metrics.household_energy.history[0].reference.period_status, "expired");
+
+  const corruptions = [
+    (cap) => { cap.snapshot_evidence_kind = "recorded_fixture"; },
+    (cap) => { cap.source_download_url = "https://example.com/fake-ofgem.html"; },
+    (cap) => { delete cap.source_sha256; },
+    (cap) => { delete cap.retrieved_at; },
+  ];
+  for (const corrupt of corruptions) {
+    const candidate = JSON.parse(JSON.stringify(noCurrentData));
+    corrupt(candidate.metrics.household_energy);
+    await assert.rejects(() => withWire(candidate));
+  }
+
+  const upcomingOnly = JSON.parse(energyBytes.toString("utf8"));
+  const upcomingMetric = upcomingOnly.metrics.household_energy;
+  upcomingMetric.validation_status = "unavailable";
+  upcomingMetric.latest = null;
+  upcomingMetric.history = [];
+  upcomingMetric.upcoming_period = announced;
+  const upcomingState = await withWire(upcomingOnly);
+  assert.equal(upcomingState.metrics.household_energy.upcoming_period.value, "1750");
+  upcomingMetric.snapshot_evidence_kind = "recorded_fixture";
+  await assert.rejects(() => withWire(upcomingOnly));
+
+  const neverCollected = JSON.parse(energyBytes.toString("utf8"));
+  const emptyMetric = neverCollected.metrics.household_energy;
+  emptyMetric.validation_status = "unavailable";
+  emptyMetric.latest = null;
+  emptyMetric.history = [];
+  emptyMetric.upcoming_period = null;
+  for (const field of ["snapshot_evidence_kind", "source_download_url", "source_sha256", "retrieved_at"])
+    delete emptyMetric[field];
+  const cold = await withWire(neverCollected);
+  assert.equal(cold.metrics.household_energy.latest, null);
+  assert.equal(cold.metrics.household_energy.history.length, 0);
+});
+
 function fileFetcher(data, selectedManifest = manifest) {
   return async (url) =>
     url.endsWith("current.json")
@@ -59,10 +195,11 @@ test("DESNZ petrol and diesel render as two weekly UK prices with direct history
     assert.ok(card);
     assert.match(card, /Unleaded petrol/);
     assert.match(card, /174\.57p/);
-    assert.match(card, /Change −0\.71p per litre compared with 12 October 2026/);
+    assert.match(card, /−0\.71p\/litre vs 12 Oct 2026/);
+    assert.match(card, /aria-label="Change −0\.71 pence per litre compared with 12 October 2026"/);
     assert.match(card, /Diesel/);
     assert.match(card, /199\.33p/);
-    assert.match(card, /Change −0\.71p per litre compared with 12 October 2026/);
+    assert.match(card, /−0\.71p\/litre vs 12 Oct 2026/);
     assert.match(card, /href="\/prices#petrol-diesel"/);
     const delayed = renderToStaticMarkup(createElement(App, {
       pathname: "/", initialData: { ...producer, metrics: {

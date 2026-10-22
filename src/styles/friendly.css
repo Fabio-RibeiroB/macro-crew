@@ -973,7 +973,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
-  column-gap: 8px;
+  column-gap: 4px;
   border-bottom: 1px solid var(--fs-line);
 }
 .fs-fuel-value h4 {
@@ -1039,6 +1039,10 @@
   .fs-overview .fs-stat-count-7,
   .fs-overview .fs-stat-count-8 {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .fs-overview .fs-stat-count-9 {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 10px;
   }
   .fs-overview .fs-stat-compact {

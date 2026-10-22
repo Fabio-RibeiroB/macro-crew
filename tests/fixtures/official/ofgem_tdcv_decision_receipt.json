@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "source": "Ofgem Review of typical domestic consumption values: decision",
+  "url": "https://www.ofgem.gov.uk/sites/default/files/2026-05/Review%20of%20typical%20domestic%20consumption%20values%20decision.pdf",
+  "retrieved_at": "2026-10-22T15:15:17Z",
+  "evidence_kind": "official_download",
+  "file": "ofgem_tdcv_decision_2026-05.pdf",
+  "bytes": 207896,
+  "sha256": "009eb2ebe4979e1691d1900ad9d05e79f655eeada1801b8c6eed2f7a49a19ec9",
+  "publication_date": "2026-05-27",
+  "effective_date": "2026-07-01",
+  "final_medium_single_rate_electricity_kwh_per_year": 2500,
+  "final_medium_gas_kwh_per_year": 9500,
+  "decision_table": "Table 1: Finalised TDCV figures, page 6"
+}

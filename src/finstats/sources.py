@@ -4,6 +4,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import calendar
 from html.parser import HTMLParser
 import re
 import zipfile
@@ -21,6 +22,7 @@ MAX_PIPR_BYTES = 25_000_000
 MAX_SOURCE_PAGE_BYTES = 2_000_000
 MAX_HPI_BYTES = 10_000_000
 MAX_FUEL_BYTES = 2_000_000
+MAX_OFGEM_BYTES = 2_000_000
 PARSER_VERSION = 1
 MONTHS = {name: index for index, name in enumerate(
     ('JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'), 1)}
@@ -49,6 +51,11 @@ ONS = 'https://www.ons.gov.uk'
 BOE = 'https://www.bankofengland.co.uk'
 GILT_SERIES = ('IUDSNPY', 'IUDMNPY', 'IUDLNPY')
 GILT_DOWNLOAD_URL = BOE + '/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=04/Jan/2000&Dateto=now&SeriesCodes=' + ','.join(GILT_SERIES) + '&CSVF=CN&UsingCodes=Y'
+OFGEM_TDCV_URL = 'https://www.ofgem.gov.uk/sites/default/files/2026-05/Review%20of%20typical%20domestic%20consumption%20values%20decision.pdf'
+OFGEM_TDCV_SOURCE_SHA256 = '009eb2ebe4979e1691d1900ad9d05e79f655eeada1801b8c6eed2f7a49a19ec9'
+OFGEM_TDCV_EFFECTIVE = '2026-07-01'
+OFGEM_MEDIUM_SINGLE_RATE_ELECTRICITY_KWH = 2500
+OFGEM_MEDIUM_GAS_KWH = 9500
 UNEMPLOYMENT_QUALITY = {
     'quality_note': "The Labour Force Survey unemployment rate's 95% confidence intervals remain wider than before the pandemic.",
     'quality_source_url': ONS + '/employmentandlabourmarket/peopleinwork/employmentandemployeetypes/articles/labourforcesurveyqualityupdate/october2026',
@@ -149,6 +156,14 @@ DEFINITIONS = {
     'gilt_5y': Definition('uk.gilt_yield.nominal_par_5y', 'IUDSNPY', 'IADB', 'Yield from British Government Securities, 5 year Nominal Par Yield', 'daily', 'not_applicable', 'previous_trading_day', BOE + '/boeapps/database/', GILT_DOWNLOAD_URL),
     'gilt_10y': Definition('uk.gilt_yield.nominal_par_10y', 'IUDMNPY', 'IADB', 'Yield from British Government Securities, 10 year Nominal Par Yield', 'daily', 'not_applicable', 'previous_trading_day', BOE + '/boeapps/database/', GILT_DOWNLOAD_URL),
     'gilt_20y': Definition('uk.gilt_yield.nominal_par_20y', 'IUDLNPY', 'IADB', 'Yield from British Government Securities, 20 year Nominal Par Yield', 'daily', 'not_applicable', 'previous_trading_day', BOE + '/boeapps/database/', GILT_DOWNLOAD_URL),
+    'household_energy': Definition(
+        'uk.energy_price_cap.typical_dual_fuel_bill', 'Ofgem dual-fuel Direct Debit cap',
+        'Energy price cap unit rates and standing charges',
+        'Illustrative annual dual-fuel bill at typical consumption', 'quarterly',
+        'not_applicable', 'previous_comparable_period',
+        'https://www.ofgem.gov.uk/your-energy-supply/your-energy-bill/energy-price-cap-unit-rates-and-standing-charges',
+        'https://www.ofgem.gov.uk/your-energy-supply/your-energy-bill/energy-price-cap-unit-rates-and-standing-charges',
+        unit='GBP_per_year'),
 }
 
 # Optional metric members: registered public-definition fields the writer is
@@ -159,6 +174,13 @@ OPTIONAL_METRICS = {
     'gilt_5y': {'geography': 'United Kingdom', 'maturity_years': 5, 'yield_type': 'fitted_nominal_par', 'primary': False},
     'gilt_10y': {'geography': 'United Kingdom', 'maturity_years': 10, 'yield_type': 'fitted_nominal_par', 'primary': True},
     'gilt_20y': {'geography': 'United Kingdom', 'maturity_years': 20, 'yield_type': 'fitted_nominal_par', 'primary': False},
+    'household_energy': {'geography': 'Great Britain', 'payment_method': 'Direct Debit',
+        'tariff': 'default variable tariff', 'consumption_basis': 'Ofgem typical domestic consumption values (medium; single-rate electricity)',
+        'electricity_kwh_per_year': OFGEM_MEDIUM_SINGLE_RATE_ELECTRICITY_KWH,
+        'gas_kwh_per_year': OFGEM_MEDIUM_GAS_KWH,
+        'consumption_source_url': OFGEM_TDCV_URL,
+        'consumption_source_sha256': OFGEM_TDCV_SOURCE_SHA256,
+        'unit': 'GBP_per_year'},
     'cpi': {'geography': 'United Kingdom'},
     'regular_pay_nominal_growth': {'geography': 'Great Britain', 'window_months': 3},
     'regular_pay_real_growth': {'geography': 'Great Britain', 'window_months': 3, 'deflator': 'CPIH'},
@@ -202,6 +224,7 @@ def fixture_file(key):
         return 'uk_hpi_average_prices.csv'
     if key in {'petrol_price', 'diesel_price'}:
         return 'desnz_weekly_road_fuel_prices_2026-10-20.csv'
+    if key == 'household_energy': return 'ofgem_energy_price_cap_2026-10.html.gz'
     if key in JSON_TIMESERIES:
         return f'{key}_{definition.series.lower()}_{definition.dataset.lower()}.json'
     return f'{key}.csv'
@@ -214,6 +237,98 @@ class Observation:
     status: str
     row: int
     reference: dict | None = None
+
+
+class OfgemPage(HTMLParser):
+    """Bounded parser for Ofgem's published average Direct Debit table."""
+    def __init__(self):
+        super().__init__(); self.tables=[]; self.table=None; self.row=None; self.cell=False; self.text=[]; self.body=[]
+    def handle_starttag(self, tag, attrs):
+        if tag == 'table': self.table=[]
+        elif tag == 'tr' and self.table is not None: self.row=[]
+        elif tag in ('td','th') and self.row is not None: self.cell=True; self.text=[]
+    def handle_data(self, data):
+        self.body.append(data)
+        if self.cell: self.text.append(data)
+    def handle_endtag(self, tag):
+        if tag in ('td','th') and self.cell:
+            self.row.append(' '.join(' '.join(self.text).split())); self.cell=False
+        elif tag == 'tr' and self.row is not None:
+            self.table.append(self.row); self.row=None
+        elif tag == 'table' and self.table is not None:
+            self.tables.append(self.table); self.table=None
+
+
+def parse_ofgem(key, body, today):
+    if key != 'household_energy': raise ValidationError('Unexpected Ofgem metric')
+    if len(body) > MAX_OFGEM_BYTES: raise ValidationError('Ofgem page exceeds size limit')
+    try:
+        page=OfgemPage(); page.feed(body.decode('utf-8'))
+    except (UnicodeError, ValueError) as exc: raise ValidationError('Invalid Ofgem HTML') from exc
+    text=' '.join(' '.join(page.body).split()).replace('\u00a0', ' ').replace('\u202f', ' ')
+    if ('Energy price cap unit rates and standing charges | Ofgem' not in text or
+            'Average electricity and gas unit prices and standing charges by Direct Debit' not in text):
+        raise ValidationError('Unexpected Ofgem page identity or payment basis')
+    matches=list(re.finditer(r'From (\d{1,2} [A-Z][a-z]+) to (\d{1,2} [A-Z][a-z]+) (\d{4}), the price cap will be £([\d,]+) per year', text))
+    if not matches: raise ValidationError('Ofgem cap headline/effective period missing')
+    tables=[rows for rows in page.tables if rows and any('Energy price cap per unit' in c for c in rows[0])]
+    if len(tables)!=1: raise ValidationError('Ofgem average rates table missing or ambiguous')
+    rows=tables[0]; headers=rows[0]
+    no_electricity_vat=re.search(r'There is no VAT on electricity from (\d{1,2} [A-Z][a-z]+ \d{4}) to (\d{1,2} [A-Z][a-z]+ \d{4})', text)
+    gas_vat=re.search(r'include 5% VAT on gas', text, re.I)
+    if not no_electricity_vat or not gas_vat:
+        raise ValidationError('Ofgem period-specific VAT basis is missing or changed')
+    vat_start=datetime.strptime(no_electricity_vat[1], '%d %B %Y').date()
+    vat_end=datetime.strptime(no_electricity_vat[2], '%d %B %Y').date()
+    no_compare='Costs cannot be compared directly to previous periods because of this change' in text
+    periods=[]
+    for index,match in enumerate(matches):
+        start=datetime.strptime(f'{match[1]} {match[3]}','%d %B %Y').date()
+        end=datetime.strptime(f'{match[2]} {match[3]}','%d %B %Y').date()
+        quarter_end_month=start.month + 2
+        if (start.day != 1 or start.month not in {1, 4, 7, 10} or
+                end != date(end.year, quarter_end_month,
+                            calendar.monthrange(end.year, quarter_end_month)[1])):
+            raise ValidationError('Ofgem cap period is not a calendar quarter')
+        status='effective' if start <= today <= end else 'announced' if today < start else None
+        if status is None: continue
+        context=text[match.end():matches[index+1].start() if index+1 < len(matches) else len(text)]
+        if not re.search(r'This figure is based on the average energy unit rate and standing charge for people who pay by Direct Debit in England, Scotland and Wales', context, re.I):
+            raise ValidationError('Ofgem headline Direct Debit and GB basis mismatch')
+        explicit_usage=re.search(r'([\d,]+) kWh (?:of )?(?:single-rate )?electricity.{0,180}?([\d,]+) kWh (?:of )?gas', context, re.I)
+        if explicit_usage and (int(explicit_usage[1].replace(',','')) != OFGEM_MEDIUM_SINGLE_RATE_ELECTRICITY_KWH or
+                               int(explicit_usage[2].replace(',','')) != OFGEM_MEDIUM_GAS_KWH):
+            raise ValidationError('Ofgem headline consumption basis conflicts with reviewed 2026 TDCVs')
+        if start < vat_start or end > vat_end:
+            raise ValidationError('Ofgem source does not state VAT treatment for this cap period')
+        current=[i for i,h in enumerate(headers) if f'{start.day} {start.strftime("%B")} to {end.day} {end.strftime("%B")} {start.year}' in h]
+        if len(current)!=1: raise ValidationError('Ofgem cap rates column mismatch')
+        rates={}
+        for row in rows[1:]:
+            if len(row)!=len(headers) or row[0].strip().lower() not in {'electricity','gas'}: continue
+            parts=re.fullmatch(r'([\d.]+) pence per kWh ([\d.]+) pence daily standing charge',row[current[0]])
+            if not parts: raise ValidationError('Ofgem rate cell format changed')
+            rates[row[0].strip().lower()]={'unit_rate_p_per_kwh':parts[1], 'standing_charge_p_per_day':parts[2]}
+        if set(rates)!={'electricity','gas'}: raise ValidationError('Ofgem dual-fuel rates incomplete')
+        tax_treatment=f'5% VAT on gas; 0% VAT on electricity from {no_electricity_vat[1]} to {no_electricity_vat[2]}'
+        comparison_status=('not_comparable_tax_change' if start == vat_start and no_compare
+                           else 'compare_only_same_basis')
+        periods.append((start,end,status,str(int(match[4].replace(',',''))),rates,
+                        tax_treatment,comparison_status))
+    if not periods or sum(status == 'effective' for _,_,status,_,_,_,_ in periods) != 1:
+        raise ValidationError('Ofgem page does not identify exactly one currently effective cap')
+    observations=[]
+    for start,end,status,bill,rates,tax_treatment,comparison_status in periods:
+        reference={'effective_start':start.isoformat(),'effective_end':end.isoformat(),'announcement_date':None,
+            'period_status':status,'geography':'Great Britain','regional_basis':'Ofgem average Direct Debit rates for England, Scotland and Wales',
+            'payment_method':'Direct Debit','tariff':'default variable tariff',
+            'electricity_kwh_per_year':OFGEM_MEDIUM_SINGLE_RATE_ELECTRICITY_KWH,
+            'gas_kwh_per_year':OFGEM_MEDIUM_GAS_KWH,
+            'consumption_basis':'Ofgem final 2026 medium TDCVs; single-rate electricity; effective 1 July 2026',
+            'tax_treatment':tax_treatment,'comparison_status':comparison_status,
+            **rates}
+        observations.append(Observation(start.isoformat(),bill,'observed',1,reference))
+    return Snapshot(DEFINITIONS[key],None,None,tuple(observations))
 
 
 @dataclass(frozen=True)
@@ -661,9 +776,10 @@ def parse_fuel(key, body, today):
 
 def parse(key: str, body: bytes, today: date) -> Snapshot:
     definition = DEFINITIONS[key]
-    max_bytes = MAX_PIPR_BYTES if key.startswith('private_rent_') else MAX_HPI_BYTES if key.startswith('house_price_') else MAX_BYTES
+    max_bytes = MAX_OFGEM_BYTES if key == 'household_energy' else MAX_PIPR_BYTES if key.startswith('private_rent_') else MAX_HPI_BYTES if key.startswith('house_price_') else MAX_BYTES
     if len(body) > max_bytes:
         raise ValidationError('Response exceeds size limit')
+    if key == 'household_energy': return parse_ofgem(key, body, today)
     if key.startswith('private_rent_'):
         return parse_pipr(key, body, today)
     if key.startswith('house_price_'):
@@ -848,6 +964,15 @@ def fetch(key: str) -> bytes:
         page_evidence = {'body': page, 'url': FUEL_SOURCE_URL,
                          'retrieved_at': retrieved_at, 'evidence_kind': 'official_download'}
         return payload, url, published_date, page_evidence
+    if key == 'household_energy':
+        url = DEFINITIONS[key].download_url
+        request = Request(url, headers={'User-Agent': 'FinStats/2.0 (+https://github.com/Fabio-RibeiroB/macro-crew)'})
+        with urlopen(request, timeout=30) as response:
+            if response.status != 200 or response.geturl() != url:
+                raise ValidationError('Unexpected Ofgem cap page response')
+            payload = response.read(MAX_OFGEM_BYTES + 1)
+        if len(payload) > MAX_OFGEM_BYTES: raise ValidationError('Ofgem cap page exceeds size limit')
+        return payload, url
     if key.startswith('private_rent_'):
         # The dataset page exposes a versioned workbook link. Select only the
         # exact current ONS edition path; never follow arbitrary page links.

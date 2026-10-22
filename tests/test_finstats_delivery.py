@@ -261,7 +261,8 @@ def test_delivery_publishes_cpi_headline_with_core_metrics_retained(tmp_path):
         'regular_pay_nominal_growth', 'regular_pay_real_growth', 'unemployment',
         'public_debt', 'private_rent_growth', 'private_rent_level',
         'gilt_5y', 'gilt_10y', 'gilt_20y',
-        'house_price_level', 'house_price_growth', 'petrol_price', 'diesel_price'}
+        'house_price_level', 'house_price_growth', 'petrol_price', 'diesel_price',
+        'household_energy'}
     cpi = data['metrics']['cpi']
     assert cpi['validation_status'] == 'verified'
     assert cpi['snapshot_evidence_kind'] == 'official_download'
@@ -290,6 +291,14 @@ def test_delivery_publishes_cpi_headline_with_core_metrics_retained(tmp_path):
     assert data['metrics']['petrol_price']['latest']['period'] == '2026-10-19'
     assert data['metrics']['diesel_price']['latest']['reference'] == {
         'kind': 'weekly_observation', 'date': '2026-10-19'}
+    energy = data['metrics']['household_energy']
+    assert energy['latest']['value'] == '1723'
+    assert energy['latest']['period'] == '2026-10-01'
+    assert energy['latest']['reference']['gas_kwh_per_year'] == 9500
+    assert energy['latest']['reference']['electricity_kwh_per_year'] == 2500
+    assert energy['latest']['reference']['comparison_status'] == 'not_comparable_tax_change'
+    assert energy['latest']['reference']['electricity']['unit_rate_p_per_kwh'] == '26.32'
+    assert energy['latest']['reference']['gas']['standing_charge_p_per_day'] == '29.68'
     nominal = data['metrics']['regular_pay_nominal_growth']
     real = data['metrics']['regular_pay_real_growth']
     assert nominal['latest']['reference'] == real['latest']['reference'] == {

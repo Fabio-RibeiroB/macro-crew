@@ -16,6 +16,21 @@ records the exact download URLs, UTC receipt times, content types and SHA-256 ha
 The Bank Rate recording covers January–October 2026; the production adapter requests
 history from 1975. ONS recordings include the full source histories.
 
+`ofgem_energy_price_cap_2026-10.html.gz` is a deterministic, lossless gzip archive
+of the verbatim Ofgem rates page fetched on 22 October 2026; its adjacent receipt
+hashes the decompressed source bytes and pins the current effective dates,
+and the absence of a published next-cap announcement. Ofgem reports a £1,723
+annual Direct Debit bill, medium revised TDCVs (2,500 kWh electricity and 9,500
+kWh gas), and says the October tax change prevents direct comparison with the
+previous period. The previous July PDF without the revised TDCV qualification is
+not treated as a comparable bill.
+
+`ofgem_tdcv_decision_2026-05.pdf` is the official final decision published on
+27 May 2026. Its receipt pins the original PDF hash and records Table 1's medium
+single-rate electricity and gas values (2,500 and 9,500 kWh/year), effective
+1 July 2026. The cap parser's reviewed basis is bound to this document hash;
+changed consumption or payment grammar on the cap page fails closed.
+
 GDP reconciliation: the [August 2026 monthly GDP bulletin](https://www.ons.gov.uk/economy/grossdomesticproductgdp/bulletins/gdpmonthlyestimateuk/august2026),
 released 15 October 2026, reports monthly growth of 0.4% in June, 0.4% in July and
 0.1% in August. These match `gdp.csv` (MGDP/ECYX) for that release. June was revised
