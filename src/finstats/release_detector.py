@@ -64,22 +64,44 @@ class _VisibleText(HTMLParser):
     """Extract visible text while discarding markup and non-content elements."""
 
     _DROP = {"script", "style", "noscript", "svg"}
+    _CHROME = {"nav", "header", "footer"}
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self.parts: list[str] = []
         self.drop_depth = 0
+        self.chrome_depth = 0
+        self.scope_depth = 0
+        self.scopes = 0
+        self.in_scope = False
 
     def handle_starttag(self, tag, attrs):
-        if tag.lower() in self._DROP:
+        tag = tag.lower()
+        if tag in {"main", "article"}:
+            self.scopes += 1
+            if not self.in_scope:
+                self.in_scope = True
+                self.scope_depth = 1
+            else:
+                self.scope_depth += 1
+        if tag in self._CHROME:
+            self.chrome_depth += 1
+        if tag in self._DROP:
             self.drop_depth += 1
 
     def handle_endtag(self, tag):
-        if tag.lower() in self._DROP and self.drop_depth:
+        tag = tag.lower()
+        if tag in self._CHROME and self.chrome_depth:
+            self.chrome_depth -= 1
+        if tag in {"main", "article"} and self.scope_depth:
+            self.scope_depth -= 1
+            if self.scope_depth == 0:
+                self.in_scope = False
+        if tag in self._DROP and self.drop_depth:
             self.drop_depth -= 1
 
     def handle_data(self, data):
-        if not self.drop_depth:
+        if self.in_scope and not self.chrome_depth and not self.drop_depth:
             self.parts.append(data)
 
 
@@ -93,10 +115,17 @@ def canonical_official_text(value: str | bytes) -> str:
         raise TypeError("official text must be text or bytes")
     if len(value.encode("utf-8")) > MAX_OFFICIAL_TEXT_BYTES:
         raise ValueError("official text exceeds the private evidence limit")
-    parser = _VisibleText()
-    parser.feed(value)
-    parser.close()
-    text = " ".join(" ".join(parser.parts).split())
+    is_html = bool(re.search(r"<\s*/?\s*[a-zA-Z][^>]*>", value))
+    if is_html:
+        parser = _VisibleText()
+        parser.feed(value)
+        parser.close()
+        if parser.scopes != 1:
+            raise ValueError("official HTML requires one unambiguous main or article scope")
+        parts = parser.parts
+    else:
+        parts = [value]
+    text = " ".join(" ".join(parts).split())
     return re.sub(r"\u00a0", " ", text).strip()
 
 
@@ -124,6 +153,15 @@ def _snapshot_observations(store: Store, snapshot_id: int) -> list[dict]:
          **({"reference": item["reference"]} if item.get("reference") else {})}
         for item in json.loads(row["payload"])["observations"]
     ]
+
+
+def _latest_kind(store: Store, key: str, evidence_kind: str) -> dict | None:
+    row = store.db.execute("""SELECT s.*, a.id AS receipt_id, a.collected_at, a.raw_hash,
+        a.source_url, a.evidence_kind FROM snapshot s
+        JOIN receipt r ON r.snapshot_id=s.id JOIN attempt a ON a.id=r.attempt_id
+        WHERE s.key=? AND a.status='accepted' AND a.evidence_kind=?
+        ORDER BY s.vintage DESC,a.id DESC LIMIT 1""", (key, evidence_kind)).fetchone()
+    return dict(row) if row else None
 
 
 def _observation_fingerprint(key: str, payload: dict) -> str:
@@ -209,18 +247,21 @@ def build_evidence(
     evidence_kind = release.get("evidence_kind", "official_download")
     if evidence_kind not in {"official_download", "recorded_fixture"}:
         raise ValueError("unknown release evidence kind")
-    text = canonical_official_text(official_text) if official_text is not None else None
+    if official_text is not None and (not release.get("source_url")
+                                      or text_source_url != release.get("source_url")):
+        raise ValueError("official text URL must exactly match the qualified release URL")
     for candidate_url in (release.get("source_url"), text_source_url):
         if candidate_url is not None and not _source_url_valid(source, candidate_url):
             raise ValueError("release evidence URL is outside the qualified official paths")
+    text = canonical_official_text(official_text) if official_text is not None else None
     if text is not None and text_source_url is None:
         raise ValueError("official text requires its qualified source URL")
     metrics = {}
     for key in sorted(set(metric_keys)):
         if key not in DEFINITIONS:
             raise ValueError("unknown metric key")
-        current = store.latest(key)
-        if current is None or current["evidence_kind"] != evidence_kind:
+        current = _latest_kind(store, key, evidence_kind)
+        if current is None:
             continue
         payload = json.loads(current["payload"])
         comparison = _comparison(store, key, current)
@@ -393,8 +434,8 @@ def discover_published_release_evidence(
                 continue
             matched_keys = []
             for key in linked_keys:
-                snapshot = store.latest(key)
-                if snapshot is None or snapshot["evidence_kind"] != "official_download":
+                snapshot = _latest_kind(store, key, "official_download")
+                if snapshot is None:
                     continue
                 payload = json.loads(snapshot["payload"])
                 if payload["published_date"] == event["date"]:

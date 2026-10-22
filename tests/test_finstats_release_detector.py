@@ -37,23 +37,42 @@ def store(tmp_path):
 
 
 def test_semantic_text_hash_ignores_html_whitespace_and_noncontent():
-    first = canonical_official_text("<h1>Release</h1><p>Inflation was 3.5%.</p>")
+    first = canonical_official_text("<nav>Home</nav><main><h1>Release</h1><p>Inflation was 3.5%.</p></main><footer>Legal</footer>")
     second = canonical_official_text(
-        '<div class="layout"><h1> Release </h1>\n<p>Inflation&nbsp;was 3.5%.</p>'
-        "<script>tracking()</script></div>"
+        '<header>New branding</header><main class="content"><h1> Release </h1>\n<p>Inflation&nbsp;was 3.5%.</p>'
+        "<script>tracking()</script></main><nav>Different links</nav>"
     )
     assert first == second
     assert semantic_fingerprint({"text": first}) == semantic_fingerprint({"text": second})
+    assert canonical_official_text("<main><p>Inflation was 3.6%.</p></main>") != first
+    with pytest.raises(ValueError, match="unambiguous"):
+        canonical_official_text("<div><p>Unscoped page content</p></div>")
+    assert canonical_official_text("bounded plain text") == "bounded plain text"
+
+
+def test_latest_requested_kind_and_prior_comparison_keep_fixture_provenance_consistent(store):
+    body = fixture("gdp")
+    official_id = store.ingest("gdp", body, WHEN, evidence_kind="official_download")
+    store.ingest("gdp", body, WHEN + timedelta(hours=1), evidence_kind="recorded_fixture")
+    evidence = build_evidence(store, release={**RELEASE, "evidence_kind": "official_download"},
+                              metric_keys=["gdp"])
+    metric = evidence["metrics"]["gdp"]
+    assert metric["snapshot_id"] == official_id
+    assert evidence["evidence_kind"] == "official_download"
+    assert metric["previous_provenance"] is None
+    fixture_evidence = build_evidence(store, release=RELEASE, metric_keys=["gdp"])
+    assert fixture_evidence["evidence_kind"] == "recorded_fixture"
+    assert fixture_evidence["metrics"]["gdp"]["source_receipt_id"] != metric["source_receipt_id"]
 
 
 def test_repeat_fetch_and_export_generation_metadata_do_not_change_identity(store):
     first_id = store.ingest("gdp", fixture("gdp"), WHEN, evidence_kind="recorded_fixture")
     first = build_evidence(store, release=RELEASE, metric_keys=["gdp"],
-                           official_text="<p>Growth was 0.1%.</p>", text_source_url=RELEASE["source_url"])
+                           official_text="<main><p>Growth was 0.1%.</p></main>", text_source_url=RELEASE["source_url"])
     store.ingest("gdp", fixture("gdp"), WHEN + timedelta(hours=1), evidence_kind="recorded_fixture")
     second = build_evidence(store, release={**RELEASE, "checked_at": "later",
                                            "generation_id": "unrelated-export"}, metric_keys=["gdp"],
-                            official_text="<p>Growth was 0.1%.</p>", text_source_url=RELEASE["source_url"])
+                            official_text="<main><p>Growth was 0.1%.</p></main>", text_source_url=RELEASE["source_url"])
     assert store.latest("gdp")["id"] == first_id
     assert first["semantic_fingerprint"] == second["semantic_fingerprint"]
     assert release_evidence_identity(first) == release_evidence_identity(second)
@@ -90,10 +109,10 @@ def test_rolling_metric_evidence_preserves_full_reference_window(store):
 def test_corrected_number_and_corrected_official_text_create_distinct_dated_identity(store):
     body = fixture("gdp")
     store.ingest("gdp", body, WHEN, evidence_kind="recorded_fixture")
-    before = build_evidence(store, release=RELEASE, metric_keys=["gdp"], official_text="<p>Growth 0.1%.</p>", text_source_url=RELEASE["source_url"])
+    before = build_evidence(store, release=RELEASE, metric_keys=["gdp"], official_text="<main><p>Growth 0.1%.</p></main>", text_source_url=RELEASE["source_url"])
     corrected = body.replace(b'"2026 AUG","0.1"', b'"2026 AUG","0.2"')
     store.ingest("gdp", corrected, WHEN + timedelta(hours=1), evidence_kind="recorded_fixture")
-    corrected_evidence = build_evidence(store, release=RELEASE, metric_keys=["gdp"], official_text="<p>Growth 0.2%.</p>", text_source_url=RELEASE["source_url"])
+    corrected_evidence = build_evidence(store, release=RELEASE, metric_keys=["gdp"], official_text="<main><p>Growth 0.2%.</p></main>", text_source_url=RELEASE["source_url"])
     revisions = corrected_evidence["metrics"]["gdp"]["revisions"]
     assert {r["period"]: (r["previous"], r["current"]) for r in revisions}["2026-08"] == ("0.1", "0.2")
     assert corrected_evidence["metrics"]["gdp"]["previous_provenance"]["source_sha256"]
@@ -134,8 +153,12 @@ def test_text_input_requires_a_bounded_qualified_official_path(store):
     store.ingest("gdp", fixture("gdp"), WHEN, evidence_kind="recorded_fixture")
     with pytest.raises(ValueError, match="qualified official paths"):
         build_evidence(store, release=RELEASE, metric_keys=["gdp"],
-                       official_text="<p>text</p>",
+                       official_text="<main><p>text</p></main>",
                        text_source_url="https://www.ons.gov.uk/other/unreviewed-path")
+    with pytest.raises(ValueError, match="exactly match"):
+        build_evidence(store, release=RELEASE, metric_keys=["gdp"],
+                       official_text="<main><p>GDP wording</p></main>",
+                       text_source_url="https://www.ons.gov.uk/releases/consumer-price-inflation-october-2026")
     with pytest.raises(ValueError, match="evidence limit"):
         build_evidence(store, release=RELEASE, metric_keys=["gdp"],
                        official_text="x" * 64_001, text_source_url=RELEASE["source_url"])
