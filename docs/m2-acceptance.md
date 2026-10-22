@@ -69,9 +69,11 @@ in the combined suite. This does not claim a production rollback was performed.
 
 After explicit deployment authorisation, retain the existing release, manifest,
 immutable generations and private SQLite backup. Validate the candidate against
-existing production data before activating its collector. The old reader can
-consume the new generation if the frontend is rolled back; no database downgrade
-or simultaneous reader/writer cutover is required. Follow
+existing production data before activating its collector. The compatibility
+evidence above records the then-tested M1 reader only; it does not establish that
+the currently deployed strict reader accepts later registered metrics. M3
+qualification found that reader `98226c2` rejects the eleven-feed candidate with
+`Unknown metric`. Follow the reader-first rollout and ordered rollback in
 [dashboard-cutover.md](dashboard-cutover.md) for the operational backup, atomic
 activation, timer and rollback steps. No production files, services, timers or
 paid AI were changed during acceptance.

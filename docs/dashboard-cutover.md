@@ -79,13 +79,16 @@ periods, statistics, source details, chart ranges, mobile layout, theme and arch
 Test a failed refresh and confirm previous loaded figures survive. Do not switch
 if any initial official metric is unavailable or the service cannot deliver data.
 
-Rollback: stop/disable the publish timer, restore the previous served release and
-re-enable the prior shadow timer. Preserve the database and public source evidence.
-A frontend rollback does not require downgrading the database. Keep previously
-published immutable generations so an already open browser can complete its fetch.
-The delivery command prunes inactive disposable export generations older than
-14 days. It excludes active generations, symlinks and unexpected files, and never
-prunes the raw archive or SQLite history. Both directories still need disk monitoring.
+Rollback: stop the new publisher timer and wait for any running collection or
+publication to become idle. Restore the previous `current.json` pointer while
+preserving every immutable generation. Restore the previous frontend and its
+compatible publisher source before resuming the prior timer. Preserve the database,
+raw source archive and deployment backups; do not downgrade the database or delete
+raw evidence. Keep previously published immutable generations so an already open
+browser can complete its fetch. The delivery command prunes inactive disposable
+export generations older than 14 days. It excludes active generations, symlinks and
+unexpected files, and never prunes the raw archive or SQLite history. Both
+directories still need disk monitoring.
 
 ## Reproducible checks
 
@@ -103,18 +106,26 @@ generation checksum and three core metric objects unchanged. Optional registered
 metrics are members of the same `metrics` object and generation. The shared
 synthetic wire fixtures under `tests/fixtures/verified/` exercise the M1 core-only
 payload and the candidate additive payload; their labels and values are test data,
-not an official export. The frontend tests run the candidate reader against both
-fixtures and verify its checksum, definitions, card/history identity, and optional
-metric validation. A test-only copy of the accepted M1 reader also validates the
-additive fixture using its frozen three-core contract; the M1 presentation consumes
-only `bank_rate`, `cpih` and `gdp`.
+not an official export. The candidate reader validates both fixtures. The frozen
+M1 reader test validates the additive fixture using its three-core contract and
+consumes only `bank_rate`, `cpih` and `gdp`; that test proves M1 compatibility only.
+It does not prove compatibility for every later strict reader. In particular, the
+currently deployed reader at `98226c2` rejects the candidate eleven-feed payload
+with `Unknown metric`, while candidate `8d7e3df` accepts the actual production
+nine-feed payload. See the [M3 rollout qualification](m3-acceptance.md) for the
+official collection and staging evidence.
 
 Offline rollback rehearsal uses the same one-generation pointer flow. Before
 activation, retain the prior `current.json` and immutable generation. A failed
-generation write or manifest replacement must leave that pointer readable; after
-frontend rollback, the older reader continues using that same v1 generation and
-ignores unconsumed optional members. No second pointer, per-metric fallback or
-database downgrade is involved. Tests cover partial-source retention, fixture
-rejection, public-field projection, source and public checksums, failed manifest
-replacement, and existing-store replay. These tests prove the compatibility and
-rollback mechanics only; they do not activate new feeds or qualify their sources.
+generation write or manifest replacement must leave that pointer readable. For
+the current production reader, deploy the candidate reader while the existing
+nine-feed publisher remains active; only after that reader is serving may the
+eleven-feed publisher be activated. Older strict readers do not accept unregistered
+metrics. On rollback, stop the new publisher and wait until idle, restore the prior
+pointer without removing generations, restore the previous frontend and compatible
+publisher source, then resume its timer. No second pointer, per-metric fallback,
+database downgrade or raw-source deletion is involved. Tests cover partial-source
+retention, fixture rejection, public-field projection, source and public checksums,
+failed manifest replacement, and existing-store replay. These tests prove the
+compatibility and rollback mechanics only; the M3 record separately qualifies the
+new source collection and the exact reader/writer sequence.
