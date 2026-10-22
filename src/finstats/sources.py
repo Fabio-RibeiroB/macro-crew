@@ -4,6 +4,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import calendar
 from html.parser import HTMLParser
 import re
 import zipfile
@@ -50,6 +51,11 @@ ONS = 'https://www.ons.gov.uk'
 BOE = 'https://www.bankofengland.co.uk'
 GILT_SERIES = ('IUDSNPY', 'IUDMNPY', 'IUDLNPY')
 GILT_DOWNLOAD_URL = BOE + '/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=04/Jan/2000&Dateto=now&SeriesCodes=' + ','.join(GILT_SERIES) + '&CSVF=CN&UsingCodes=Y'
+OFGEM_TDCV_URL = 'https://www.ofgem.gov.uk/sites/default/files/2026-05/Review%20of%20typical%20domestic%20consumption%20values%20decision.pdf'
+OFGEM_TDCV_SOURCE_SHA256 = '009eb2ebe4979e1691d1900ad9d05e79f655eeada1801b8c6eed2f7a49a19ec9'
+OFGEM_TDCV_EFFECTIVE = '2026-07-01'
+OFGEM_MEDIUM_SINGLE_RATE_ELECTRICITY_KWH = 2500
+OFGEM_MEDIUM_GAS_KWH = 9500
 UNEMPLOYMENT_QUALITY = {
     'quality_note': "The Labour Force Survey unemployment rate's 95% confidence intervals remain wider than before the pandemic.",
     'quality_source_url': ONS + '/employmentandlabourmarket/peopleinwork/employmentandemployeetypes/articles/labourforcesurveyqualityupdate/october2026',
@@ -170,8 +176,10 @@ OPTIONAL_METRICS = {
     'gilt_20y': {'geography': 'United Kingdom', 'maturity_years': 20, 'yield_type': 'fitted_nominal_par', 'primary': False},
     'household_energy': {'geography': 'Great Britain', 'payment_method': 'Direct Debit',
         'tariff': 'default variable tariff', 'consumption_basis': 'Ofgem typical domestic consumption values (medium; single-rate electricity)',
-        'electricity_kwh_per_year': 2500, 'gas_kwh_per_year': 9500,
-        'consumption_source_url': 'https://www.ofgem.gov.uk/consultation/review-typical-domestic-consumption-values',
+        'electricity_kwh_per_year': OFGEM_MEDIUM_SINGLE_RATE_ELECTRICITY_KWH,
+        'gas_kwh_per_year': OFGEM_MEDIUM_GAS_KWH,
+        'consumption_source_url': OFGEM_TDCV_URL,
+        'consumption_source_sha256': OFGEM_TDCV_SOURCE_SHA256,
         'unit': 'GBP_per_year'},
     'cpi': {'geography': 'United Kingdom'},
     'regular_pay_nominal_growth': {'geography': 'Great Britain', 'window_months': 3},
@@ -257,18 +265,42 @@ def parse_ofgem(key, body, today):
     try:
         page=OfgemPage(); page.feed(body.decode('utf-8'))
     except (UnicodeError, ValueError) as exc: raise ValidationError('Invalid Ofgem HTML') from exc
-    text=' '.join(' '.join(page.body).split())
+    text=' '.join(' '.join(page.body).split()).replace('\u00a0', ' ').replace('\u202f', ' ')
+    if ('Energy price cap unit rates and standing charges | Ofgem' not in text or
+            'Average electricity and gas unit prices and standing charges by Direct Debit' not in text):
+        raise ValidationError('Unexpected Ofgem page identity or payment basis')
     matches=list(re.finditer(r'From (\d{1,2} [A-Z][a-z]+) to (\d{1,2} [A-Z][a-z]+) (\d{4}), the price cap will be £([\d,]+) per year', text))
     if not matches: raise ValidationError('Ofgem cap headline/effective period missing')
     tables=[rows for rows in page.tables if rows and any('Energy price cap per unit' in c for c in rows[0])]
     if len(tables)!=1: raise ValidationError('Ofgem average rates table missing or ambiguous')
     rows=tables[0]; headers=rows[0]
+    no_electricity_vat=re.search(r'There is no VAT on electricity from (\d{1,2} [A-Z][a-z]+ \d{4}) to (\d{1,2} [A-Z][a-z]+ \d{4})', text)
+    gas_vat=re.search(r'include 5% VAT on gas', text, re.I)
+    if not no_electricity_vat or not gas_vat:
+        raise ValidationError('Ofgem period-specific VAT basis is missing or changed')
+    vat_start=datetime.strptime(no_electricity_vat[1], '%d %B %Y').date()
+    vat_end=datetime.strptime(no_electricity_vat[2], '%d %B %Y').date()
+    no_compare='Costs cannot be compared directly to previous periods because of this change' in text
     periods=[]
-    for match in matches:
+    for index,match in enumerate(matches):
         start=datetime.strptime(f'{match[1]} {match[3]}','%d %B %Y').date()
         end=datetime.strptime(f'{match[2]} {match[3]}','%d %B %Y').date()
+        quarter_end_month=start.month + 2
+        if (start.day != 1 or start.month not in {1, 4, 7, 10} or
+                end != date(end.year, quarter_end_month,
+                            calendar.monthrange(end.year, quarter_end_month)[1])):
+            raise ValidationError('Ofgem cap period is not a calendar quarter')
         status='effective' if start <= today <= end else 'announced' if today < start else None
         if status is None: continue
+        context=text[match.end():matches[index+1].start() if index+1 < len(matches) else len(text)]
+        if not re.search(r'This figure is based on the average energy unit rate and standing charge for people who pay by Direct Debit in England, Scotland and Wales', context, re.I):
+            raise ValidationError('Ofgem headline Direct Debit and GB basis mismatch')
+        explicit_usage=re.search(r'([\d,]+) kWh (?:of )?(?:single-rate )?electricity.{0,180}?([\d,]+) kWh (?:of )?gas', context, re.I)
+        if explicit_usage and (int(explicit_usage[1].replace(',','')) != OFGEM_MEDIUM_SINGLE_RATE_ELECTRICITY_KWH or
+                               int(explicit_usage[2].replace(',','')) != OFGEM_MEDIUM_GAS_KWH):
+            raise ValidationError('Ofgem headline consumption basis conflicts with reviewed 2026 TDCVs')
+        if start < vat_start or end > vat_end:
+            raise ValidationError('Ofgem source does not state VAT treatment for this cap period')
         current=[i for i,h in enumerate(headers) if f'{start.day} {start.strftime("%B")} to {end.day} {end.strftime("%B")} {start.year}' in h]
         if len(current)!=1: raise ValidationError('Ofgem cap rates column mismatch')
         rates={}
@@ -278,20 +310,22 @@ def parse_ofgem(key, body, today):
             if not parts: raise ValidationError('Ofgem rate cell format changed')
             rates[row[0].strip().lower()]={'unit_rate_p_per_kwh':parts[1], 'standing_charge_p_per_day':parts[2]}
         if set(rates)!={'electricity','gas'}: raise ValidationError('Ofgem dual-fuel rates incomplete')
-        periods.append((start,end,status,str(int(match[4].replace(',',''))),rates))
-    if not periods or sum(status == 'effective' for _,_,status,_,_ in periods) != 1:
+        tax_treatment=f'5% VAT on gas; 0% VAT on electricity from {no_electricity_vat[1]} to {no_electricity_vat[2]}'
+        comparison_status=('not_comparable_tax_change' if start == vat_start and no_compare
+                           else 'compare_only_same_basis')
+        periods.append((start,end,status,str(int(match[4].replace(',',''))),rates,
+                        tax_treatment,comparison_status))
+    if not periods or sum(status == 'effective' for _,_,status,_,_,_,_ in periods) != 1:
         raise ValidationError('Ofgem page does not identify exactly one currently effective cap')
-    tax_sentences=[sentence.strip() for sentence in text.split('.') if 'VAT' in sentence]
-    if not tax_sentences: raise ValidationError('Ofgem tax treatment note missing')
-    vat='; '.join(tax_sentences)
-    tax_break='Costs cannot be compared directly to previous periods because of this change' in text
     observations=[]
-    for start,end,status,bill,rates in periods:
+    for start,end,status,bill,rates,tax_treatment,comparison_status in periods:
         reference={'effective_start':start.isoformat(),'effective_end':end.isoformat(),'announcement_date':None,
             'period_status':status,'geography':'Great Britain','regional_basis':'Ofgem average Direct Debit rates for England, Scotland and Wales',
-            'payment_method':'Direct Debit','tariff':'default variable tariff','electricity_kwh_per_year':2500,
-            'gas_kwh_per_year':9500,'consumption_basis':'Ofgem medium TDCV; single-rate electricity; 2026 values effective 1 July 2026',
-            'tax_treatment':vat,'comparison_status':'not_comparable_tax_change' if tax_break else 'compare_only_same_basis',
+            'payment_method':'Direct Debit','tariff':'default variable tariff',
+            'electricity_kwh_per_year':OFGEM_MEDIUM_SINGLE_RATE_ELECTRICITY_KWH,
+            'gas_kwh_per_year':OFGEM_MEDIUM_GAS_KWH,
+            'consumption_basis':'Ofgem final 2026 medium TDCVs; single-rate electricity; effective 1 July 2026',
+            'tax_treatment':tax_treatment,'comparison_status':comparison_status,
             **rates}
         observations.append(Observation(start.isoformat(),bill,'observed',1,reference))
     return Snapshot(DEFINITIONS[key],None,None,tuple(observations))

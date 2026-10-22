@@ -42,22 +42,37 @@ def publish(store, when):
             member = {'definition': public_definition(key), **health_data['metrics'][key]}
             if selected is None:
                 member.update({'validation_status': 'unavailable', 'latest': None, 'history': []})
+                if key == 'household_energy':
+                    member['upcoming_period'] = None
             else:
                 payload = json.loads(selected['payload'])
                 if key == 'household_energy':
                     retained = store.observations(key)
                     local_date = when.astimezone(ZoneInfo('Europe/London')).date().isoformat()
-                    payload['observations'] = [point for point in retained
-                        if point['reference']['period_status'] == 'effective'
-                        and point['reference']['effective_start'] <= local_date <= point['reference']['effective_end']]
-                    future = [point for point in retained
-                        if point['reference']['period_status'] == 'announced'
-                        and point['reference']['effective_start'] > local_date]
+                    history, active, future = [], [], []
+                    for original in retained:
+                        point = dict(original)
+                        reference = dict(point['reference'])
+                        start, end = reference['effective_start'], reference['effective_end']
+                        if start <= local_date <= end:
+                            reference['period_status'] = 'effective'
+                            active.append(point)
+                        elif end < local_date:
+                            reference['period_status'] = 'expired'
+                        else:
+                            reference['period_status'] = 'announced'
+                            future.append(point)
+                        point['reference'] = reference
+                        if start <= local_date:
+                            history.append(point)
+                    payload['observations'] = history
                     payload['upcoming_period'] = min(future, key=lambda p: p['period']) if future else None
+                    payload['active_period'] = active[-1] if active else None
                 local_date = when.astimezone(ZoneInfo('Europe/London')).date().isoformat()
                 next_release = payload['next_release']
                 member.update({
-                    'validation_status': 'verified',
+                    'validation_status': ('verified' if key != 'household_energy' or payload['active_period']
+                                          else 'unavailable'),
                     'snapshot_id': selected['id'],
                     'source_receipt_id': selected['receipt_id'],
                     'source_published_date': payload['published_date'],
@@ -72,7 +87,8 @@ def publish(store, when):
                     'parser_version': payload['parser_version'],
                     'vintage_ordering': 'source_date_then_first_seen',
                     'snapshot_evidence_kind': selected['evidence_kind'],
-                    'latest': payload['observations'][-1] if payload['observations'] else None,
+                    'latest': (payload['active_period'] if key == 'household_energy'
+                               else payload['observations'][-1] if payload['observations'] else None),
                     'history': payload['observations'],
                 })
                 if key == 'household_energy':

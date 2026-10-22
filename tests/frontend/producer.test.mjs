@@ -52,6 +52,56 @@ test("Ofgem live smoke producer output passes the strict reader and renders assu
   } finally { await server.close(); }
 });
 
+test("strict reader keeps announced Ofgem periods separate and accepts date-bound activation", async () => {
+  const energyBytes = readFileSync(new URL("producer-energy-v1.json", WIRE));
+  const energyManifest = JSON.parse(readFileSync(new URL("producer-energy-v1.manifest.json", WIRE), "utf8"));
+  const withWire = async (candidate) => {
+    const bytes = Buffer.from(JSON.stringify(candidate));
+    const selectedManifest = { ...energyManifest, sha256: createHash("sha256").update(bytes).digest("hex") };
+    return loadVerified("/", fileFetcher(bytes, selectedManifest));
+  };
+  const announcedData = JSON.parse(energyBytes.toString("utf8"));
+  const metric = announcedData.metrics.household_energy;
+  const announced = {
+    ...metric.latest,
+    period: "2027-01-01",
+    value: "1750",
+    reference: {
+      ...metric.latest.reference,
+      effective_start: "2027-01-01",
+      effective_end: "2027-03-31",
+      period_status: "announced",
+      comparison_status: "compare_only_same_basis",
+      electricity: { unit_rate_p_per_kwh: "27.00", standing_charge_p_per_day: "55.00" },
+      gas: { unit_rate_p_per_kwh: "8.00", standing_charge_p_per_day: "30.00" },
+    },
+  };
+  metric.upcoming_period = announced;
+  const before = await withWire(announcedData);
+  assert.equal(before.metrics.household_energy.latest.value, "1723");
+  assert.equal(before.metrics.household_energy.upcoming_period.value, "1750");
+
+  const activatedData = JSON.parse(JSON.stringify(announcedData));
+  const activeMetric = activatedData.metrics.household_energy;
+  activeMetric.history[0].reference.period_status = "expired";
+  const active = { ...activeMetric.upcoming_period, reference: { ...activeMetric.upcoming_period.reference, period_status: "effective" } };
+  activeMetric.history.push(active);
+  activeMetric.latest = active;
+  activeMetric.upcoming_period = null;
+  const after = await withWire(activatedData);
+  assert.equal(after.metrics.household_energy.latest.value, "1750");
+  assert.equal(after.metrics.household_energy.latest.reference.period_status, "effective");
+
+  const noCurrentData = JSON.parse(energyBytes.toString("utf8"));
+  const noCurrent = noCurrentData.metrics.household_energy;
+  noCurrent.validation_status = "unavailable";
+  noCurrent.latest = null;
+  noCurrent.history[0].reference.period_status = "expired";
+  const unavailable = await withWire(noCurrentData);
+  assert.equal(unavailable.metrics.household_energy.latest, null);
+  assert.equal(unavailable.metrics.household_energy.history[0].reference.period_status, "expired");
+});
+
 function fileFetcher(data, selectedManifest = manifest) {
   return async (url) =>
     url.endsWith("current.json")

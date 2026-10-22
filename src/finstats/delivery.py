@@ -57,7 +57,13 @@ def deliver(state_dir, output_dir, event_failure_sink=None, event_unqualified_si
         member = {name: metric[name] for name in PUBLIC_FIELDS if name in metric}
         member['definition'] = public_definition(key)
         if metric['validation_status'] == 'unavailable':
-            member.update(latest=None, history=[])
+            if key == 'household_energy':
+                history = metric.get('history', [])
+                if any(point.get('reference', {}).get('period_status') != 'expired' for point in history):
+                    raise ValueError('Unavailable Ofgem history contains a non-expired period')
+                member.update(latest=None, history=history, history_window='last_5_years')
+            else:
+                member.update(latest=None, history=[])
         elif metric['validation_status'] == 'verified':
             if metric['snapshot_evidence_kind'] != 'official_download':
                 raise ValueError('Recorded fixtures cannot become public official data')

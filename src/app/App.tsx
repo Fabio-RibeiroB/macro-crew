@@ -623,9 +623,10 @@ function HouseholdEnergy({ data, loading, error, refresh }: any) {
     <div className="fs-context-card">
       <h3>Past cap periods</h3>
       {metric?.history?.length ? <ol className="fs-energy-history">{[...metric.history].reverse().map((point: any) => <li key={point.period}>
-        <strong>{formatPeriod(point.reference.effective_start)} to {formatPeriod(point.reference.effective_end)} · £{Number(point.value).toLocaleString("en-GB")}/year</strong>
+        <strong>{point.reference.period_status === "expired" ? "Ended" : "Current"} · {formatPeriod(point.reference.effective_start)} to {formatPeriod(point.reference.effective_end)} · £{Number(point.value).toLocaleString("en-GB")}/year</strong>
         <span>{point.reference.electricity_kwh_per_year.toLocaleString("en-GB")} kWh electricity and {point.reference.gas_kwh_per_year.toLocaleString("en-GB")} kWh gas · {point.reference.tax_treatment}</span>
       </li>)}</ol> : <p>A verified cap period is not available yet.</p>}
+      {metric?.validation_status === "unavailable" && metric?.history?.length > 0 && <p>No effective cap is currently verified; the periods above have ended.</p>}
       <h3>What this bill assumes</h3>
       <p>Ofgem's illustrative annual dual-fuel bill uses a default variable tariff and Direct Debit. The benchmark is medium typical consumption: {r?.electricity_kwh_per_year?.toLocaleString("en-GB") ?? "2,500"} kWh of single-rate electricity and {r?.gas_kwh_per_year?.toLocaleString("en-GB") ?? "9,500"} kWh of gas per year. It is the Ofgem average for England, Scotland and Wales, not a quote for a particular region.</p>
       {r && <><p>Effective {formatPeriod(r.effective_start)} to {formatPeriod(r.effective_end)}. Electricity: {r.electricity.unit_rate_p_per_kwh}p/kWh and {r.electricity.standing_charge_p_per_day}p/day. Gas: {r.gas.unit_rate_p_per_kwh}p/kWh and {r.gas.standing_charge_p_per_day}p/day.</p>
@@ -634,7 +635,7 @@ function HouseholdEnergy({ data, loading, error, refresh }: any) {
       <p>The cap limits unit rates and standing charges, not total bills. Actual costs depend on use and region. It does not cover Northern Ireland, fixed tariffs or heating oil.</p>
       <p>Cap announcement date: {r?.announcement_date ?? "not supplied on this rates page"}. Source page publication date: {metric?.source_published_date ?? "not supplied"}. Last successful check: {checkedAt(metric?.last_successful_check_at ?? null)}. No next cap announcement is currently published on this source page.</p>
       <OfficialLink href={metric?.definition.source_url ?? "https://www.ofgem.gov.uk/your-energy-supply/your-energy-bill/energy-price-cap-unit-rates-and-standing-charges"}>Ofgem energy cap rates and standing charges</OfficialLink>
-      <OfficialLink href={metric?.definition.consumption_source_url ?? "https://www.ofgem.gov.uk/consultation/review-typical-domestic-consumption-values"}>Ofgem decision on revised typical consumption values</OfficialLink>
+      <OfficialLink href={metric?.definition.consumption_source_url}>Ofgem final decision on typical consumption values (2026)</OfficialLink>
     </div>
   </Statistics>;
 }
