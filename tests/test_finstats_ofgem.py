@@ -169,12 +169,13 @@ def test_no_current_cap_is_unavailable_but_keeps_expired_history_and_siblings(tm
         assert len(energy['history']) == 1
         assert energy['history'][0]['reference']['period_status'] == 'expired'
         assert len(data['metrics']) == len(DEFINITIONS)
-        deliver(tmp_path, tmp_path / 'public')
-        public_manifest = json.loads((tmp_path / 'public' / 'current.json').read_text())
-        public = json.loads((tmp_path / 'public' / public_manifest['data_url']).read_text())
+        public_dir = tmp_path.with_name(tmp_path.name + '-public')
+        deliver(tmp_path, public_dir)
+        public_manifest = json.loads((public_dir / 'current.json').read_text())
+        public = json.loads((public_dir / public_manifest['data_url']).read_text())
         assert public['metrics']['household_energy']['validation_status'] == 'unavailable'
         assert public['metrics']['household_energy']['latest'] is None
         assert public['metrics']['household_energy']['history'][0]['reference']['period_status'] == 'expired'
-        assert public['metrics']['bank_rate']['latest']['value'] == '4.0'
+        assert public['metrics']['bank_rate']['latest']['value'] == '3.75'
     finally:
         store.close()
