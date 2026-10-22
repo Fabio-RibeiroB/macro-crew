@@ -163,8 +163,64 @@ test("ONS HF6X producer data renders only on Government with adjacent-month pp c
       } },
     }));
     assert.match(unavailable, /A verified reading is not available yet/);
-    assert.doesNotMatch(unavailable, /class="fs-chart-grid fs-chart-count-1"/);
+    const debtSection = unavailable.slice(unavailable.indexOf('id="public-debt"'), unavailable.indexOf('id="gilt-yields"'));
+    assert.doesNotMatch(debtSection, /class="fs-chart-grid fs-chart-count-1"/);
+    assert.match(unavailable, /id="gilt-yields"/);
   } finally { await server.close(); }
+});
+
+test("BoE 5/10/20 nominal par producer export binds exact series and renders Government yields", async () => {
+  const giltBytes = readFileSync(new URL("producer-fuel-v1.json", WIRE));
+  const giltManifest = JSON.parse(readFileSync(new URL("producer-fuel-v1.manifest.json", WIRE), "utf8"));
+  const producer = await loadVerified("/", fileFetcher(giltBytes, giltManifest));
+  const yields = [producer.metrics.gilt_10y, producer.metrics.gilt_5y, producer.metrics.gilt_20y];
+  assert.deepEqual(yields.map((metric) => metric.definition.series), ["IUDMNPY", "IUDSNPY", "IUDLNPY"]);
+  assert.deepEqual(yields.map((metric) => metric.definition.maturity_years), [10, 5, 20]);
+  assert.equal(yields[0].definition.primary, true);
+  assert.deepEqual(yields.map((metric) => metric.latest.period), ["2026-10-20", "2026-10-21", "2026-10-21"]);
+  assert.deepEqual(yields.map((metric) => metric.latest.value), ["5.3516", "4.9700", "5.6700"]);
+  assert.equal(yields[0].collection_status, "degraded");
+  assert.equal(yields[0].history.at(-1).period, "2026-10-20", "failed maturity retains its previous history while siblings advance");
+  assert.equal(yields[0].history[0].period, "2021-10-20", "public browser history stays in the existing five-year window");
+  for (const metric of yields) {
+    assert.equal(metric.definition.unit, "percent");
+    assert.equal(metric.definition.yield_type, "fitted_nominal_par");
+    assert.equal(metric.source_download_url, metric.definition.download_url);
+    assert.equal(metric.snapshot_evidence_kind, "official_download");
+    assert.match(metric.source_sha256, /^[a-f0-9]{64}$/);
+    assert.ok(metric.history.every(({ period }) => ![0, 6].includes(new Date(`${period}T00:00:00Z`).getUTCDay())));
+    assert.ok(metric.history.every((point, index, points) => !index || points[index - 1].period < point.period));
+  }
+  const previous = yields[0].history.at(-2);
+  const bps = (Number(yields[0].latest.value) - Number(previous.value)) * 100;
+  assert.equal(Number(bps.toFixed(2)), -2.24);
+
+  const { createServer } = await import("vite");
+  const { createElement } = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+  try {
+    const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
+    const government = renderToStaticMarkup(createElement(App, { pathname: "/government-budget", initialData: producer }));
+    assert.match(government, /id="public-debt"/);
+    assert.match(government, /id="gilt-yields"/);
+    assert.ok(government.indexOf('id="public-debt"') < government.indexOf('id="gilt-yields"'));
+    assert.ok(government.indexOf('id="gilt-yields"') < government.indexOf("Three things to keep separate"));
+    assert.match(government, /10-year gilt yield/);
+    assert.match(government, /5-year gilt yield/);
+    assert.match(government, /20-year gilt yield/);
+    assert.match(government, /−2\.24 basis points/);
+    assert.match(government, /4 January 2000/);
+    assert.match(government, /market financing conditions/);
+    assert.match(government, /average cost of all government debt already issued/);
+    assert.match(government, /IUDSNPY, IUDMNPY and IUDLNPY/);
+  } finally { await server.close(); }
+
+  const changed = JSON.parse(giltBytes.toString("utf8"));
+  changed.metrics.gilt_10y.definition.download_url = "https://www.bankofengland.co.uk/boeapps/database/other.csv";
+  const badBytes = Buffer.from(JSON.stringify(changed));
+  const badManifest = { ...giltManifest, sha256: createHash("sha256").update(badBytes).digest("hex") };
+  await assert.rejects(() => loadVerified("/", fileFetcher(badBytes, badManifest)), (error) => error.kind === "invalid");
 });
 
 test("producer output passes the manifest checksum and the full reader contract", async () => {

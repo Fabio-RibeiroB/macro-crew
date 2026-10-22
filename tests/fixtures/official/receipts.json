@@ -112,5 +112,12 @@
     "content_type": "text/html; charset=utf-8",
     "evidence_kind": "official_download",
     "fixture_role": "controlled fixture transport evidence; paired with reduced HPI CSV fixture"
+  },
+  "boe_nominal_par_yields_5_10_20_daily.csv": {
+    "url": "https://www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=04/Jan/2000&Dateto=now&SeriesCodes=IUDSNPY,IUDMNPY,IUDLNPY&CSVF=CN&UsingCodes=Y",
+    "retrieved_at": "2026-10-22T19:20:00Z",
+    "evidence_kind": "recorded_fixture",
+    "sha256": "3c52d666ba3623d668d6cf7bce60491ed3aa77db3522c2345bb30c6934508450",
+    "source_published_date": null
   }
 }

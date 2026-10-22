@@ -107,6 +107,24 @@ const topics = {
     meaning: "The amount of public sector debt outstanding, compared with the value of the UK economy over a year.",
     caution: "Debt is a balance at a point in time. It is different from the deficit or borrowing during a period, and from the wider net financial liabilities measure.",
   },
+  gilt_5y: {
+    short: "5-year gilt yield", Icon: Landmark, measurement: "BoE · fitted nominal par yield · 5 years",
+    color: "#5f8094", detailHref: "/government-budget#gilt-yields",
+    meaning: "A fitted yield at a fixed 5-year maturity that reflects market financing conditions.",
+    caution: "This is a fitted nominal par yield, not the redemption yield on one benchmark gilt or the average cost of all outstanding government debt.",
+  },
+  gilt_10y: {
+    short: "10-year gilt yield", Icon: Landmark, measurement: "BoE · fitted nominal par yield · 10 years",
+    color: "#276f87", detailHref: "/government-budget#gilt-yields",
+    meaning: "A fitted yield at a fixed 10-year maturity that reflects market financing conditions.",
+    caution: "This is a fitted nominal par yield, not the redemption yield on one benchmark gilt or the average cost of all outstanding government debt.",
+  },
+  gilt_20y: {
+    short: "20-year gilt yield", Icon: Landmark, measurement: "BoE · fitted nominal par yield · 20 years",
+    color: "#866d9c", detailHref: "/government-budget#gilt-yields",
+    meaning: "A fitted yield at a fixed 20-year maturity that reflects market financing conditions.",
+    caution: "This is a fitted nominal par yield, not the redemption yield on one benchmark gilt or the average cost of all outstanding government debt.",
+  },
   regular_pay_nominal_growth: {
     short: "Regular pay growth",
     Icon: TrendingUp,
@@ -267,6 +285,7 @@ function MetricCard({
   const status = freshness(metric);
   const previous = previousReading(metric);
   const isPay = kind === "regular_pay_nominal_growth";
+  const isGilt = kind.startsWith("gilt_");
   const isRolling = isPay || kind === "unemployment";
   const payPrevious = isRolling ? previousPublishedWindow(metric) : null;
   const comparisonPoint = isRolling ? payPrevious : previous;
@@ -332,7 +351,9 @@ function MetricCard({
             {Math.abs(rateChange.difference) === 1 ? "" : "s"} at the{" "}
             {formatPeriod(rateChange.period)} observation
           </>
-        ) : "The last rate change cannot be established from the available history." : comparisonPoint && delta !== null ? (
+        ) : "The last rate change cannot be established from the available history." : isGilt && comparisonPoint && delta !== null ? (
+          <><span>{delta === 0 ? "Unchanged" : `${delta > 0 ? "+" : "−"}${Math.abs(delta * 100).toFixed(2).replace(/\.00$/, "")} basis points`}</span> compared with the previous available trading observation on {formatPeriod(comparisonPoint.period)}. One percentage point equals 100 basis points.</>
+        ) : comparisonPoint && delta !== null ? (
           <>
             <span>
               {Math.abs(delta) < 0.00001
@@ -969,6 +990,31 @@ function PublicDebt({ data, loading, error, refresh }: any) {
   </Statistics>;
 }
 
+function GiltYields({ data, loading, error, refresh }: any) {
+  const primary = data?.metrics?.gilt_10y;
+  const metrics = [
+    ["10-year nominal par yield", "gilt_10y", "10-year yield · percent"],
+    ["5-year nominal par yield", "gilt_5y", "5-year yield · percent"],
+    ["20-year nominal par yield", "gilt_20y", "20-year yield · percent"],
+  ] as const;
+  return <Statistics data={data} kinds={["gilt_10y", "gilt_5y", "gilt_20y"]} loading={loading} error={error} refresh={refresh}
+    sectionId="gilt-yields" title="Gilt yields" eyebrow="BoE daily fitted nominal par yields">
+    <p className="fs-caption">{primary?.latest ? <>Latest 10-year observation: {formatPeriod(primary.latest.period)}. Comparison uses the previous available trading observation; non-trading dates have no fabricated values.</> : "Daily UK fitted nominal par yields; observation dates and comparisons appear when verified readings are available."} One percentage point equals 100 basis points.</p>
+    <Suspense fallback={<p role="status">Loading chart…</p>}>
+      {metrics.some(([, key]) => data?.metrics?.[key]?.history?.length) && <div className="fs-chart-grid fs-chart-count-1">
+        {metrics.map(([title, key, label]) => data?.metrics?.[key]?.history?.length ? <HistoricalTrendCard key={key} title={title} label={label} data={chartPoints(data.metrics[key])} color={topics[key].color} /> : null)}
+      </div>}
+    </Suspense>
+    <details className="fs-details fs-info" open={!primary?.latest}>
+      <summary>Definition and source <ChevronDown size={15} aria-hidden="true" /></summary>
+      <p>The Bank of England daily nominal par-yield family is fitted from its Variable Roughness Penalty (VRP) term-structure model at fixed 5-, 10- and 20-year maturities. The 10-year maturity is primary. Each yield describes market financing conditions at that maturity; it is not a benchmark gilt's redemption yield or the average cost of all government debt already issued.</p>
+      <p>The comparable family begins 4 January 2000. Daily observations are shown only on source dates, so weekends and other non-trading dates are not zero-filled. Changes compare with the previous available observation and are expressed in basis points (100 basis points = 1 percentage point). Source revisions are retained as private evidence and history.</p>
+      <p>Last successful checks: 5-year {checkedAt(data?.metrics?.gilt_5y?.last_successful_check_at ?? null)}; 10-year {checkedAt(primary?.last_successful_check_at ?? null)}; 20-year {checkedAt(data?.metrics?.gilt_20y?.last_successful_check_at ?? null)}.</p>
+      <OfficialLink href={primary?.definition.source_url ?? "https://www.bankofengland.co.uk/boeapps/database/"}>Bank of England Database nominal par yields (IUDSNPY, IUDMNPY and IUDLNPY)</OfficialLink>
+    </details>
+  </Statistics>;
+}
+
 function Publications({ reports, reportTime }: any) {
   return (
     <section className="fs-container fs-section" id="publications">
@@ -1433,6 +1479,7 @@ export default function App({
               the wider outlook.
             </PageHeading>
             <PublicDebt {...stats} />
+            <GiltYields {...stats} />
             <GovernmentGuide />
             <EventList {...eventProps} indicatorIds={["uk.public_debt.net_debt_gdp"]} compact />
           </>

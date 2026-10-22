@@ -1,5 +1,16 @@
 # Recorded official series
 
+## Bank of England gilt nominal par yields (issue #37)
+
+`boe_nominal_par_yields_5_10_20_daily.csv` is the exact combined daily Database
+CSV response for IUDSNPY, IUDMNPY and IUDLNPY, requested from 4 January 2000
+through the current date. It was retrieved read-only on 22 October 2026 from the
+Bank of England Database endpoint encoded in the metric definitions. The file
+is labelled recorded fixture evidence and is accepted only by offline fixture
+replay; it cannot be promoted to official public figures. All three series use
+the same download contract; each metric parser selects and validates only its
+own series. The latest captured observation is 20 October 2026.
+
 These are unmodified response bodies obtained on 20 October 2026. `receipts.json`
 records the exact download URLs, UTC receipt times, content types and SHA-256 hashes.
 The Bank Rate recording covers January–October 2026; the production adapter requests

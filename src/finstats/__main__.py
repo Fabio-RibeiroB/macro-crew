@@ -72,8 +72,13 @@ def collect(directory, transport=fetch, clock=utc_now, fixtures=None, event_coll
                                     shared_downloads['pipr'] = exc
                                     raise
                                 shared_downloads['pipr'] = fetched
-                        elif transport is fetch and (key.startswith('house_price_') or key in {'petrol_price', 'diesel_price'}):
-                            cache_key = 'fuel' if key in {'petrol_price', 'diesel_price'} else 'hpi'
+                        elif transport is fetch and (key.startswith('house_price_') or key in {'petrol_price', 'diesel_price'} or key.startswith('gilt_')):
+                            if key in {'petrol_price', 'diesel_price'}:
+                                cache_key = 'fuel'
+                            elif key.startswith('house_price_'):
+                                cache_key = 'hpi'
+                            else:
+                                cache_key = 'gilt_yields'
                             fetched = shared_downloads.get(cache_key)
                             if isinstance(fetched, Exception):
                                 raise fetched
