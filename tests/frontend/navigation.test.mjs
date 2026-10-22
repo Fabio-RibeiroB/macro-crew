@@ -17,7 +17,7 @@ test("plain-English pages have stable direct URLs and unique navigation identiti
   assert.equal(new Set(PAGES.map((p) => p.path)).size, PAGES.length);
   assert.deepEqual(
     NAV_PAGES.map((p) => p.label),
-    ["Overview", "Prices", "Economy", "Jobs & Pay", "Housing", "Government"],
+    ["Overview", "Calendar", "Prices", "Economy", "Jobs & Pay", "Housing", "Government"],
   );
   assert.deepEqual(
     FOOTER_PAGES.map((p) => [p.path, p.label]),
@@ -28,7 +28,7 @@ test("plain-English pages have stable direct URLs and unique navigation identiti
   );
   assert.deepEqual(
     PAGES.map((p) => p.path),
-    ["/", "/prices", "/economy", "/jobs-pay", "/housing", "/government-budget", "/about", "/sources"],
+    ["/", "/calendar", "/prices", "/economy", "/jobs-pay", "/housing", "/government-budget", "/about", "/sources"],
   );
   for (const page of PAGES) {
     assert.equal(resolvePage(page.path).id, page.id);
@@ -130,7 +130,12 @@ test("every page renders its own heading, navigation and missing-data content", 
           /Charts will appear when verified figures are available/,
         );
       if (page.id === "government")
-        assert.match(html, /not available here yet/);
+        {
+          assert.match(html, /Public sector net debt/);
+          assert.match(html, /not available here yet/);
+          assert.ok(html.indexOf("Public sector net debt") < html.indexOf("Start with who is affected"));
+          assert.match(html, /Next release dates/);
+        }
       if (page.id === "overview") {
         assert.doesNotMatch(html, /Big economic news|The quick read|Your everyday economy/);
         assert.match(html, /<h1[^>]*>Latest verified figures<\/h1>/);

@@ -10,6 +10,13 @@ export const PAGES = [
     place: "nav",
   },
   {
+    id: "calendar",
+    path: "/calendar",
+    label: "Calendar",
+    title: "Official release calendar",
+    place: "nav",
+  },
+  {
     id: "prices",
     path: "/prices",
     label: "Prices",
@@ -65,7 +72,6 @@ export const FOOTER_PAGES = PAGES.filter((page) => page.place === "footer");
 
 /** Future subject routes from the UI spec. They have no page yet. */
 export const UNPUBLISHED_PATHS = [
-  "/calendar",
   "/wages",
   "/unemployment",
 ];

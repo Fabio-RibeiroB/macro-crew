@@ -103,6 +103,20 @@ export const OPTIONAL_METRICS = {
     quality_source_url:
       "https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/employmentandemployeetypes/articles/labourforcesurveyqualityupdate/october2026",
   },
+  public_debt: {
+    metric_id: "uk.public_debt.net_debt_gdp",
+    series: "HF6X",
+    dataset: "PUSF",
+    title: "PS: Net Debt (excluding public sector banks) as a % of GDP: NSA",
+    frequency: "monthly",
+    comparison: "previous_month",
+    adjustment: "not_seasonally_adjusted",
+    unit: "percent",
+    version: 1,
+    geography: "United Kingdom",
+    source_url: "https://www.ons.gov.uk/economy/governmentpublicsectorandtaxes/publicsectorfinance/timeseries/hf6x/pusf",
+    download_url: "https://www.ons.gov.uk/generator?format=csv&uri=%2Feconomy%2Fgovernmentpublicsectorandtaxes%2Fpublicsectorfinance%2Ftimeseries%2Fhf6x%2Fpusf",
+  },
   private_rent_growth: {
     metric_id: "uk.private_rent.annual_growth", series: "Annual change",
     dataset: "Price Index of Private Rents, UK: monthly price statistics, Table 1",

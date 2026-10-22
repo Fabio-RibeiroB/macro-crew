@@ -49,6 +49,8 @@ import {
   bindMenuDismissal,
   menuFocusAction,
 } from "./data/interactions.mjs";
+import { loadEvents } from "./data/events.mjs";
+import { EventList } from "./components/EventList";
 import "../styles/friendly.css";
 
 const topics = {
@@ -95,6 +97,15 @@ const topics = {
       "GDP measures economic output. Growth can support business activity and jobs, but it does not tell us whether every household is better off.",
     caution:
       "One month can be volatile. Early estimates can change as the ONS receives more information.",
+  },
+  public_debt: {
+    short: "Public debt",
+    Icon: Landmark,
+    measurement: "ONS public sector net debt · percent of GDP",
+    color: "#69748b",
+    detailHref: "/government-budget#public-debt",
+    meaning: "The amount of public sector debt outstanding, compared with the value of the UK economy over a year.",
+    caution: "Debt is a balance at a point in time. It is different from the deficit or borrowing during a period, and from the wider net financial liabilities measure.",
   },
   regular_pay_nominal_growth: {
     short: "Regular pay growth",
@@ -940,6 +951,24 @@ function GovernmentGuide() {
   );
 }
 
+function PublicDebt({ data, loading, error, refresh }: any) {
+  const metric = data?.metrics?.public_debt;
+  return <Statistics data={data} kinds={["public_debt"]} loading={loading} error={error} refresh={refresh}
+    sectionId="public-debt" title="Public sector net debt" eyebrow="ONS monthly estimate">
+    <p className="fs-caption">{metric?.latest ? <>The latest value is for the end of {formatPeriod(metric.latest.period)}. The month-on-month comparison is in percentage points (pp), not percent growth.</> : "Monthly UK estimate; source publication and reference month will appear when a verified reading is available."}</p>
+    <Suspense fallback={<p role="status">Loading chart…</p>}>
+      {metric?.history?.length ? <div className="fs-chart-grid fs-chart-count-1"><HistoricalTrendCard title="Public sector net debt excluding public sector banks, as a share of GDP" label="Debt · % of GDP" color="#69748b" data={chartPoints(metric)} /></div> : null}
+    </Suspense>
+    <details className="fs-details fs-info" open={!metric?.latest}>
+      <summary>Definition and source <ChevronDown size={15} aria-hidden="true" /></summary>
+      <p>ONS series HF6X measures public sector net debt excluding public sector banks as a percentage of GDP. Debt is the outstanding balance; the deficit or net borrowing is the amount borrowed over a period. Public sector net financial liabilities (PSNFL) is a wider balance-sheet measure that includes more financial assets and liabilities.</p>
+      <p>UK, monthly, not seasonally adjusted. ONS can revise the history, including when GDP estimates change. We retain each accepted source response and its revision history privately.</p>
+      <p>ONS release: {metric?.source_published_date ?? "not yet available"}. Last checked: {checkedAt(metric?.last_successful_check_at ?? null)}.</p>
+      <OfficialLink href={metric?.definition.source_url ?? "https://www.ons.gov.uk/economy/governmentpublicsectorandtaxes/publicsectorfinance/timeseries/hf6x/pusf"}>ONS HF6X public debt series</OfficialLink>
+    </details>
+  </Statistics>;
+}
+
 function Publications({ reports, reportTime }: any) {
   return (
     <section className="fs-container fs-section" id="publications">
@@ -1124,12 +1153,16 @@ export default function App({
     pathname ??
       (typeof window === "undefined" ? "/" : window.location.pathname),
   );
-  const needsData = ["overview", "prices", "economy", "jobs-pay", "housing"].includes(page.id);
+  const needsData = ["overview", "prices", "economy", "jobs-pay", "housing", "government"].includes(page.id);
+  const needsEvents = ["overview", "calendar", "prices", "economy", "jobs-pay", "housing", "government"].includes(page.id);
   const [snapshot, setSnapshot] = useState(() =>
     refreshSnapshot(initialData, needsData ? "loading" : "idle"),
   );
   const [reportSnapshot, setReportSnapshot] = useState(() =>
     refreshSnapshot(null),
+  );
+  const [eventSnapshot, setEventSnapshot] = useState(() =>
+    refreshSnapshot(null, needsEvents ? "loading" : "idle"),
   );
   const [menuOpen, setMenuOpen] = useState(false);
   const [narrow, setNarrow] = useState(() => {
@@ -1147,6 +1180,7 @@ export default function App({
   const refreshOwner = useRef<ReturnType<
     typeof createRefreshController
   > | null>(null);
+  const eventsOwner = useRef<ReturnType<typeof createRefreshController> | null>(null);
   const header = useRef<HTMLElement>(null);
   const menuToggle = useRef<HTMLButtonElement>(null);
   const menuWasOpen = useRef(false);
@@ -1237,6 +1271,23 @@ export default function App({
     };
   }, [needsData]);
   useEffect(() => {
+    if (!needsEvents) return;
+    const owner = createRefreshController({
+      initialData: null,
+      initialStatus: "loading",
+      load: (signal) => loadEvents(import.meta.env.BASE_URL, (url, options) =>
+        fetch(url, { ...options, signal }),
+      ),
+      onState: setEventSnapshot,
+    });
+    eventsOwner.current = owner;
+    const cleanup = bindRefreshLifecycle(owner, window);
+    return () => {
+      cleanup();
+      if (eventsOwner.current === owner) eventsOwner.current = null;
+    };
+  }, [needsEvents]);
+  useEffect(() => {
     if (page.id !== "economy") return;
     const owner = createRefreshController({
       load: async (signal) => {
@@ -1259,6 +1310,9 @@ export default function App({
   );
   const reportTime = reportSnapshot.data?.metadata?.generated_at ?? null;
   const stats = { data, error, loading, refresh };
+  const eventView = refreshView(eventSnapshot);
+  const refreshEvents = () => eventsOwner.current?.refresh();
+  const eventProps = { payload: eventView.data, error: eventView.error, loading: eventView.loading, refresh: refreshEvents };
   return (
     <div className="fs-root">
       <a className="fs-skip" href="#main-content">
@@ -1330,14 +1384,17 @@ export default function App({
               compact
               overview
             />
+            <EventList {...eventProps} limit={5} compact />
           </>
         )}
+        {page.id === "calendar" && <><PageHeading eyebrow="Official dates" title={page.title}>Known release and meeting dates from official sources.</PageHeading><EventList {...eventProps} /></>}
         {page.id === "prices" && (
           <>
             <PageHeading eyebrow="Prices & everyday costs" title={page.title}>
               The pace of price rises matters. So does what your income can buy.
             </PageHeading>
             <Statistics {...stats} kinds={priceKinds(data)} />
+            <EventList {...eventProps} indicatorIds={["uk.cpi.annual_rate", "uk.cpih.annual_rate", "uk.road_fuel.unleaded_petrol_price", "uk.road_fuel.diesel_price", "uk.energy.price_cap"]} compact />
             <PriceGuide data={data} />
             <Trends data={data} kinds={priceTrendKinds(data)} />
             <FuelPrices {...stats} />
@@ -1350,6 +1407,7 @@ export default function App({
               activity.
             </PageHeading>
             <Statistics {...stats} kinds={["bank_rate", "gdp"]} />
+            <EventList {...eventProps} indicatorIds={["uk.bank_rate.daily", "uk.gdp.monthly_growth"]} compact />
             <InterestGuide />
             <GrowthGuide />
             <Trends data={data} kinds={["bank_rate", "gdp"]} />
@@ -1363,16 +1421,19 @@ export default function App({
             </PageHeading>
             <Wages {...stats} />
             <Unemployment {...stats} />
+            <EventList {...eventProps} indicatorIds={["uk.regular_pay.nominal_annual_growth", "uk.regular_pay.real_annual_growth", "uk.unemployment.rate"]} compact />
           </>
         )}
-        {page.id === "housing" && <Housing {...stats} />}
+        {page.id === "housing" && <><Housing {...stats} /><EventList {...eventProps} indicatorIds={["uk.private_rent.annual_growth", "uk.private_rent.monthly_level", "uk.house_price.average_level", "uk.house_price.annual_change"]} compact /></>}
         {page.id === "government" && (
           <>
             <PageHeading eyebrow="Government & Budget" title={page.title}>
               What to look for in announcements about taxes, public services and
               the wider outlook.
             </PageHeading>
+            <PublicDebt {...stats} />
             <GovernmentGuide />
+            <EventList {...eventProps} indicatorIds={["uk.public_debt.net_debt_gdp"]} compact />
           </>
         )}
         {page.id === "about" && (

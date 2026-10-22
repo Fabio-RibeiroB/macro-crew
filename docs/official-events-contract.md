@@ -50,3 +50,13 @@ calendar is not claimed complete for every release or future fiscal/energy
 announcement. A malformed private event state or event export failure is
 reported separately and cannot block metric publication; the last activated
 event manifest is left in place.
+
+The browser reads `events-manifest.json` on an independent refresh controller,
+then validates the immutable payload digest, schema, provider qualification,
+event definition/precision/status, metric links and bounded official URLs. A
+failed check keeps the last accepted calendar and reports the failure. A check
+older than 24 hours is labelled stale even when its last fetch succeeded. Upcoming
+lists use source dates only, retain explicit cancellation/rescheduling labels,
+exclude published and expired events, and show null-time events as London
+calendar dates without inventing a time. Provider qualification status remains
+visible because an empty unqualified source does not mean that no dates exist.
