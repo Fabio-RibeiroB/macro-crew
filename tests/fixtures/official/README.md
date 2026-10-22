@@ -166,3 +166,18 @@ only the two explicitly named pump-price columns; duty and VAT remain in the
 archived evidence. Monday is the weekly reference date. The workbook's separate
 Monday or next-working-morning-on-bank-holidays sampling rule is not treated as
 an exact sample timestamp.
+
+## Official event source captures (issue #35)
+
+The files **events_hm_treasury.html**, **events_obr.html**, and
+**events_ofgem_energy.html** are unmodified official response bodies captured on
+22 October 2026. Their exact fetch URLs, public calendar URLs, UTC receipt times,
+byte counts, SHA-256 hashes, and explicitly unqualified status are in
+**events_source_receipts.json**. These captures substantiate the no-adapter
+review; they are not evidence that future dates are absent or that the providers'
+calendars are complete.
+
+The files **events_case_ons.json**, **events_case_boe_mpc.html**, and
+**events_case_desnz_fuel.html** are synthetic parser test cases. They exercise
+precision, DST, cancellation, rescheduling, and deduplication only. They are
+not source captures and can never be published as official data.

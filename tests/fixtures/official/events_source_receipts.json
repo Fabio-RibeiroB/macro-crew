@@ -1,0 +1,45 @@
+{
+  "capture_date": "2026-10-22",
+  "receipts": {
+    "boe_mpc": {
+      "source_url": "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates",
+      "calendar_url": "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates",
+      "retrieved_at": "2026-10-22T14:32:39.282593Z",
+      "sha256": "ef7aa82cdb1048e1005aa4dd82b22bbf3187fb1c940327fd5552118fa41f3fa8",
+      "bytes": 79208,
+      "fixture": "events_boe_mpc_capture.html",
+      "evidence_kind": "official_download",
+      "qualification": "qualified_source_page_structure_capture"
+    },
+    "hm_treasury": {
+      "source_url": "https://www.gov.uk/search/news-and-communications?organisations%5B%5D=hm-treasury",
+      "calendar_url": "https://www.gov.uk/search/news-and-communications?organisations%5B%5D=hm-treasury",
+      "retrieved_at": "2026-10-22T14:32:39.282593Z",
+      "sha256": "0485dffc45344470fe2dd8b25b68ebff5aeec19f7ad713925e8d476556a2a2ac",
+      "bytes": 25169,
+      "fixture": "events_hm_treasury.html",
+      "evidence_kind": "official_download",
+      "qualification": "unqualified_no_reviewed_event_date_adapter"
+    },
+    "obr": {
+      "source_url": "https://obr.uk/publications/",
+      "calendar_url": "https://obr.uk/publications/",
+      "retrieved_at": "2026-10-22T14:32:39.282593Z",
+      "sha256": "ec910455722bd5e06632ca71718283df48d047972f49bfa98e5e6d4dd980ab77",
+      "bytes": 109997,
+      "fixture": "events_obr.html",
+      "evidence_kind": "official_download",
+      "qualification": "unqualified_no_reviewed_event_date_adapter"
+    },
+    "ofgem_energy": {
+      "source_url": "https://www.ofgem.gov.uk/your-energy-supply/your-energy-bill/energy-price-cap-and-standing-charges-explained",
+      "calendar_url": "https://www.ofgem.gov.uk/your-energy-supply/your-energy-bill/energy-price-cap-and-standing-charges-explained",
+      "retrieved_at": "2026-10-22T14:32:39.282593Z",
+      "sha256": "b23f6d7b6be47f828be2bfac11c2fe1c63ba4b371da0918c97d293a5a82fc644",
+      "bytes": 208908,
+      "fixture": "events_ofgem_energy.html",
+      "evidence_kind": "official_download",
+      "qualification": "unqualified_no_reviewed_event_date_adapter"
+    }
+  }
+}
