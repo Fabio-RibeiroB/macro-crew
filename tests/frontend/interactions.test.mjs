@@ -175,6 +175,7 @@ class Browser extends EventTarget {
   constructor(url = "https://finstats.example/") {
     super();
     this.frames = clock();
+    this.timers = new Map();
     this.intervals = new Map();
     this.sequence = 0;
     this.replacements = [];
@@ -189,6 +190,18 @@ class Browser extends EventTarget {
   }
   cancelAnimationFrame(id) {
     this.frames.clearTimer(id);
+  }
+  setTimeout(fn, ms) {
+    this.timers.set(++this.sequence, { fn, ms });
+    return this.sequence;
+  }
+  clearTimeout(id) {
+    this.timers.delete(id);
+  }
+  fireTimeouts() {
+    const pending = [...this.timers.values()];
+    this.timers.clear();
+    pending.forEach(({ fn }) => fn());
   }
   setInterval(fn, ms) {
     this.intervals.set(++this.sequence, { fn, ms });
@@ -344,6 +357,83 @@ test("fragment scrolling follows navigation only, not slow data or reader scroll
   win.dispatchEvent(new Event("hashchange"));
   win.frames.fire();
   assert.equal(targets.length, 4);
+});
+
+test("fragment waits for a late target and tracks above-target layout only for a bounded navigation window", () => {
+  const win = new Browser("https://finstats.example/housing#house-prices");
+  const observers = [];
+  win.ResizeObserver = class {
+    constructor(callback) { this.callback = callback; observers.push(this); }
+    observe() {}
+    disconnect() { this.disconnected = true; }
+    fire() { if (!this.disconnected) this.callback(); }
+  };
+  win.MutationObserver = class {
+    constructor(callback) { this.callback = callback; observers.push(this); }
+    observe() {}
+    disconnect() { this.disconnected = true; }
+    fire() { if (!this.disconnected) this.callback(); }
+  };
+  let element = null;
+  const doc = {
+    documentElement: {},
+    body: {},
+    getElementById: (id) => id === "house-prices" ? element : null,
+  };
+  const positions = [];
+  const cleanup = bindPageNavigation(win, doc);
+  win.frames.fire();
+  assert.deepEqual(positions, []);
+
+  element = {
+    top: 0,
+    getBoundingClientRect() { return { top: this.top }; },
+    scrollIntoView() { positions.push(this.top); this.top = 0; },
+  };
+  observers.find((observer) => observer instanceof win.MutationObserver).fire();
+  assert.deepEqual(positions, [0]);
+
+  // The four charts above the heading expand after the initial fragment scroll.
+  element.top = 1174;
+  observers.find((observer) => observer instanceof win.ResizeObserver).fire();
+  assert.deepEqual(positions, [0, 1174]);
+  assert.equal(element.top, 0);
+
+  // After the navigation window expires, a later background refresh is inert.
+  win.fireTimeouts();
+  element.top = 722;
+  observers.find((observer) => observer instanceof win.ResizeObserver).fire();
+  assert.deepEqual(positions, [0, 1174]);
+  assert.ok(observers.every((observer) => observer.disconnected));
+  cleanup();
+});
+
+test("fragment layout tracking stops immediately when the reader expresses scroll intent", () => {
+  const win = new Browser("https://finstats.example/housing#house-prices");
+  let resizeObserver;
+  win.ResizeObserver = class {
+    constructor(callback) { this.callback = callback; resizeObserver = this; }
+    observe() {}
+    disconnect() { this.disconnected = true; }
+    fire() { if (!this.disconnected) this.callback(); }
+  };
+  const positions = [];
+  const element = {
+    top: 0,
+    getBoundingClientRect() { return { top: this.top }; },
+    scrollIntoView() { positions.push(this.top); this.top = 0; },
+  };
+  const cleanup = bindPageNavigation(win, {
+    documentElement: {}, body: {}, getElementById: () => element,
+  });
+  win.frames.fire();
+  assert.deepEqual(positions, [0]);
+  element.top = 500;
+  win.dispatchEvent(new Event("wheel"));
+  resizeObserver.fire();
+  assert.deepEqual(positions, [0]);
+  assert.equal(resizeObserver.disconnected, true);
+  cleanup();
 });
 
 test("menu closes on focus leaving the header and removes its focus listener", () => {

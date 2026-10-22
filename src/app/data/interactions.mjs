@@ -25,8 +25,11 @@ export function menuFocusAction({
 /** Follow a navigation intent once; data arrivals never reposition the reader. */
 export function bindPageNavigation(win, doc) {
   let frame;
+  let stopFollowingLayout = () => {};
   const follow = () => {
     win.cancelAnimationFrame(frame);
+    stopFollowingLayout();
+    stopFollowingLayout = () => {};
     const { pathname, search, hash } = win.location;
     const legacy = legacyDestination(pathname, hash);
     const canonical = canonicalDestination(pathname);
@@ -40,7 +43,59 @@ export function bindPageNavigation(win, doc) {
     frame = win.requestAnimationFrame(() => {
       try {
         const id = decodeURIComponent(hash.slice(1));
-        if (id) doc.getElementById(id)?.scrollIntoView({ block: "start" });
+        if (!id) return;
+        const target = () => doc.getElementById(id);
+        let lastTop;
+        let finished = false;
+        const cleanups = [];
+        const finish = () => {
+          if (finished) return;
+          finished = true;
+          cleanups.forEach((cleanup) => cleanup());
+          if (stopFollowingLayout === finish) stopFollowingLayout = () => {};
+        };
+        const align = () => {
+          const element = target();
+          if (!element) return;
+          const top = element.getBoundingClientRect?.().top;
+          if (Number.isFinite(top) && (lastTop === undefined || Math.abs(top - lastTop) > 2)) {
+            element.scrollIntoView({ block: "start" });
+            lastTop = element.getBoundingClientRect?.().top ?? top;
+          } else if (!Number.isFinite(top) && lastTop === undefined) {
+            element.scrollIntoView({ block: "start" });
+          }
+        };
+        const Observer = win.ResizeObserver;
+        if (Observer) {
+          const observer = new Observer(align);
+          if (doc.documentElement) observer.observe(doc.documentElement);
+          if (doc.body) observer.observe(doc.body);
+          cleanups.push(() => observer.disconnect());
+        }
+        const Mutations = win.MutationObserver;
+        if (Mutations && doc.documentElement) {
+          const observer = new Mutations(align);
+          observer.observe(doc.documentElement, { childList: true, subtree: true });
+          cleanups.push(() => observer.disconnect());
+        }
+        const cancelOnIntent = () => finish();
+        const keyIntent = (event) => {
+          if ([" ", "PageUp", "PageDown", "Home", "End", "ArrowUp", "ArrowDown"].includes(event.key)) finish();
+        };
+        for (const type of ["wheel", "touchstart", "pointerdown"]) {
+          win.addEventListener(type, cancelOnIntent, { passive: true });
+          cleanups.push(() => win.removeEventListener(type, cancelOnIntent));
+        }
+        win.addEventListener("keydown", keyIntent);
+        cleanups.push(() => win.removeEventListener("keydown", keyIntent));
+        const deadline = win.setTimeout
+          ? win.setTimeout(finish, 6000)
+          : globalThis.setTimeout(finish, 6000);
+        cleanups.push(() => win.clearTimeout
+          ? win.clearTimeout(deadline)
+          : globalThis.clearTimeout(deadline));
+        stopFollowingLayout = finish;
+        align();
       } catch {
         /* Ignore malformed fragments. */
       }
@@ -50,6 +105,7 @@ export function bindPageNavigation(win, doc) {
   win.addEventListener("hashchange", follow);
   return () => {
     win.cancelAnimationFrame(frame);
+    stopFollowingLayout();
     win.removeEventListener("hashchange", follow);
   };
 }
