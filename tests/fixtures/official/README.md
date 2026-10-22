@@ -169,17 +169,21 @@ an exact sample timestamp.
 
 ## Official event source captures (issue #35)
 
-The files **events_hm_treasury.html**, **events_obr.html**, and
-**events_ofgem_energy.html** are unmodified official response bodies captured on
-22 October 2026. Their exact fetch URLs, public calendar URLs, UTC receipt times,
-byte counts, and SHA-256 hashes are in **events_source_receipts.json**. These
-captures substantiate the bounded date extractors; they do not establish that
-the providers' calendars are complete.
+The files **events_ons_capture.json**, **events_boe_mpc_capture.html**,
+**events_obr.html**, **events_hm_treasury.html**,
+**events_desnz_fuel_capture.html**, and **events_ofgem_energy.html** are
+unmodified official response bodies captured on 22 October 2026. Their exact
+fetch URLs, public calendar URLs, UTC receipt times, byte counts, SHA-256 hashes,
+and adapter qualification basis are in **events_source_receipts.json**. The ONS
+receipt records 9 returned rows out of 9 total under the bounded 1,000-result
+request. These captures substantiate the parser structures and dates at capture
+time; they do not establish completeness of future schedules.
 
-The corresponding ONS, BoE and DESNZ `events_*_capture` files are official
-response bodies with matching receipts. Files named `events_case_*` are
-synthetic parser cases only; they exercise precision, DST, cancellation,
-rescheduling and deduplication, and can never be published as official data.
+The files **events_case_ons.json**, **events_case_boe_mpc.html**, and
+**events_case_desnz_fuel.html**, plus inline no-date and changed-markup test
+cases, are synthetic parser tests. They exercise precision, DST, cancellation,
+rescheduling, deduplication and failure boundaries only. They are not source
+captures and can never be published as official data.
 
 ## ONS public sector net debt (issue #36)
 
