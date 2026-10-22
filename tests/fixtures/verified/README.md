@@ -18,8 +18,8 @@ the unchanged three core metric members plus reviewed optional metric members.
   use the full MGSX rolling-window label, independently of the source date.
 - `producer-cpi-v1.json` + `producer-cpi-v1.manifest.json`: earlier CPI-only
   candidate producer output, retained as the #27 integration artifact.
-- `producer-pay-v1.json` + `producer-pay-v1.manifest.json`: actual current
-  producer output, not hand-written test data. It is produced by the real
+- `producer-pay-v1.json` + `producer-pay-v1.manifest.json`: prior producer
+  output, not hand-written test data. It is produced by the real
   collect → publish → deliver pipeline over the recorded official fixtures in
   `tests/fixtures/official/` with a fixed clock (2026-10-21T12:00Z) and a fixed
   generation id. It contains the unchanged core measures, CPI, pay and UK PIPR rent measures,
@@ -32,6 +32,13 @@ the unchanged three core metric members plus reviewed optional metric members.
 reference month, separate GBP and percent units, and the UK HPI source receipt
 identity. Its CSV excerpt contains only UK national rows from 2016 onward; the
 receipt keeps the full official file URL, original byte count and full-source SHA-256.
+
+- `producer-fuel-v1.json` + `producer-fuel-v1.manifest.json`: the current
+  collect → publish → deliver integration artifact with petrol and diesel as
+  separate weekly `pence_per_litre` members. It uses the retained DESNZ CSV,
+  release page and workbook fixtures, with a fixed clock and generation id. The
+  source evidence remains labelled recorded fixture data and this wire artifact
+  is never deployed or accepted as a live production source.
 
 Tests may mutate copies of these fixtures in memory; checked-in bytes are never
 modified by a test run. A recorded fixture can never become public official data.

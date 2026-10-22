@@ -3,6 +3,7 @@ import {
   ArrowRight,
   ChevronDown,
   ExternalLink,
+  Fuel,
   Landmark,
   Moon,
   RefreshCw,
@@ -117,6 +118,13 @@ const topics = {
   house_price_level: {
     short: "House prices", Icon: Landmark, measurement: "UK average house price · pounds", color: "#547b8a", detailHref: "/housing#house-prices", meaning: "The average price of a home sold in the United Kingdom.", caution: "Recent UK HPI estimates are provisional and can be revised."
   },
+  petrol_price: {
+    short: "Petrol & Diesel", Icon: Fuel,
+    measurement: "UK average retail pump prices · pence per litre",
+    color: "#547b8a", detailHref: "/prices#petrol-diesel",
+    meaning: "A UK-wide average from the DESNZ sample, not a price at your local forecourt.",
+    caution: "The sample is weighted by sales and is not a quote for an individual station.",
+  },
   private_rent_growth: {
     short: "Rent",
     Icon: Landmark,
@@ -129,6 +137,8 @@ const topics = {
 };
 const metricValue = (metric: any) => ["GBP_per_month", "GBP"].includes(metric?.definition?.unit)
   ? (metric.latest?.value == null ? "Not available" : `£${Number(metric.latest.value).toLocaleString("en-GB")}`)
+  : metric?.definition?.unit === "pence_per_litre"
+    ? (metric.latest?.value == null ? "Not available" : `${metric.latest.value}p`)
   : percent(metric?.latest?.value);
 // CPI headlines the inflation card once a verified reading exists; CPIH stays
 // the labelled fallback and the supporting measure on the Prices page.
@@ -174,6 +184,20 @@ function OfficialLink({
     </a>
   );
 }
+function decimalDifference(current: string, previous: string) {
+  const digits = Math.max((current.split(".")[1] ?? "").length, (previous.split(".")[1] ?? "").length);
+  const scale = 10n ** BigInt(digits);
+  const integer = (value: string) => {
+    const [whole, fraction = ""] = value.split(".");
+    return BigInt(whole) * scale + BigInt((fraction + "0".repeat(digits)).slice(0, digits) || "0");
+  };
+  const difference = integer(current) - integer(previous);
+  const negative = difference < 0n;
+  const absolute = negative ? -difference : difference;
+  const whole = absolute / scale;
+  const fraction = digits ? (absolute % scale).toString().padStart(digits, "0").replace(/0+$/, "") : "";
+  return `${negative ? "−" : difference > 0n ? "+" : ""}${whole}${fraction ? `.${fraction}` : ""}`;
+}
 function MetricCard({
   metric,
   kind,
@@ -187,7 +211,7 @@ function MetricCard({
 }) {
   const topic = topics[kind];
   const Tag = compact ? "h2" : "h3";
-  if (!metric) {
+  if (!metric && kind !== "petrol_price") {
     return (
       <article className={`fs-stat ${compact ? "fs-stat-compact" : ""}`}>
         <div className="fs-stat-top">
@@ -203,6 +227,31 @@ function MetricCard({
         </a>
       </article>
     );
+  }
+  if (kind === "petrol_price") {
+    const diesel = secondaryMetric;
+    const fuel = (label: string, item: any) => {
+      const previous = item?.latest ? previousReading(item) : null;
+      const comparison = previous && item.latest.value != null
+        ? `Change ${decimalDifference(item.latest.value, previous.value)}p per litre compared with ${formatPeriod(previous.period)}`
+        : "A directly comparable previous week is not available.";
+      return <div className="fs-fuel-value" key={label}>
+        <h4>{label}</h4>
+        <p className="fs-number">{metricValue(item)}</p>
+        <p className="fs-measure">pence per litre · {item?.latest ? formatPeriod(item.latest.period) : "dated reading unavailable"}</p>
+        <p className="fs-comparison">{comparison}</p>
+        <p className={`fs-fresh fs-fresh-${item?.latest ? freshness(item).kind : "warning"}`}>
+          {item?.latest ? freshness(item).label : "Unavailable"}
+        </p>
+      </div>;
+    };
+    return <article className={`fs-stat ${compact ? "fs-stat-compact" : ""}`}>
+      <div className="fs-stat-top"><Tag>{topic.short}</Tag><topic.Icon size={18} aria-hidden="true" /></div>
+      {fuel("Unleaded petrol", metric)}
+      {fuel("Diesel", diesel)}
+      <p className="fs-caption">UK sales-weighted sample average; local forecourt prices vary.</p>
+      <a className="fs-stat-link" href={topic.detailHref}>See petrol and diesel history <ArrowRight size={15} aria-hidden="true" /></a>
+    </article>;
   }
   const status = freshness(metric);
   const previous = previousReading(metric);
@@ -479,6 +528,32 @@ function Housing({ data, loading, error, refresh }: any) {
   </>;
 }
 
+function FuelPrices({ data, loading, error, refresh }: any) {
+  const petrol = data?.metrics?.petrol_price;
+  const diesel = data?.metrics?.diesel_price;
+  return <Statistics data={data} kinds={["petrol_price"]} loading={loading} error={error}
+    refresh={refresh} sectionId="petrol-diesel" title="Petrol and diesel prices"
+    eyebrow="Weekly road fuel prices · DESNZ">
+    <Suspense fallback={<p role="status">Loading fuel price history…</p>}>
+      <div className="fs-chart-grid fs-chart-count-2">
+        {[petrol, diesel].filter((metric) => metric?.history?.length).map((metric) =>
+          <HistoricalTrendCard key={metric.definition.metric_id}
+            title={metric.definition.title}
+            label={metric.definition.series === "ULSP pump price" ? "Unleaded petrol · pence per litre" : "Diesel · pence per litre"}
+            unit="p" color={metric.definition.series === "ULSP pump price" ? "#547b8a" : "#9b6b32"}
+            data={chartPoints(metric)} />)}
+      </div>
+    </Suspense>
+    <p className="fs-caption">The week is referenced to Monday. DESNZ samples on Monday morning, or the next working morning on a bank holiday; this does not assert that the actual sample was taken on Monday. The shared sample is weighted by company sales and is a UK average, not a local forecourt quote.</p>
+    <details className="fs-details fs-info"><summary>Source and method <ChevronDown size={15} aria-hidden="true" /></summary>
+      <p>DESNZ Weekly road fuel prices CSV, 2018 onward. Petrol and diesel are independent pump-price series in pence per litre. Duty and VAT columns are retained in the private source evidence; the published pump prices already include the source's tax treatment and are not recalculated.</p>
+      <p>The accompanying workbook describes a sales-weighted UK average from six companies, covering around 60% of market volume using 2022 sales. It specifies Monday morning sampling, or the next working morning on bank holidays. The observation date remains the Monday reference date.</p>
+      {[["Unleaded petrol", petrol], ["Diesel", diesel]].map(([label, metric]) => <p key={label}>{label}: source release date: {metric?.source_published_date ?? "not supplied"}; last successful check: {checkedAt(metric?.last_successful_check_at ?? null)}.</p>)}
+      <OfficialLink href={petrol?.definition.source_url ?? "https://www.gov.uk/government/statistics/weekly-road-fuel-prices"}>DESNZ weekly road fuel prices and current downloads</OfficialLink>
+    </details>
+  </Statistics>;
+}
+
 function PageHeading({
   eyebrow,
   title,
@@ -579,7 +654,7 @@ function Statistics({
                 key={kind}
                 kind={kind}
                 metric={data.metrics[kind]}
-                secondaryMetric={kind === "regular_pay_nominal_growth" ? data.metrics.regular_pay_real_growth : kind === "private_rent_growth" ? data.metrics.private_rent_level : kind === "house_price_level" ? data.metrics.house_price_growth : undefined}
+                secondaryMetric={kind === "regular_pay_nominal_growth" ? data.metrics.regular_pay_real_growth : kind === "private_rent_growth" ? data.metrics.private_rent_level : kind === "house_price_level" ? data.metrics.house_price_growth : kind === "petrol_price" ? data.metrics.diesel_price : undefined}
                 compact={compact}
               />
             ))}
@@ -1251,7 +1326,7 @@ export default function App({
           <>
             <Statistics
               {...stats}
-              kinds={[inflationKind(data), "bank_rate", "regular_pay_nominal_growth", "unemployment", "private_rent_growth", "house_price_level", "gdp"]}
+              kinds={[inflationKind(data), "bank_rate", "regular_pay_nominal_growth", "unemployment", "private_rent_growth", "house_price_level", "petrol_price", "gdp"]}
               compact
               overview
             />
@@ -1265,6 +1340,7 @@ export default function App({
             <Statistics {...stats} kinds={priceKinds(data)} />
             <PriceGuide data={data} />
             <Trends data={data} kinds={priceTrendKinds(data)} />
+            <FuelPrices {...stats} />
           </>
         )}
         {page.id === "economy" && (

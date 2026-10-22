@@ -155,3 +155,14 @@ national rows (K02000001) from January 2016 onward, retaining the official colum
 and values. It is not a live figure or complete source archive. The producer and
 reader fixture is built from the real collect → publish → deliver pipeline; the
 source release date, reference month and retrieval time remain separate.
+
+## DESNZ weekly road fuel prices (issue #31)
+
+The recorded fixture retains the full 2018–2026 CSV, the current GOV.UK release
+page and the 19 October 2026 workbook. Its receipt records exact URLs, byte
+counts, SHA-256 hashes and retrieval times. This data is labelled as a recorded
+fixture and cannot be published as official production figures. The parser reads
+only the two explicitly named pump-price columns; duty and VAT remain in the
+archived evidence. Monday is the weekly reference date. The workbook's separate
+Monday or next-working-morning-on-bank-holidays sampling rule is not treated as
+an exact sample timestamp.

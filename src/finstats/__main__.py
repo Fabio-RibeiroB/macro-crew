@@ -11,7 +11,7 @@ import sqlite3
 import sys
 
 from finstats.publication import publish
-from finstats.sources import DEFINITIONS, fetch, fixture_file, recorded_hpi_release_evidence
+from finstats.sources import DEFINITIONS, FUEL_SOURCE_URL, fetch, fixture_file, parse_fuel_release_page, recorded_hpi_release_evidence
 from finstats.storage import Store, timestamp, utc_now
 
 
@@ -52,6 +52,13 @@ def collect(directory, transport=fetch, clock=utc_now, fixtures=None):
                             if source_published_date:
                                 release_page_evidence = recorded_hpi_release_evidence(
                                     url, source_published_date, timestamp(when))
+                        if key in {'petrol_price', 'diesel_price'}:
+                            page_body = (Path(fixtures) / 'desnz_weekly_road_fuel_prices_release_2026-10-20.html').read_bytes()
+                            source_published_date, url = parse_fuel_release_page(page_body)
+                            release_page_evidence = {
+                                'body': page_body, 'url': FUEL_SOURCE_URL,
+                                'retrieved_at': timestamp(when), 'evidence_kind': 'recorded_fixture',
+                            }
                     else:
                         if transport is fetch and key.startswith('private_rent_'):
                             fetched = shared_downloads.get('pipr')
@@ -64,17 +71,18 @@ def collect(directory, transport=fetch, clock=utc_now, fixtures=None):
                                     shared_downloads['pipr'] = exc
                                     raise
                                 shared_downloads['pipr'] = fetched
-                        elif transport is fetch and key.startswith('house_price_'):
-                            fetched = shared_downloads.get('hpi')
+                        elif transport is fetch and (key.startswith('house_price_') or key in {'petrol_price', 'diesel_price'}):
+                            cache_key = 'fuel' if key in {'petrol_price', 'diesel_price'} else 'hpi'
+                            fetched = shared_downloads.get(cache_key)
                             if isinstance(fetched, Exception):
                                 raise fetched
                             if fetched is None:
                                 try:
                                     fetched = transport(key)
                                 except (ValueError, OSError, HTTPException, sqlite3.Error) as exc:
-                                    shared_downloads['hpi'] = exc
+                                    shared_downloads[cache_key] = exc
                                     raise
-                                shared_downloads['hpi'] = fetched
+                                shared_downloads[cache_key] = fetched
                         else:
                             fetched = transport(key)
                         if isinstance(fetched, tuple):
