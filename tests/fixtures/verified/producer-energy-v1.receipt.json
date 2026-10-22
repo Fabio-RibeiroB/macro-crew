@@ -1,8 +1,10 @@
 {
   "kind": "recorded producer-to-reader contract fixture; never production data",
   "source": "Official Ofgem cap page, archived in tests/fixtures/official/ofgem_energy_price_cap_2026-10.html.gz",
-  "producer": "finstats.storage.Store.ingest → finstats.publication.publish → finstats.delivery.deliver",
+  "producer": "finstats.storage.Store.ingest \u2192 finstats.publication.publish \u2192 finstats.delivery.deliver",
   "verified_metric": "household_energy",
   "other_metrics": "unavailable by design in the isolated single-feed smoke",
-  "generation_id": "23635a77216a456ca87b7992122001fa"
+  "generation_id": "23635a77216a456ca87b7992122001fa",
+  "public_manifest_sha256": "f0370157d8ceba82dba8e3df8ce7b4d3d286bb172c5372fa06d66bf4344f8297",
+  "public_data_sha256": "582f2178fd7c0791f61d972cfefa5c7418c45417eb55fca3d870e33bd1a89285"
 }

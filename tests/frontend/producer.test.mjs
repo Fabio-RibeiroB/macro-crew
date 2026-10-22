@@ -80,6 +80,19 @@ test("strict reader keeps announced Ofgem periods separate and accepts date-boun
   const before = await withWire(announcedData);
   assert.equal(before.metrics.household_energy.latest.value, "1723");
   assert.equal(before.metrics.household_energy.upcoming_period.value, "1750");
+  assert.match(before.metrics.household_energy.latest.reference.tax_treatment, /1 October 2026 to 31 March 2027/);
+  assert.equal(before.metrics.household_energy.latest.reference.comparison_status, "not_comparable_tax_change");
+  assert.equal(before.metrics.household_energy.upcoming_period.reference.comparison_status, "compare_only_same_basis");
+
+  for (const status of ["effective", "expired", "announced"]) {
+    const invalidData = JSON.parse(JSON.stringify(announcedData));
+    const invalidPoint = status === "announced"
+      ? invalidData.metrics.household_energy.upcoming_period
+      : invalidData.metrics.household_energy.latest;
+    invalidPoint.reference.effective_end = "2026-09-30";
+    invalidPoint.reference.period_status = status;
+    await assert.rejects(() => withWire(invalidData));
+  }
 
   const activatedData = JSON.parse(JSON.stringify(announcedData));
   const activeMetric = activatedData.metrics.household_energy;

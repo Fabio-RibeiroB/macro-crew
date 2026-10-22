@@ -154,7 +154,7 @@ def test_no_current_cap_is_unavailable_but_keeps_expired_history_and_siblings(tm
         store.ingest('household_energy', BODY,
                      datetime(2026, 10, 22, tzinfo=timezone.utc),
                      source_url=DEFINITIONS['household_energy'].download_url)
-        bank_rate = (FIXTURES / 'boe_bank_rate.csv').read_bytes()
+        bank_rate = (FIXTURES / 'bank_rate.csv').read_bytes()
         store.ingest('bank_rate', bank_rate,
                      datetime(2026, 10, 22, tzinfo=timezone.utc),
                      source_url=DEFINITIONS['bank_rate'].download_url,
