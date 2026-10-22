@@ -175,14 +175,14 @@ def test_house_price_series_fail_independently_and_keep_prior_verified_history(
     before = read_generation(tmp_path)
     def broken_one_series(key):
         if key.startswith('house_price_'):
-            body, url, released = fixture_transport(key)
+            body, url, released, page_evidence = fixture_transport(key)
             lines = body.decode().splitlines()
             headers = lines[0].split(',')
             position = headers.index(bad_column)
             cells = lines[-1].split(',')
             cells[position] = 'UNKNOWN'
             lines[-1] = ','.join(cells)
-            return ('\n'.join(lines) + '\n').encode(), url, released
+            return ('\n'.join(lines) + '\n').encode(), url, released, page_evidence
         return fixture_transport(key)
     result = collect(tmp_path, transport=broken_one_series, clock=lambda: CPI_WHEN + timedelta(days=1))
     assert result['failed_metrics'] == [failed_key]

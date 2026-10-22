@@ -109,8 +109,10 @@ def test_hpi_truncated_edition_rejects_and_retains_prior_snapshot(store, tmp_pat
     )
     july_url = 'https://publicdata.landregistry.gov.uk/market-trend-data/house-price-index-data/Average-prices-2026-07.csv'
     august_url = 'https://publicdata.landregistry.gov.uk/market-trend-data/house-price-index-data/Average-prices-2026-08.csv'
+    from finstats.sources import recorded_hpi_release_evidence
+    july_page = recorded_hpi_release_evidence(july_url, '2026-07-31', '2026-10-20T00:00:00Z')
     prior_id = store.ingest(key, body, CPI_WHEN, source_url=july_url,
-                            source_published_date='2026-07-31')
+                            source_published_date='2026-07-31', release_page_evidence=july_page)
     prior = store.latest(key)
     prior_history = store.db.execute(
         'SELECT period,value,status,source_row FROM observation WHERE snapshot_id=? ORDER BY period',
@@ -121,7 +123,8 @@ def test_hpi_truncated_edition_rejects_and_retains_prior_snapshot(store, tmp_pat
 
     with pytest.raises(ValidationError, match='latest reference period does not match'):
         store.ingest(key, body, CPI_WHEN, source_url=august_url,
-                     source_published_date='2026-10-21')
+                     source_published_date='2026-10-21', release_page_evidence=recorded_hpi_release_evidence(
+                         august_url, '2026-10-21', '2026-10-20T00:00:00Z'))
 
     current = store.latest(key)
     assert current['id'] == prior_id
@@ -141,7 +144,8 @@ def test_hpi_truncated_edition_rejects_and_retains_prior_snapshot(store, tmp_pat
     try:
         with pytest.raises(ValidationError, match='latest reference period does not match'):
             cold.ingest(key, body, CPI_WHEN, source_url=august_url,
-                        source_published_date='2026-10-21')
+                        source_published_date='2026-10-21', release_page_evidence=recorded_hpi_release_evidence(
+                            august_url, '2026-10-21', '2026-10-20T00:00:00Z'))
         assert cold.latest(key) is None
         assert cold.db.execute(
             "SELECT status FROM attempt WHERE key=? ORDER BY id DESC LIMIT 1", (key,),

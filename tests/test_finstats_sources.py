@@ -9,7 +9,9 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from finstats.sources import DEFINITIONS, ValidationError, fixture_file, parse
+from finstats.sources import (
+    DEFINITIONS, ValidationError, fixture_file, parse, recorded_hpi_release_evidence,
+)
 
 FIXTURES = Path(__file__).parent / 'fixtures' / 'official'
 TODAY = date(2026, 10, 20)
@@ -26,7 +28,9 @@ def fixture_transport(key):
         return body, ('https://www.ons.gov.uk/file?uri=%2Feconomy%2Finflationandpriceindices%2Fdatasets%2Fpriceindexofprivaterentsukmonthlypricestatistics%2F21october2026%2Fpriceindexofprivaterentsukmonthlypricestatistics.xlsx')
     if key.startswith('house_price_'):
         receipt = json.loads((FIXTURES / 'receipts.json').read_text())['uk_hpi_average_prices.csv']
-        return body, receipt['originalURL'], receipt['source_published_date']
+        page = recorded_hpi_release_evidence(
+            receipt['originalURL'], receipt['source_published_date'], '2026-10-20T00:00:00Z')
+        return body, receipt['originalURL'], receipt['source_published_date'], page
     return body
 
 

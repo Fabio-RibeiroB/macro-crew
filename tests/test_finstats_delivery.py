@@ -2,13 +2,15 @@ import hashlib
 import json
 from pathlib import Path
 import stat
+from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 from finstats.__main__ import collect
 from finstats.delivery import deliver, main
-from finstats.storage import atomic_write
+from finstats.storage import Store, atomic_write
+from finstats.sources import parse_hpi_release_page
 from tests.test_finstats_sources import FIXTURES, fixture, fixture_transport
 from tests.test_finstats_storage import CPI_WHEN, WHEN
 
@@ -39,6 +41,104 @@ def test_public_delivery_is_readable_official_and_contains_no_private_files(tmp_
     assert 'source_row' not in json.dumps(data)
     assert 'raw/' not in json.dumps(data)
     assert str(private) not in json.dumps(data)
+    receipts = [json.loads(path.read_text()) for path in (private / 'receipts').glob('*.json')]
+    assert len(receipts) == 2
+    store = Store(private)
+    try:
+        for receipt in receipts:
+            assert receipt['release_page_evidence_kind'] == 'recorded_fixture'
+            page = (private / 'raw' / f"{receipt['release_page_sha256']}.bin").read_bytes()
+            csv = (private / 'raw' / f"{receipt['source_csv_sha256']}.bin").read_bytes()
+            assert hashlib.sha256(page).hexdigest() == receipt['release_page_sha256']
+            assert hashlib.sha256(csv).hexdigest() == receipt['source_csv_sha256']
+            assert parse_hpi_release_page(page) == (
+                receipt['parsed_published_date'], receipt['parsed_csv_url'])
+            assert receipt['parsed_published_date'] == receipt['source_published_date']
+            assert receipt['parsed_csv_url'] == receipt['source_csv_url']
+            attempt = store.db.execute(
+                'SELECT status,source_url,raw_hash FROM attempt WHERE id=?',
+                (receipt['attempt_id'],),
+            ).fetchone()
+            assert tuple(attempt) == ('accepted', receipt['source_csv_url'], receipt['source_csv_sha256'])
+            assert store.db.execute(
+                'SELECT 1 FROM receipt WHERE attempt_id=?', (receipt['attempt_id'],),
+            ).fetchone()
+    finally:
+        store.close()
+    public_text = json.dumps(data)
+    assert 'release_page_sha256' not in public_text
+    assert 'release_page_retrieved_at' not in public_text
+    assert not list(public.rglob('*.html'))
+
+
+@pytest.mark.parametrize('failure', [
+    'date_mismatch', 'link_mismatch', 'missing_page', 'page_archive', 'receipt_archive',
+])
+def test_hpi_release_evidence_failures_reject_only_hpi_and_publish_other_metrics(tmp_path, failure):
+    private, public = tmp_path / 'private', tmp_path / 'public'
+    collect(private, transport=fixture_transport, clock=lambda: CPI_WHEN)
+    deliver(private, public)
+    before_store = Store(private)
+    try:
+        before = {key: before_store.latest(key)['id']
+                  for key in ('house_price_level', 'house_price_growth')}
+    finally:
+        before_store.close()
+
+    hpi_values = fixture_transport('house_price_level')
+    page_body = hpi_values[3]['body'] + (b' ' if failure == 'page_archive' else b'')
+
+    def transport(key):
+        values = fixture_transport(key)
+        if not key.startswith('house_price_'):
+            return values
+        body, url, published, page = values
+        page = dict(page)
+        if failure == 'date_mismatch':
+            published = '2026-10-20'
+        elif failure == 'link_mismatch':
+            url += '&unlisted=1'
+        elif failure == 'missing_page':
+            page = None
+        elif failure == 'page_archive':
+            page['body'] = page_body
+        return body, url, published, page
+
+    if failure in ('page_archive', 'receipt_archive'):
+        page_hash = hashlib.sha256(page_body).hexdigest()
+        original = atomic_write
+
+        def fail_page_archive(path, body, **kwargs):
+            if failure == 'page_archive' and path.parent.name == 'raw' and path.name == page_hash + '.bin':
+                raise OSError('private page archive unavailable')
+            if failure == 'receipt_archive' and path.parent.name == 'receipts':
+                raise OSError('private page archive unavailable')
+            return original(path, body, **kwargs)
+
+        with patch('finstats.storage.atomic_write', side_effect=fail_page_archive):
+            result = collect(private, transport=transport, clock=lambda: CPI_WHEN + timedelta(days=1))
+    else:
+        result = collect(private, transport=transport, clock=lambda: CPI_WHEN + timedelta(days=1))
+
+    assert result['failed_metrics'] == ['house_price_level', 'house_price_growth']
+    after_store = Store(private)
+    try:
+        for key, snapshot_id in before.items():
+            assert after_store.latest(key)['id'] == snapshot_id
+            status = after_store.db.execute(
+                'SELECT status FROM attempt WHERE key=? ORDER BY id DESC LIMIT 1', (key,),
+            ).fetchone()['status']
+            assert status == 'rejected'
+    finally:
+        after_store.close()
+    deliver(private, public)
+    data = read_public(public)
+    assert all(data['metrics'][key]['collection_status'] == 'degraded'
+               for key in before)
+    assert all(data['metrics'][key]['latest']['value'] is not None for key in before)
+    assert all(data['metrics'][key]['collection_status'] == 'ok'
+               for key in data['metrics'] if key not in before)
+    assert 'release_page_sha256' not in json.dumps(data)
 
 
 def test_delivery_publishes_cpi_headline_with_core_metrics_retained(tmp_path):

@@ -10,7 +10,7 @@ import zipfile
 import zlib
 import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from urllib.request import Request, urlopen
 from urllib.parse import urlsplit
@@ -633,6 +633,51 @@ def parse(key: str, body: bytes, today: date) -> Snapshot:
     return Snapshot(definition, published, next_release, tuple(observations), **quality)
 
 
+def parse_hpi_release_page(body: bytes):
+    """Re-derive the release date and first approved CSV link from archived bytes."""
+    if not isinstance(body, bytes) or len(body) > MAX_SOURCE_PAGE_BYTES:
+        raise ValidationError('UK HPI release page exceeds size limit')
+    try:
+        text = body.decode('utf-8', 'strict')
+    except UnicodeError as exc:
+        raise ValidationError('Invalid UTF-8 UK HPI release page') from exc
+    published_match = re.search(r'"datePublished"\s*:\s*"([0-9]{4}-[0-9]{2}-[0-9]{2})T', text)
+    if not published_match:
+        raise ValidationError('UK HPI publication date unavailable')
+    published = published_match.group(1)
+    try:
+        datetime.strptime(published, '%Y-%m-%d')
+    except ValueError as exc:
+        raise ValidationError('Invalid UK HPI publication date') from exc
+    links = re.findall(
+        r'href=["\'](https://publicdata\.landregistry\.gov\.uk/market-trend-data/house-price-index-data/Average-prices-[0-9]{4}-[0-9]{2}\.csv(?:\?[^"\']*)?)["\']',
+        text,
+    )
+    if not links:
+        raise ValidationError('Current official UK HPI Average price CSV unavailable')
+    return published, links[0].replace('&amp;', '&')
+
+
+def recorded_hpi_release_evidence(source_url, source_published_date, retrieved_at):
+    """Create explicitly synthetic, labelled release-page evidence for fixture replay."""
+    published = datetime.strptime(source_published_date, '%Y-%m-%d').date()
+    release_page_url = (
+        'https://www.gov.uk/government/statistical-data-sets/'
+        f'uk-house-price-index-data-downloads-{published.strftime("%B").lower()}-{published.year}'
+    )
+    html = (
+        '<html><script type="application/ld+json">'
+        f'{{"datePublished":"{source_published_date}T00:00:00Z"}}'
+        '</script><a href="' + source_url.replace('&', '&amp;') + '">Average price</a></html>'
+    ).encode('utf-8')
+    return {
+        'body': html,
+        'url': release_page_url,
+        'retrieved_at': retrieved_at,
+        'evidence_kind': 'recorded_fixture',
+    }
+
+
 def fetch(key: str) -> bytes:
     """One bounded request. Retry scheduling belongs to the caller, not the parser."""
     if key.startswith('private_rent_'):
@@ -691,17 +736,18 @@ def fetch(key: str) -> bytes:
         with urlopen(Request(release_page_url, headers={'User-Agent': 'FinStats/2.0 (+https://github.com/Fabio-RibeiroB/macro-crew)'}), timeout=30) as response:
             if response.status != 200 or urlsplit(response.geturl()).hostname != 'www.gov.uk':
                 raise ValidationError('Unexpected UK HPI release page response')
+            release_page_url = response.geturl()
             release_page = response.read(MAX_SOURCE_PAGE_BYTES + 1)
         if len(release_page) > MAX_SOURCE_PAGE_BYTES:
             raise ValidationError('UK HPI release page exceeds size limit')
-        release_text = release_page.decode('utf-8', 'strict')
-        published_match = re.search(r'"datePublished"\s*:\s*"([0-9]{4}-[0-9]{2}-[0-9]{2})T', release_text)
-        if not published_match:
-            raise ValidationError('UK HPI publication date unavailable')
-        links = re.findall(r'href=["\'](https://publicdata\.landregistry\.gov\.uk/market-trend-data/house-price-index-data/Average-prices-[0-9]{4}-[0-9]{2}\.csv(?:\?[^"\']*)?)["\']', release_text)
-        if not links:
-            raise ValidationError('Current official UK HPI Average price CSV unavailable')
-        url = links[0].replace('&amp;', '&')
+        page_retrieved_at = datetime.now(timezone.utc).isoformat(timespec='microseconds').replace('+00:00', 'Z')
+        published_date, url = parse_hpi_release_page(release_page)
+        page_evidence = {
+            'body': release_page,
+            'url': release_page_url,
+            'retrieved_at': page_retrieved_at,
+            'evidence_kind': 'official_download',
+        }
         request = Request(url, headers={'User-Agent': 'FinStats/2.0 (+https://github.com/Fabio-RibeiroB/macro-crew)'})
         with urlopen(request, timeout=60) as response:
             if response.status != 200 or urlsplit(response.geturl()).hostname != 'publicdata.landregistry.gov.uk':
@@ -709,7 +755,7 @@ def fetch(key: str) -> bytes:
             payload = response.read(MAX_HPI_BYTES + 1)
         if len(payload) > MAX_HPI_BYTES:
             raise ValidationError('UK HPI CSV exceeds size limit')
-        return payload, url, published_match.group(1)
+        return payload, url, published_date, page_evidence
     request = Request(DEFINITIONS[key].download_url, headers={
         'User-Agent': 'FinStats/2.0 (+https://github.com/Fabio-RibeiroB/macro-crew)'})
     with urlopen(request, timeout=30) as response:
