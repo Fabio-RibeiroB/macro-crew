@@ -10,8 +10,9 @@ import re
 from typing import Iterable
 from urllib.parse import urlsplit
 
-from finstats.sources import DEFINITIONS
+from finstats.sources import DEFINITIONS, public_definition
 from finstats.storage import Store, encode
+from finstats.events import public_events
 
 RULES_VERSION = 1
 EVIDENCE_VERSION = 1
@@ -321,3 +322,109 @@ def release_evidence_identity(bundle: dict) -> str:
         "published_date": release["published_date"],
         "semantic_fingerprint": bundle["semantic_fingerprint"],
     })
+
+
+def discover_published_release_evidence(
+    store: Store, *, seen_identities: Iterable[str] = (),
+) -> dict:
+    """Adapt existing private event evidence into exact #40 evidence candidates.
+
+    This reads only `events.json` beside the accepted metric store. It makes no
+    requests, trusts no caller-supplied metric keys, and returns candidates only
+    when a published event and an accepted official metric share a publication
+    date. The caller owns durable deduplication by `evidence_identity`.
+    """
+    state_path = store.directory / "events.json"
+    if not state_path.is_file():
+        return {"candidates": [], "rejected": [], "unsupported": []}
+    state = json.loads(state_path.read_text())
+    if not isinstance(state, dict) or state.get("schema_version") != 1:
+        raise ValueError("invalid private event state")
+    if state.get("mode") != "official":
+        return {"candidates": [], "rejected": [{"reason": "fixture_event_state"}],
+                "unsupported": []}
+    projected = public_events(store.directory)
+    if projected is None:
+        return {"candidates": [], "rejected": [], "unsupported": []}
+
+    metric_keys_by_id = {}
+    for key in DEFINITIONS:
+        metric_id = public_definition(key)["metric_id"]
+        if metric_id in metric_keys_by_id:
+            raise ValueError("official metric IDs are not unique")
+        metric_keys_by_id[metric_id] = key
+
+    seen = set(seen_identities)
+    candidates = []
+    rejected = []
+    unsupported = []
+    for provider_name, provider in projected["providers"].items():
+        raw_provider = state["providers"][provider_name]
+        if provider_name == "boe_mpc" and provider.get("status") == "ok":
+            unsupported.append({
+                "source": provider_name,
+                "reason": "event_contract_contains_meeting_dates_not_published_policy_release_identities",
+            })
+        if (provider.get("status") != "ok" or provider.get("qualification") != "qualified"
+                or raw_provider.get("evidence_kind") != "official_download"):
+            rejected.append({"source": provider_name, "reason": "provider_not_current_qualified_official"})
+            continue
+        for event in provider.get("events", []):
+            if event.get("status") != "published":
+                rejected.append({"event_id": event.get("id"), "reason": "event_not_published"})
+                continue
+            if provider_name != "ons":
+                rejected.append({"event_id": event.get("id"),
+                                 "reason": "published_event_type_not_enabled"})
+                continue
+            linked_ids = event.get("linked_indicators")
+            if not isinstance(linked_ids, list) or not linked_ids:
+                rejected.append({"event_id": event.get("id"), "reason": "missing_linked_metric_ids"})
+                continue
+            linked_keys = []
+            for metric_id in linked_ids:
+                key = metric_keys_by_id.get(metric_id)
+                if key is None or DEFINITIONS[key].frequency != "monthly":
+                    linked_keys = []
+                    break
+                linked_keys.append(key)
+            if not linked_keys:
+                rejected.append({"event_id": event.get("id"), "reason": "unmapped_or_nonmonthly_metric"})
+                continue
+            matched_keys = []
+            for key in linked_keys:
+                snapshot = store.latest(key)
+                if snapshot is None or snapshot["evidence_kind"] != "official_download":
+                    continue
+                payload = json.loads(snapshot["payload"])
+                if payload["published_date"] == event["date"]:
+                    matched_keys.append(key)
+            if not matched_keys:
+                rejected.append({"event_id": event.get("id"),
+                                 "reason": "no_accepted_official_metric_for_event_publication_date"})
+                continue
+            release = {
+                "source": "ons",
+                "id": event["id"],
+                "published_date": event["date"],
+                "source_url": event["source_url"],
+                "release_kind": "scheduled_monthly_statistical_release",
+                "status": "published",
+                "evidence_kind": "official_download",
+            }
+            qualification = qualifies(release, matched_keys)
+            if not qualification["qualified"]:
+                rejected.append({"event_id": event["id"], "reason": qualification["reason"]})
+                continue
+            bundle = build_evidence(
+                store, release=release, metric_keys=matched_keys,
+                official_text=event["title"], text_source_url=event["source_url"],
+            )
+            identity = release_evidence_identity(bundle)
+            if identity in seen:
+                rejected.append({"event_id": event["id"], "reason": "duplicate_evidence_identity"})
+                continue
+            seen.add(identity)
+            candidates.append({"evidence_identity": identity, "release": release,
+                               "metric_keys": matched_keys, "evidence": bundle})
+    return {"candidates": candidates, "rejected": rejected, "unsupported": unsupported}

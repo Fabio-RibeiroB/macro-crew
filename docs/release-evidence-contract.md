@@ -1,12 +1,24 @@
 # Private release evidence contract (issue #39)
 
 `finstats.release_detector` is an opt-in deterministic core. Nothing in the
-collector, event feed, delivery command or website calls it. Callers supply one
-already-qualified official release identity, the accepted metric keys, and
-optional text from one exact official page. It performs no network or filesystem
-discovery. Text is capped at 64 KiB, limited to the reviewed official hosts,
-reduced to visible text, and whitespace-normalized. It is private evidence and
-must not be copied into public metric generations.
+collector, delivery command or website calls it. The #40 worker's input path is
+`discover_published_release_evidence(store, seen_identities=...)`: it reads only
+the existing private `events.json` beside the accepted metric store, validates
+it through the current event projection contract, and makes no network requests.
+It accepts only current, qualified official providers and published events. For
+ONS releases it maps the event's linked official `metric_id` values through
+`public_definition()` to local metric keys, then requires an accepted
+`official_download` snapshot for each candidate metric with the exact event
+publication date. Metric keys are never caller-supplied, so one event family
+cannot borrow another family's accepted values. It returns `candidates`,
+`rejected`, and `unsupported`; the #40 worker supplies its private seen-identity
+ledger and persists deduplication itself.
+
+The event title is the only official text currently available in that contract.
+Direct `build_evidence(...)` use may supply text from an exact qualified official
+path; it performs no discovery. Text is capped at 64 KiB, reduced to visible
+text, and whitespace-normalized. Evidence is private and must not be copied into
+public metric generations.
 
 `build_evidence(store, release=..., metric_keys=..., official_text=...,
 text_source_url=...)` returns a versioned object with:
@@ -41,6 +53,11 @@ ineligible. It does not qualify daily Bank Rate or yield observations. Release
 identities must represent actual policy decisions; observation dates are not
 policy publication identities. Qualification does not initiate AI work and is
 not used by publication.
+
+The existing BoE event provider contains MPC meeting dates, not published policy
+decision identities. The adapter reports this as unsupported and never promotes
+a meeting date to a decision release. Other published event types remain
+ineligible in this issue.
 
 ## Pending fuel and yield review
 

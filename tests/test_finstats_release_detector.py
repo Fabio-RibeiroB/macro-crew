@@ -1,5 +1,6 @@
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
+import json
 
 import pytest
 
@@ -7,6 +8,7 @@ from finstats.release_detector import (
     MATERIAL_THRESHOLD_PROPOSALS,
     build_evidence,
     canonical_official_text,
+    discover_published_release_evidence,
     qualifies,
     release_evidence_identity,
     semantic_fingerprint,
@@ -16,6 +18,7 @@ from tests.test_finstats_sources import fixture
 
 
 WHEN = datetime(2026, 10, 20, 12, tzinfo=timezone.utc)
+EVENT_WHEN = datetime(2026, 10, 22, 12, tzinfo=timezone.utc)
 RELEASE = {
     "source": "ons",
     "id": "ons:/releases/consumer-price-inflation-october-2026",
@@ -136,3 +139,96 @@ def test_text_input_requires_a_bounded_qualified_official_path(store):
     with pytest.raises(ValueError, match="evidence limit"):
         build_evidence(store, release=RELEASE, metric_keys=["gdp"],
                        official_text="x" * 64_001, text_source_url=RELEASE["source_url"])
+
+
+def _published_ons_capture():
+    releases = [
+        {"uri": "/releases/gdp-monthly-estimate-october-2026", "description": {
+            "title": "GDP monthly estimate, UK: October 2026",
+            "release_date": "2026-10-22T08:30:00Z", "published": True}},
+        {"uri": "/releases/consumer-price-inflation-october-2026", "description": {
+            "title": "Consumer price inflation, UK: October 2026",
+            "release_date": "2026-10-22T08:30:00Z", "published": True}},
+    ]
+    return json.dumps({"breakdown": {"total": len(releases)}, "releases": releases}).encode()
+
+
+def _mocked_gdp_official_download():
+    # In-memory test response, never written to a fixture or public generation.
+    return (b'"Title","Gross Value Added - Monthly (period on period growth) :CVM SA"\n'
+            b'"CDID","ECYX"\n"Source dataset ID","MGDP"\n"PreUnit",""\n'
+            b'"Unit",""\n"Release date","22-10-2026"\n'
+            b'"Next release","12 November 2026"\n"Important notes",""\n'
+            b'"2026 AUG","0.1"\n')
+
+
+def test_existing_event_producer_contract_builds_only_date_matched_linked_metric_candidates(tmp_path):
+    from finstats.events import collect_events
+
+    store = Store(tmp_path)
+    try:
+        store.ingest("gdp", _mocked_gdp_official_download(), EVENT_WHEN)
+
+        def mock_official_fetch(url):
+            if url.startswith("https://api.beta.ons.gov.uk/"):
+                return _published_ons_capture()
+            if url == "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates":
+                return b"<p>2026 confirmed dates</p><p>Thursday 5 November</p>"
+            raise OSError("unneeded event source in this bounded test")
+
+        result = collect_events(tmp_path, clock=lambda: EVENT_WHEN, fetch=mock_official_fetch)
+        assert result["schedule"]["mode"] == "official"
+        detected = discover_published_release_evidence(store)
+        assert len(detected["candidates"]) == 1
+        candidate = detected["candidates"][0]
+        assert candidate["release"]["id"] == "ons:/releases/gdp-monthly-estimate-october-2026"
+        assert candidate["release"]["published_date"] == "2026-10-22"
+        assert candidate["metric_keys"] == ["gdp"]
+        assert candidate["evidence"]["metrics"].keys() == {"gdp"}
+        assert detected["unsupported"] == [{
+            "source": "boe_mpc",
+            "reason": "event_contract_contains_meeting_dates_not_published_policy_release_identities",
+        }]
+        # The published CPI event has the same date, but cannot inherit the GDP
+        # observation through caller-supplied metric keys.
+        assert any(item.get("event_id") == "ons:/releases/consumer-price-inflation-october-2026"
+                   and item["reason"] == "no_accepted_official_metric_for_event_publication_date"
+                   for item in detected["rejected"])
+        repeated = discover_published_release_evidence(
+            store, seen_identities=[candidate["evidence_identity"]])
+        assert repeated["candidates"] == []
+        assert any(item["reason"] == "duplicate_evidence_identity" for item in repeated["rejected"])
+    finally:
+        store.close()
+
+
+def test_existing_event_adapter_skips_scheduled_and_rejects_wrong_family(tmp_path):
+    from finstats.events import collect_events
+
+    store = Store(tmp_path)
+    try:
+        store.ingest("gdp", _mocked_gdp_official_download(), EVENT_WHEN)
+
+        def mock_official_fetch(url):
+            if url.startswith("https://api.beta.ons.gov.uk/"):
+                return _published_ons_capture()
+            raise OSError("unneeded event source in this bounded test")
+
+        collect_events(tmp_path, clock=lambda: EVENT_WHEN, fetch=mock_official_fetch)
+        state_path = tmp_path / "events.json"
+        state = json.loads(state_path.read_text())
+        gdp_event = next(event for event in state["providers"]["ons"]["events"]
+                         if event["id"] == "ons:/releases/gdp-monthly-estimate-october-2026")
+        gdp_event["status"] = "scheduled"
+        state_path.write_text(json.dumps(state))
+        scheduled = discover_published_release_evidence(store)
+        assert scheduled["candidates"] == []
+        assert any(item["reason"] == "event_not_published" for item in scheduled["rejected"])
+
+        gdp_event["status"] = "published"
+        gdp_event["linked_indicators"] = ["uk.cpi.annual_rate"]
+        state_path.write_text(json.dumps(state))
+        with pytest.raises(ValueError, match="invalid ONS indicator links"):
+            discover_published_release_evidence(store)
+    finally:
+        store.close()
