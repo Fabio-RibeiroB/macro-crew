@@ -436,6 +436,44 @@ test("fragment layout tracking stops immediately when the reader expresses scrol
   cleanup();
 });
 
+test("Tab and focus navigation cancel fragment tracking before late layout changes", () => {
+  for (const intent of ["Tab", "focusin"]) {
+    const win = new Browser("https://finstats.example/housing#house-prices");
+    let resizeObserver;
+    win.ResizeObserver = class {
+      constructor(callback) { this.callback = callback; resizeObserver = this; }
+      observe() {}
+      disconnect() { this.disconnected = true; }
+      fire() { if (!this.disconnected) this.callback(); }
+    };
+    const element = {
+      top: 0,
+      getBoundingClientRect() { return { top: this.top }; },
+      scrollIntoView() { this.top = 0; },
+    };
+    const doc = new EventTarget();
+    doc.documentElement = {};
+    doc.body = {};
+    doc.getElementById = () => element;
+    const cleanup = bindPageNavigation(win, doc);
+    win.frames.fire();
+
+    element.top = 500;
+    if (intent === "Tab") {
+      const tab = new Event("keydown");
+      tab.key = "Tab";
+      win.dispatchEvent(tab);
+    } else {
+      doc.dispatchEvent(new Event("focusin"));
+    }
+    resizeObserver.fire();
+
+    assert.equal(element.top, 500, `${intent} focus movement must prevent anchor correction`);
+    assert.equal(resizeObserver.disconnected, true);
+    cleanup();
+  }
+});
+
 test("menu closes on focus leaving the header and removes its focus listener", () => {
   const doc = new EventTarget();
   const inside = {};

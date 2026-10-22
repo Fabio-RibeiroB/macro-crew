@@ -22,7 +22,7 @@ export function menuFocusAction({
   return "unchanged";
 }
 
-/** Follow a navigation intent once; data arrivals never reposition the reader. */
+/** Keep a fragment target aligned while initial layout settles; stop on user intent. */
 export function bindPageNavigation(win, doc) {
   let frame;
   let stopFollowingLayout = () => {};
@@ -80,7 +80,7 @@ export function bindPageNavigation(win, doc) {
         }
         const cancelOnIntent = () => finish();
         const keyIntent = (event) => {
-          if ([" ", "PageUp", "PageDown", "Home", "End", "ArrowUp", "ArrowDown"].includes(event.key)) finish();
+          if ([" ", "PageUp", "PageDown", "Home", "End", "ArrowUp", "ArrowDown", "Tab"].includes(event.key)) finish();
         };
         for (const type of ["wheel", "touchstart", "pointerdown"]) {
           win.addEventListener(type, cancelOnIntent, { passive: true });
@@ -88,6 +88,10 @@ export function bindPageNavigation(win, doc) {
         }
         win.addEventListener("keydown", keyIntent);
         cleanups.push(() => win.removeEventListener("keydown", keyIntent));
+        if (typeof doc.addEventListener === "function") {
+          doc.addEventListener("focusin", cancelOnIntent);
+          cleanups.push(() => doc.removeEventListener("focusin", cancelOnIntent));
+        }
         const deadline = win.setTimeout
           ? win.setTimeout(finish, 6000)
           : globalThis.setTimeout(finish, 6000);
