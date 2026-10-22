@@ -1148,16 +1148,14 @@ function Sources() {
 export default function App({
   pathname,
   initialData = null,
-}: { pathname?: string; initialData?: any } = {}) {
+  initialEvents = null,
+}: { pathname?: string; initialData?: any; initialEvents?: any } = {}) {
   const page = resolvePage(
     pathname ??
       (typeof window === "undefined" ? "/" : window.location.pathname),
   );
   const needsData = ["overview", "prices", "economy", "jobs-pay", "housing", "government"].includes(page.id);
-<<<<<<< HEAD
   const needsEvents = ["overview", "calendar", "prices", "economy", "jobs-pay", "housing", "government"].includes(page.id);
-=======
->>>>>>> ca2d9213a41f157b8b1ceebe1df457a7769fa926
   const [snapshot, setSnapshot] = useState(() =>
     refreshSnapshot(initialData, needsData ? "loading" : "idle"),
   );
@@ -1165,7 +1163,7 @@ export default function App({
     refreshSnapshot(null),
   );
   const [eventSnapshot, setEventSnapshot] = useState(() =>
-    refreshSnapshot(null, needsEvents ? "loading" : "idle"),
+    refreshSnapshot(initialEvents, needsEvents ? "loading" : "idle"),
   );
   const [menuOpen, setMenuOpen] = useState(false);
   const [narrow, setNarrow] = useState(() => {
@@ -1276,7 +1274,7 @@ export default function App({
   useEffect(() => {
     if (!needsEvents) return;
     const owner = createRefreshController({
-      initialData: null,
+      initialData: initialEvents,
       initialStatus: "loading",
       load: (signal) => loadEvents(import.meta.env.BASE_URL, (url, options) =>
         fetch(url, { ...options, signal }),
@@ -1397,7 +1395,7 @@ export default function App({
               The pace of price rises matters. So does what your income can buy.
             </PageHeading>
             <Statistics {...stats} kinds={priceKinds(data)} />
-            <EventList {...eventProps} indicatorIds={["uk.cpi.annual_rate", "uk.cpih.annual_rate", "uk.road_fuel.unleaded_petrol_price", "uk.road_fuel.diesel_price", "uk.energy.price_cap"]} compact />
+            <EventList {...eventProps} indicatorIds={["uk.cpi.annual_rate", "uk.cpih.annual_rate", "uk.road_fuel.unleaded_petrol_price", "uk.road_fuel.diesel_price", "uk.energy_price_cap.typical_dual_fuel_bill"]} compact />
             <PriceGuide data={data} />
             <Trends data={data} kinds={priceTrendKinds(data)} />
             <FuelPrices {...stats} />

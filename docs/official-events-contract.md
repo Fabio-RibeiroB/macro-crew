@@ -36,7 +36,7 @@ explicit Budget-date correspondence; DESNZ dated page-update notices; and
 Ofgem price-cap article rows under “Energy price cap level dates” that state the
 deadline (“announced by”), note that Ofgem may publish earlier, and identify the
 effective period. Ofgem events label this as a date-only deadline, not an exact
-announcement day. Only
+announcement day, and link to `uk.energy_price_cap.typical_dual_fuel_bill`. Only
 dates found in those source structures are emitted. A recognized source with no
 dated upcoming event reports an empty list and `unknown_dates: true`; an
 unrecognized or changed source structure fails closed and retains the prior
@@ -72,3 +72,19 @@ returned/total result count. Synthetic no-date and changed-markup cases are
 separate tests and are never source evidence. A malformed private event state
 or event export failure is reported separately and cannot block metric
 publication; the last activated event manifest is left in place.
+
+The deployment publishes the metric manifest at `data/current.json` and the
+event manifest at `data/events-manifest.json`. Event `data_url` paths are
+relative to `data/`, so the immutable payload is fetched from
+`data/event-generations/<sha256>.json` under the configured site base.
+
+The browser reads the event manifest on an independent refresh controller,
+then validates the immutable payload digest, schema, provider qualification,
+event definition, precision, status, metric links and bounded official URLs. A
+failed check keeps the last accepted calendar and reports the failure. A check
+older than 24 hours is labelled stale even when its last fetch succeeded.
+Upcoming lists use source dates only, retain explicit cancellation and
+rescheduling labels, exclude published and expired events, and show null-time
+events as London calendar dates without inventing a time. Provider qualification
+remains visible because an empty unqualified source does not mean that no dates
+exist.
