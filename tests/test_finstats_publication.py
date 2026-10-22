@@ -204,10 +204,11 @@ def test_house_price_series_fail_independently_and_keep_prior_verified_history(
 
 def test_malformed_hpi_csv_is_quarantined_while_other_feeds_deliver(tmp_path):
     collect(tmp_path, transport=lambda key: fixture_transport(key), clock=lambda: CPI_WHEN)
+    malformed_body = b'Date,Region_Name,Area_Code\n\xff'
     def malformed_hpi(key):
         if key.startswith('house_price_'):
-            body, url, released = fixture_transport(key)
-            return b'Date,Region_Name,Area_Code\n\xff', url, released
+            body, url, released, page_evidence = fixture_transport(key)
+            return malformed_body, url, released, page_evidence
         return fixture_transport(key)
     result = collect(tmp_path, transport=malformed_hpi, clock=lambda: CPI_WHEN + timedelta(days=1))
     assert result['failed_metrics'] == ['house_price_level', 'house_price_growth']
@@ -216,6 +217,18 @@ def test_malformed_hpi_csv_is_quarantined_while_other_feeds_deliver(tmp_path):
         assert data['metrics'][key]['collection_status'] == 'degraded'
         assert data['metrics'][key]['latest']['period'] == '2026-08'
     assert data['metrics']['gdp']['collection_status'] == 'ok'
+    store = Store(tmp_path)
+    try:
+        for key in ('house_price_level', 'house_price_growth'):
+            attempt = store.db.execute(
+                'SELECT status,raw_hash,error FROM attempt WHERE key=? ORDER BY id DESC LIMIT 1',
+                (key,),
+            ).fetchone()
+            assert tuple(attempt) == (
+                'rejected', hashlib.sha256(malformed_body).hexdigest(), 'Invalid UK HPI CSV',
+            )
+    finally:
+        store.close()
 
 
 def test_corrupt_pipr_is_quarantined_and_other_metrics_still_deliver(tmp_path):
