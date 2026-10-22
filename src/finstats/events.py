@@ -95,12 +95,14 @@ def _parse_ons(body, today):
     for item in data['releases']:
         desc=item.get('description') or {}
         raw=desc.get('release_date'); title=desc.get('title')
-        if not isinstance(raw,str) or not isinstance(title,str): continue
+        if not isinstance(title,str): continue
         indicators=_ons_indicators(title)
         if not indicators: continue
+        if not isinstance(raw,str): raise ValueError('recognized ONS release date missing')
         try: instant=datetime.fromisoformat(raw.replace('Z','+00:00'))
-        except ValueError: continue
-        if instant.tzinfo is None: continue
+        except ValueError as exc: raise ValueError('invalid recognized ONS release date') from exc
+        if instant.tzinfo is None or instant.utcoffset() is None:
+            raise ValueError('recognized ONS release time requires timezone')
         d=instant.astimezone(LONDON).date().isoformat()
         if d < today.isoformat(): continue
         cancelled=bool(desc.get('cancelled'))

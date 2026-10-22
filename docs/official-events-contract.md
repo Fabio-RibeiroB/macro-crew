@@ -73,6 +73,7 @@ separate tests and are never source evidence. A malformed private event state
 or event export failure is reported separately and cannot block metric
 publication; the last activated event manifest is left in place.
 
+
 The deployment publishes the metric manifest at `data/current.json` and the
 event manifest at `data/events-manifest.json`. Event `data_url` paths are
 relative to `data/`, so the immutable payload is fetched from

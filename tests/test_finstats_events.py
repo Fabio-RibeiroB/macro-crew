@@ -213,3 +213,23 @@ def test_shared_event_identity_deduplicates_on_publication(tmp_path):
     merged=deduplicate_events([a,b])
     assert len(merged)==1
     assert merged[0]['linked_indicators']==['uk.gdp.monthly_growth','uk.unemployment.rate']
+
+
+@pytest.mark.parametrize('bad_date', [None, 'invalid', '2027-07-21', '2027-07-21T07:00:00'])
+def test_malformed_recognized_ons_date_retains_previous_schedule(tmp_path, bad_date):
+    collect_events(tmp_path, clock=lambda: NOW, fixtures=FIXTURES)
+    state_path = tmp_path / 'events.json'
+    saved = json.loads(state_path.read_text())
+    saved['providers']['ons']['evidence_kind'] = 'official_download'
+    previous = saved['providers']['ons']['events']
+    state_path.write_text(json.dumps(saved))
+    body = json.loads((Path(FIXTURES) / 'events_case_ons.json').read_text())
+    body['releases'][0]['description']['release_date'] = bad_date
+    def broken(url):
+        if 'api.beta.ons.gov.uk' in url:
+            return json.dumps(body).encode()
+        raise OSError('unrelated provider unavailable')
+    result = collect_events(tmp_path, clock=lambda: NOW, fetch=broken)
+    assert 'ons' in result['failed_sources']
+    assert result['schedule']['providers']['ons']['status'] == 'stale'
+    assert result['schedule']['providers']['ons']['events'] == previous
