@@ -211,7 +211,7 @@ function MetricCard({
 }) {
   const topic = topics[kind];
   const Tag = compact ? "h2" : "h3";
-  if (!metric) {
+  if (!metric && kind !== "petrol_price") {
     return (
       <article className={`fs-stat ${compact ? "fs-stat-compact" : ""}`}>
         <div className="fs-stat-top">
@@ -1337,10 +1337,10 @@ export default function App({
             <PageHeading eyebrow="Prices & everyday costs" title={page.title}>
               The pace of price rises matters. So does what your income can buy.
             </PageHeading>
-            <FuelPrices {...stats} />
             <Statistics {...stats} kinds={priceKinds(data)} />
             <PriceGuide data={data} />
             <Trends data={data} kinds={priceTrendKinds(data)} />
+            <FuelPrices {...stats} />
           </>
         )}
         {page.id === "economy" && (

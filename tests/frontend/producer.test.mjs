@@ -75,11 +75,29 @@ test("DESNZ petrol and diesel render as two weekly UK prices with direct history
     assert.match(delayedCard, /Update delayed · showing last verified figure/);
     const prices = renderToStaticMarkup(createElement(App, { pathname: "/prices", initialData: producer }));
     assert.match(prices, /id="petrol-diesel"/);
-    assert.ok(prices.indexOf('id="petrol-diesel"') < prices.indexOf("<h3>CPI inflation</h3>"),
-      "the direct fuel fragment precedes asynchronously populated Prices cards");
+    assert.ok(prices.indexOf("<h3>CPI inflation</h3>") < prices.indexOf('id="petrol-diesel"'),
+      "CPI remains the Prices headline before fuel figures");
     assert.match(prices, /DESNZ Weekly road fuel prices CSV/);
     assert.match(prices, /Monday morning, or the next working morning on a bank holiday/);
     assert.match(prices, /UK average, not a local forecourt quote/);
+    for (const [petrolPresent, dieselPresent] of [[false, true], [true, false], [false, false]]) {
+      const metrics = { ...producer.metrics };
+      if (!petrolPresent) delete metrics.petrol_price;
+      if (!dieselPresent) delete metrics.diesel_price;
+      const partial = renderToStaticMarkup(createElement(App, {
+        pathname: "/", initialData: { ...producer, metrics },
+      }));
+      const partialCard = [...partial.matchAll(/<article class="fs-stat fs-stat-compact\b[\s\S]*?<\/article>/g)]
+        .map(([markup]) => markup).find((markup) => markup.includes("<h2>Petrol &amp; Diesel</h2>"));
+      assert.ok(partialCard);
+      assert.match(partialCard, /Unleaded petrol/);
+      assert.match(partialCard, /Diesel/);
+      if (petrolPresent) assert.match(partialCard, /174\.57p/);
+      else assert.doesNotMatch(partialCard, /174\.57p/);
+      if (dieselPresent) assert.match(partialCard, /199\.33p/);
+      else assert.doesNotMatch(partialCard, /199\.33p/);
+      assert.match(partialCard, /Not available/);
+    }
     const { HistoricalTrendCard } = await server.ssrLoadModule("/src/app/components/HistoricalTrendCard.tsx");
     const chart = renderToStaticMarkup(createElement(HistoricalTrendCard, {
       title: "UK average unleaded petrol pump price", label: "Unleaded petrol · pence per litre",
