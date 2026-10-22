@@ -418,6 +418,31 @@ def test_gilt_series_failure_is_contained_and_retains_only_its_prior_vintage(tmp
     assert after['gilt_10y']['latest'] == before['gilt_10y']['latest']
 
 
+def test_gilt_series_can_advance_independently_after_sibling_failure(tmp_path):
+    collect(tmp_path, transport=fixture_transport, clock=lambda: CPI_WHEN)
+    before = read_generation(tmp_path)['metrics']
+
+    def one_gilt_fails(key):
+        if key == 'gilt_10y':
+            return b'<html>unavailable</html>'
+        if key == 'gilt_5y':
+            return fixture('gilt_5y') + b'21 Oct 2026,IUDSNPY,4.9700\r\n'
+        if key == 'gilt_20y':
+            return fixture('gilt_20y') + b'21 Oct 2026,IUDLNPY,5.6700\r\n'
+        return fixture_transport(key)
+
+    result = collect(tmp_path, transport=one_gilt_fails, clock=lambda: CPI_WHEN + timedelta(minutes=1))
+    assert result['failed_metrics'] == ['gilt_10y']
+    after = read_generation(tmp_path)['metrics']
+    assert after['gilt_10y']['collection_status'] == 'degraded'
+    assert after['gilt_10y']['history'] == before['gilt_10y']['history']
+    assert after['gilt_10y']['latest'] == before['gilt_10y']['latest']
+    for key, value in (('gilt_5y', '4.9700'), ('gilt_20y', '5.6700')):
+        assert after[key]['latest']['period'] == '2026-10-21'
+        assert after[key]['latest']['value'] == value
+        assert after[key]['collection_status'] == 'ok'
+
+
 def test_never_collected_gilt_is_absent_not_zero_without_blocking_sibling_maturities(tmp_path):
     def one_gilt_fails(key):
         return b'<html>unavailable</html>' if key == 'gilt_10y' else fixture_transport(key)

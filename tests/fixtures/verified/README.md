@@ -39,7 +39,11 @@ receipt keeps the full official file URL, original byte count and full-source SH
   nominal par yields. It uses the retained DESNZ and Bank CSV fixtures, with a
   fixed clock and generation id. The source evidence remains labelled recorded
   fixture data and this wire artifact is never deployed or accepted as a live
-  production source.
+  production source. Its gilt portion captures a labelled partial refresh: the
+  10-year series retains its 20 October vintage after a rejected weekend
+  observation, while the 5- and 20-year series advance to 21 October. The
+  artifact exercises independent maturity endpoints through the public reader;
+  it is not production data.
 
 Tests may mutate copies of these fixtures in memory; checked-in bytes are never
 modified by a test run. A recorded fixture can never become public official data.

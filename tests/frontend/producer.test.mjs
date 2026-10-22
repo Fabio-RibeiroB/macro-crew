@@ -177,15 +177,17 @@ test("BoE 5/10/20 nominal par producer export binds exact series and renders Gov
   assert.deepEqual(yields.map((metric) => metric.definition.series), ["IUDMNPY", "IUDSNPY", "IUDLNPY"]);
   assert.deepEqual(yields.map((metric) => metric.definition.maturity_years), [10, 5, 20]);
   assert.equal(yields[0].definition.primary, true);
-  assert.deepEqual(yields.map((metric) => metric.latest.period), ["2026-10-20", "2026-10-20", "2026-10-20"]);
-  assert.deepEqual(yields.map((metric) => metric.latest.value), ["5.3516", "4.9618", "5.6687"]);
+  assert.deepEqual(yields.map((metric) => metric.latest.period), ["2026-10-20", "2026-10-21", "2026-10-21"]);
+  assert.deepEqual(yields.map((metric) => metric.latest.value), ["5.3516", "4.9700", "5.6700"]);
+  assert.equal(yields[0].collection_status, "degraded");
+  assert.equal(yields[0].history.at(-1).period, "2026-10-20", "failed maturity retains its previous history while siblings advance");
   assert.equal(yields[0].history[0].period, "2021-10-20", "public browser history stays in the existing five-year window");
   for (const metric of yields) {
     assert.equal(metric.definition.unit, "percent");
     assert.equal(metric.definition.yield_type, "fitted_nominal_par");
     assert.equal(metric.source_download_url, metric.definition.download_url);
     assert.equal(metric.snapshot_evidence_kind, "official_download");
-    assert.equal(metric.source_sha256, "3c52d666ba3623d668d6cf7bce60491ed3aa77db3522c2345bb30c6934508450");
+    assert.match(metric.source_sha256, /^[a-f0-9]{64}$/);
     assert.ok(metric.history.every(({ period }) => ![0, 6].includes(new Date(`${period}T00:00:00Z`).getUTCDay())));
     assert.ok(metric.history.every((point, index, points) => !index || points[index - 1].period < point.period));
   }

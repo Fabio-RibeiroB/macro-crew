@@ -85,6 +85,8 @@ def test_boe_gilt_parser_rejects_substituted_or_truncated_series():
         parse('gilt_20y', body.replace(b'IUDLNPY', b'OTHERXX'), date(2026, 10, 22))
     with pytest.raises(ValidationError, match='joint-history date'):
         parse('gilt_10y', body.replace(b'04 Jan 2000,IUDMNPY', b'05 Jan 2000,IUDMNPY'), date(2026, 10, 22))
+    with pytest.raises(ValidationError, match='weekend'):
+        parse('gilt_10y', body.replace(b'20 Oct 2026,IUDMNPY', b'17 Oct 2026,IUDMNPY'), date(2026, 10, 22))
 
 
 def test_recorded_bytes_match_receipts():

@@ -338,6 +338,17 @@ def test_checked_in_producer_generation_regenerates_byte_identically(tmp_path):
         return CPI_WHEN - timedelta(days=1) if calls <= 16 else CPI_WHEN
     with patch('finstats.publication.uuid4', return_value=SimpleNamespace(hex='c' * 32)):
         collect(private, transport=fixture_transport, clock=producer_clock)
+        def partial_refresh(key):
+            body = fixture_transport(key)
+            if key == 'gilt_10y':
+                return body.replace(b'20 Oct 2026,IUDMNPY', b'17 Oct 2026,IUDMNPY')
+            if key == 'gilt_5y':
+                return body + b'21 Oct 2026,IUDSNPY,4.9700\r\n'
+            if key == 'gilt_20y':
+                return body + b'21 Oct 2026,IUDLNPY,5.6700\r\n'
+            return fixture_transport(key)
+        result = collect(private, transport=partial_refresh, clock=lambda: CPI_WHEN + timedelta(minutes=1))
+        assert result['failed_metrics'] == ['gilt_10y']
         deliver(private, public)
     wire = Path(__file__).parent / 'fixtures' / 'verified'
     manifest = json.loads((public / 'current.json').read_text())
@@ -345,6 +356,13 @@ def test_checked_in_producer_generation_regenerates_byte_identically(tmp_path):
     assert (public / 'current.json').read_bytes() == (wire / 'producer-fuel-v1.manifest.json').read_bytes()
     assert (public / manifest['data_url']).read_bytes() == (wire / 'producer-fuel-v1.json').read_bytes()
     candidate = json.loads((wire / 'producer-fuel-v1.json').read_bytes())
+    metrics = candidate['metrics']
+    assert metrics['gilt_10y']['collection_status'] == 'degraded'
+    assert metrics['gilt_10y']['latest']['period'] == '2026-10-20'
+    for key, value in (('gilt_5y', '4.9700'), ('gilt_20y', '5.6700')):
+        assert metrics[key]['latest']['period'] == '2026-10-21'
+        assert metrics[key]['latest']['value'] == value
+        assert metrics[key]['collection_status'] == 'ok'
     previous = json.loads((wire / 'producer-cpi-v1.json').read_bytes())
     for key in ('bank_rate', 'cpih', 'gdp', 'cpi'):
         current_core = dict(candidate['metrics'][key])
@@ -352,6 +370,11 @@ def test_checked_in_producer_generation_regenerates_byte_identically(tmp_path):
         # This field depends on the publication clock, unlike core source data.
         current_core.pop('release_status', None)
         previous_core.pop('release_status', None)
+        # The deliberate second refresh updates transport provenance while
+        # leaving the unchanged source observations and definitions intact.
+        for field in ('retrieved_at', 'last_successful_check_at', 'last_attempt_at', 'source_receipt_id'):
+            current_core.pop(field, None)
+            previous_core.pop(field, None)
         assert current_core == previous_core
 
 

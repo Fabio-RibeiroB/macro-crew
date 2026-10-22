@@ -693,6 +693,8 @@ def parse(key: str, body: bytes, today: date) -> Snapshot:
                 if key.startswith('gilt_') and row[1] != definition.series:
                     continue
                 period = human_date(row[0])
+                if key.startswith('gilt_') and date.fromisoformat(period).weekday() >= 5:
+                    raise ValidationError('BoE gilt observation falls on a weekend')
                 value, status = number(row[2])
                 observations.append(Observation(period, value, status, index))
             if key.startswith('gilt_') and definition.series not in found_series:

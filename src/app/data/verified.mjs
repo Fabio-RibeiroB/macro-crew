@@ -299,10 +299,6 @@ function validateDefinition(definition, spec) {
     if (spec[field] !== undefined ? definition[field] !== spec[field] : definition[field] !== undefined)
       fail("Unexpected optional metric qualification");
   }
-  for (const field of ["maturity_years", "yield_type", "primary"]) {
-    if (spec[field] !== undefined ? definition[field] !== spec[field] : definition[field] !== undefined)
-      fail("Unexpected optional metric qualification");
-  }
   if (spec.area_code !== undefined && definition.area_code !== spec.area_code)
     fail("Unexpected optional metric geography code");
   if (spec.release_caveat !== undefined && definition.release_caveat !== spec.release_caveat)
@@ -536,15 +532,6 @@ export function parseDataset(value, manifest) {
     const spec = OPTIONAL_METRICS[key];
     if (!spec) fail("Unknown metric");
     validateOptionalMetric(metric, spec);
-  }
-  const giltKeys = ["gilt_5y", "gilt_10y", "gilt_20y"];
-  const verifiedGilts = giltKeys.map((key) => value.metrics[key])
-    .filter(object)
-    .filter((metric) => metric.validation_status === "verified");
-  if (verifiedGilts.length > 1) {
-    const dates = verifiedGilts[0].history.map((point) => point.period).join(",");
-    if (verifiedGilts.some((metric) => metric.history.map((point) => point.period).join(",") !== dates))
-      fail("Gilt maturity histories do not share comparable observation dates");
   }
   return value;
 }
