@@ -172,12 +172,21 @@ an exact sample timestamp.
 The files **events_hm_treasury.html**, **events_obr.html**, and
 **events_ofgem_energy.html** are unmodified official response bodies captured on
 22 October 2026. Their exact fetch URLs, public calendar URLs, UTC receipt times,
-byte counts, SHA-256 hashes, and explicitly unqualified status are in
-**events_source_receipts.json**. These captures substantiate the no-adapter
-review; they are not evidence that future dates are absent or that the providers'
-calendars are complete.
+byte counts, and SHA-256 hashes are in **events_source_receipts.json**. These
+captures substantiate the bounded date extractors; they do not establish that
+the providers' calendars are complete.
 
-The files **events_case_ons.json**, **events_case_boe_mpc.html**, and
-**events_case_desnz_fuel.html** are synthetic parser test cases. They exercise
-precision, DST, cancellation, rescheduling, and deduplication only. They are
-not source captures and can never be published as official data.
+The corresponding ONS, BoE and DESNZ `events_*_capture` files are official
+response bodies with matching receipts. Files named `events_case_*` are
+synthetic parser cases only; they exercise precision, DST, cancellation,
+rescheduling and deduplication, and can never be published as official data.
+
+## ONS public sector net debt (issue #36)
+
+`public_debt_hf6x_pusf.csv` is the exact ONS generator response recorded on
+22 October 2026 for HF6X/PUSF. Its receipt pins the source URL, SHA-256, byte
+length, UK-calendar release date and next release. HF6X is monthly public sector
+net debt excluding public sector banks as a percentage of GDP (NSA); it is not
+the deficit/net borrowing series or the wider PSNFL series. The fixture is
+evidence for parser and producer→reader tests only and cannot be published as
+official production data.

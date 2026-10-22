@@ -259,7 +259,7 @@ def test_delivery_publishes_cpi_headline_with_core_metrics_retained(tmp_path):
     assert set(data['metrics']) == {
         'bank_rate', 'cpih', 'gdp', 'cpi',
         'regular_pay_nominal_growth', 'regular_pay_real_growth', 'unemployment',
-        'private_rent_growth', 'private_rent_level',
+        'public_debt', 'private_rent_growth', 'private_rent_level',
         'house_price_level', 'house_price_growth', 'petrol_price', 'diesel_price'}
     cpi = data['metrics']['cpi']
     assert cpi['validation_status'] == 'verified'
@@ -276,6 +276,14 @@ def test_delivery_publishes_cpi_headline_with_core_metrics_retained(tmp_path):
     assert data['metrics']['cpih']['definition']['series'] == 'L55O'
     assert data['metrics']['gdp']['latest']['value'] == '0.1'
     assert data['metrics']['bank_rate']['latest']['value'] == '3.75'
+    debt = data['metrics']['public_debt']
+    assert debt['latest'] == {'period': '2026-09', 'value': '94.0', 'status': 'observed'}
+    assert debt['definition']['geography'] == 'United Kingdom'
+    assert debt['definition']['unit'] == 'percent'
+    assert debt['definition']['series'] == 'HF6X'
+    assert debt['source_published_date'] == '2026-10-21'
+    assert debt['next_release_date'] == '2026-11-20'
+    assert debt['source_download_url'].endswith('timeseries%2Fhf6x%2Fpusf')
     assert data['metrics']['petrol_price']['latest']['value'] == '174.57'
     assert data['metrics']['diesel_price']['latest']['value'] == '199.33'
     assert data['metrics']['petrol_price']['latest']['period'] == '2026-10-19'
@@ -323,10 +331,10 @@ def test_checked_in_producer_generation_regenerates_byte_identically(tmp_path):
     def producer_clock():
         nonlocal calls
         calls += 1
-        # Keep the nine established source timestamps byte-identical. The
+        # Keep the established source timestamps byte-identical. The
         # retained release page was captured the following day, so only the two
         # HPI ingests and final publication use that later controlled time.
-        return CPI_WHEN - timedelta(days=1) if calls <= 18 else CPI_WHEN
+        return CPI_WHEN - timedelta(days=1) if calls <= 16 else CPI_WHEN
     with patch('finstats.publication.uuid4', return_value=SimpleNamespace(hex='c' * 32)):
         collect(private, transport=fixture_transport, clock=producer_clock)
         deliver(private, public)
