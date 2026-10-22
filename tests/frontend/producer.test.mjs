@@ -49,6 +49,15 @@ test("Ofgem live smoke producer output passes the strict reader and renders assu
     assert.match(prices, /26\.32p\/kWh and 54\.83p\/day/);
     assert.match(prices, /7\.97p\/kWh and 29\.68p\/day/);
     assert.match(prices, /not supplied on this rates page/);
+    assert.match(prices, /No next cap announcement is currently published/);
+    const future = structuredClone(data);
+    future.metrics.household_energy.upcoming_period = {
+      ...energy.latest, value: "1750", period: "2027-01-01",
+      reference: { ...energy.latest.reference, effective_start: "2027-01-01", effective_end: "2027-03-31", period_status: "announced" },
+    };
+    const announced = renderToStaticMarkup(createElement(App, { pathname: "/prices", initialData: future }));
+    assert.match(announced, /Announced upcoming cap: £1,750/);
+    assert.doesNotMatch(announced, /No next cap announcement is currently published/);
   } finally { await server.close(); }
 });
 
