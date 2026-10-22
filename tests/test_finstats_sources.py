@@ -11,7 +11,7 @@ import pytest
 
 from finstats.sources import (
     DEFINITIONS, FUEL_SOURCE_URL, ValidationError, fixture_file,
-    parse, parse_fuel_release_page,
+    parse, parse_fuel_release_page, public_definition,
 )
 
 FIXTURES = Path(__file__).parent / 'fixtures' / 'official'
@@ -54,6 +54,31 @@ def test_recorded_bytes_match_receipts():
     receipts = json.loads((FIXTURES / 'receipts.json').read_text())
     for name, receipt in receipts.items():
         assert hashlib.sha256((FIXTURES / name).read_bytes()).hexdigest() == receipt['sha256']
+    debt = json.loads((FIXTURES / 'public_debt_hf6x_pusf_receipt.json').read_text())
+    body = (FIXTURES / debt['file']).read_bytes()
+    assert len(body) == debt['bytes']
+    assert hashlib.sha256(body).hexdigest() == debt['sha256']
+
+
+def test_ons_hf6x_is_monthly_net_debt_share_and_preserves_release_metadata():
+    receipt = json.loads((FIXTURES / 'public_debt_hf6x_pusf_receipt.json').read_text())
+    metric = parse('public_debt', fixture('public_debt'), date(2026, 10, 22))
+    assert metric.definition.series == 'HF6X'
+    assert metric.definition.dataset == 'PUSF'
+    assert metric.definition.unit == 'percent'
+    assert metric.definition.frequency == 'monthly'
+    assert metric.observations[-1].period == '2026-09'
+    assert metric.observations[-1].value == '94.0'
+    assert metric.published_date == receipt['source_published_date'] == '2026-10-21'
+    assert metric.next_release == receipt['next_release_date'] == '2026-11-20'
+    assert public_definition('public_debt')['geography'] == 'United Kingdom'
+    with pytest.raises(ValidationError, match='Unexpected Title'):
+        parse('public_debt', fixture('public_debt').replace(
+            b'Net Debt (excluding public sector banks)', b'Net Borrowing (excluding public sector banks)', 1),
+            date(2026, 10, 22))
+    with pytest.raises(ValidationError, match='Unexpected unit'):
+        parse('public_debt', fixture('public_debt').replace(b'"Unit","%"', b'"Unit","GBP"', 1),
+            date(2026, 10, 22))
 
 
 def test_desnz_fuel_receipt_binds_release_page_to_exact_current_csv():

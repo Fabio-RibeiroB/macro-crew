@@ -166,3 +166,13 @@ only the two explicitly named pump-price columns; duty and VAT remain in the
 archived evidence. Monday is the weekly reference date. The workbook's separate
 Monday or next-working-morning-on-bank-holidays sampling rule is not treated as
 an exact sample timestamp.
+
+## ONS public sector net debt (issue #36)
+
+`public_debt_hf6x_pusf.csv` is the exact ONS generator response recorded on
+22 October 2026 for HF6X/PUSF. Its receipt pins the source URL, SHA-256, byte
+length, UK-calendar release date and next release. HF6X is monthly public sector
+net debt excluding public sector banks as a percentage of GDP (NSA); it is not
+the deficit/net borrowing series or the wider PSNFL series. The fixture is
+evidence for parser and producer→reader tests only and cannot be published as
+official production data.

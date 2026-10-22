@@ -96,6 +96,15 @@ const topics = {
     caution:
       "One month can be volatile. Early estimates can change as the ONS receives more information.",
   },
+  public_debt: {
+    short: "Public debt",
+    Icon: Landmark,
+    measurement: "ONS public sector net debt · percent of GDP",
+    color: "#69748b",
+    detailHref: "/government-budget#public-debt",
+    meaning: "The amount of public sector debt outstanding, compared with the value of the UK economy over a year.",
+    caution: "Debt is a balance at a point in time. It is different from the deficit or borrowing during a period, and from the wider net financial liabilities measure.",
+  },
   regular_pay_nominal_growth: {
     short: "Regular pay growth",
     Icon: TrendingUp,
@@ -940,6 +949,24 @@ function GovernmentGuide() {
   );
 }
 
+function PublicDebt({ data, loading, error, refresh }: any) {
+  const metric = data?.metrics?.public_debt;
+  return <Statistics data={data} kinds={["public_debt"]} loading={loading} error={error} refresh={refresh}
+    sectionId="public-debt" title="Public sector net debt" eyebrow="ONS monthly estimate">
+    <p className="fs-caption">{metric?.latest ? <>The latest value is for the end of {formatPeriod(metric.latest.period)}. The month-on-month comparison is in percentage points (pp), not percent growth.</> : "Monthly UK estimate; source publication and reference month will appear when a verified reading is available."}</p>
+    <Suspense fallback={<p role="status">Loading chart…</p>}>
+      {metric?.history?.length ? <div className="fs-chart-grid fs-chart-count-1"><HistoricalTrendCard title="Public sector net debt excluding public sector banks, as a share of GDP" label="Debt · % of GDP" color="#69748b" data={chartPoints(metric)} /></div> : null}
+    </Suspense>
+    <details className="fs-details fs-info" open={!metric?.latest}>
+      <summary>Definition and source <ChevronDown size={15} aria-hidden="true" /></summary>
+      <p>ONS series HF6X measures public sector net debt excluding public sector banks as a percentage of GDP. Debt is the outstanding balance; the deficit or net borrowing is the amount borrowed over a period. Public sector net financial liabilities (PSNFL) is a wider balance-sheet measure that includes more financial assets and liabilities.</p>
+      <p>UK, monthly, not seasonally adjusted. ONS can revise the history, including when GDP estimates change. We retain each accepted source response and its revision history privately.</p>
+      <p>ONS release: {metric?.source_published_date ?? "not yet available"}. Last checked: {checkedAt(metric?.last_successful_check_at ?? null)}.</p>
+      <OfficialLink href={metric?.definition.source_url ?? "https://www.ons.gov.uk/economy/governmentpublicsectorandtaxes/publicsectorfinance/timeseries/hf6x/pusf"}>ONS HF6X public debt series</OfficialLink>
+    </details>
+  </Statistics>;
+}
+
 function Publications({ reports, reportTime }: any) {
   return (
     <section className="fs-container fs-section" id="publications">
@@ -1373,6 +1400,7 @@ export default function App({
               the wider outlook.
             </PageHeading>
             <GovernmentGuide />
+            <PublicDebt {...stats} />
           </>
         )}
         {page.id === "about" && (

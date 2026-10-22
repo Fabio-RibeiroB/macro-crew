@@ -1,0 +1,13 @@
+{
+  "file": "public_debt_hf6x_pusf.csv",
+  "series_url": "https://www.ons.gov.uk/economy/governmentpublicsectorandtaxes/publicsectorfinance/timeseries/hf6x/pusf",
+  "url": "https://www.ons.gov.uk/generator?format=csv&uri=%2Feconomy%2Fgovernmentpublicsectorandtaxes%2Fpublicsectorfinance%2Ftimeseries%2Fhf6x%2Fpusf",
+  "captured_at": "2026-10-22T14:29:47Z",
+  "timestamp_basis": "UTC host clock at receipt recording; not an HTTP response header",
+  "content_type": "application/octet-stream;charset=utf-8",
+  "bytes": 11419,
+  "sha256": "43715b4283f6d609dbd4b4697094372136f48061b874ae1cc4eabe4fcc95b505",
+  "source_published_date": "2026-10-21",
+  "next_release_date": "2026-11-20",
+  "source": "Exact ONS generator response retained as a labelled test fixture; never production data."
+}
