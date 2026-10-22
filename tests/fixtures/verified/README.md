@@ -35,10 +35,11 @@ receipt keeps the full official file URL, original byte count and full-source SH
 
 - `producer-fuel-v1.json` + `producer-fuel-v1.manifest.json`: the current
   collect → publish → deliver integration artifact with petrol and diesel as
-  separate weekly `pence_per_litre` members. It uses the retained DESNZ CSV,
-  release page and workbook fixtures, with a fixed clock and generation id. The
-  source evidence remains labelled recorded fixture data and this wire artifact
-  is never deployed or accepted as a live production source.
+  separate weekly `pence_per_litre` members and the approved BoE daily 5/10/20
+  nominal par yields. It uses the retained DESNZ and Bank CSV fixtures, with a
+  fixed clock and generation id. The source evidence remains labelled recorded
+  fixture data and this wire artifact is never deployed or accepted as a live
+  production source.
 
 Tests may mutate copies of these fixtures in memory; checked-in bytes are never
 modified by a test run. A recorded fixture can never become public official data.

@@ -260,6 +260,7 @@ def test_delivery_publishes_cpi_headline_with_core_metrics_retained(tmp_path):
         'bank_rate', 'cpih', 'gdp', 'cpi',
         'regular_pay_nominal_growth', 'regular_pay_real_growth', 'unemployment',
         'public_debt', 'private_rent_growth', 'private_rent_level',
+        'gilt_5y', 'gilt_10y', 'gilt_20y',
         'house_price_level', 'house_price_growth', 'petrol_price', 'diesel_price'}
     cpi = data['metrics']['cpi']
     assert cpi['validation_status'] == 'verified'

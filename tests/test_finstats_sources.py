@@ -50,6 +50,43 @@ def fixture_transport(key):
     return body
 
 
+def test_boe_gilt_family_exact_contract_history_and_series_isolation():
+    body = fixture('gilt_10y')
+    expected = {
+        'gilt_5y': ('IUDSNPY', 5, False),
+        'gilt_10y': ('IUDMNPY', 10, True),
+        'gilt_20y': ('IUDLNPY', 20, False),
+    }
+    snapshots = {}
+    for key, (series, maturity, primary) in expected.items():
+        definition = public_definition(key)
+        assert definition['series'] == series
+        assert definition['frequency'] == 'daily'
+        assert definition['unit'] == 'percent'
+        assert definition['maturity_years'] == maturity
+        assert definition['yield_type'] == 'fitted_nominal_par'
+        assert definition['primary'] is primary
+        assert definition['comparison'] == 'previous_trading_day'
+        assert definition['download_url'].endswith('SeriesCodes=IUDSNPY,IUDMNPY,IUDLNPY&CSVF=CN&UsingCodes=Y')
+        snapshots[key] = parse(key, body, date(2026, 10, 22))
+        assert snapshots[key].observations[0].period == '2000-01-04'
+        assert snapshots[key].observations[-1].period == '2026-10-20'
+        assert all(date.fromisoformat(point.period).weekday() < 5 for point in snapshots[key].observations)
+    assert [point.period for point in snapshots['gilt_5y'].observations] == [
+        point.period for point in snapshots['gilt_10y'].observations]
+    assert [point.period for point in snapshots['gilt_10y'].observations] == [
+        point.period for point in snapshots['gilt_20y'].observations]
+    assert snapshots['gilt_10y'].observations[-1].value == '5.3516'
+
+
+def test_boe_gilt_parser_rejects_substituted_or_truncated_series():
+    body = fixture('gilt_10y')
+    with pytest.raises(ValidationError, match='Unexpected BoE series'):
+        parse('gilt_20y', body.replace(b'IUDLNPY', b'OTHERXX'), date(2026, 10, 22))
+    with pytest.raises(ValidationError, match='joint-history date'):
+        parse('gilt_10y', body.replace(b'04 Jan 2000,IUDMNPY', b'05 Jan 2000,IUDMNPY'), date(2026, 10, 22))
+
+
 def test_recorded_bytes_match_receipts():
     receipts = json.loads((FIXTURES / 'receipts.json').read_text())
     for name, receipt in receipts.items():

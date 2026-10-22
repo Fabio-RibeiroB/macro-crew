@@ -1,11 +1,11 @@
 # Gilt-yield qualification
 
-Status: source comparison for an owner decision. Checked 21 October 2026.
-This note does not select a series and does not authorise building the yield feed.
+Status: owner-approved source qualification. Source comparison checked 21 October
+2026; the 5/10/20 family was approved on 22 October 2026.
 
-Issue [#37](https://github.com/Fabio-RibeiroB/macro-crew/issues/37) stays blocked until the owner records which family may be implemented. The comparison below is the evidence for that decision. It follows the gate in the [FinStats UK specification](https://github.com/Fabio-RibeiroB/macro-crew/pull/22) and issue [#38](https://github.com/Fabio-RibeiroB/macro-crew/issues/38).
+The comparison below records the evidence behind the owner decision in issue [#38](https://github.com/Fabio-RibeiroB/macro-crew/issues/38). It follows the scope in the [FinStats UK specification](https://github.com/Fabio-RibeiroB/macro-crew/pull/22).
 
-**The owner must decide before #37 is built.** The recommendation is the Bank of England daily nominal par yields at 5, 10 and 20 years. A nominal par family at 2, 10 and 30 years was not verified. The 10-year par yield is available, and it belongs to the 5/10/20 family below.
+**Owner decision: approved for #37.** Use the Bank of England daily nominal par yields at 5, 10 and 20 years. A nominal par family at 2, 10 and 30 years was not verified. The 10-year par yield is available, and it belongs to the 5/10/20 family below.
 
 ## Definition used for the comparison
 
@@ -158,18 +158,19 @@ ONS does not currently publish this par family. The monthly Financial Statistics
 
 The OECD indicator [long-term interest rates](https://www.oecd.org/en/data/indicators/long-term-interest-rates.html) is defined as government bonds maturing in ten years, generally as averages of daily rates. The indicator page does not publish a UK series code and does not provide a 2-year or 30-year par yield. It is not a candidate.
 
-## Recommendation
+## Recommendation and owner decision (22 October 2026)
 
-Use the daily nominal par family IUDSNPY, IUDMNPY and IUDLNPY if the owner accepts a change of maturities from 2/10/30 to 5/10/20.
+The approved family is the daily nominal par series IUDSNPY, IUDMNPY and IUDLNPY, at 5, 10 and 20 years.
 
 That family is one definition at three fixed maturities, with a public series code, a weekday history, a stated estimator, a revision policy and Database Open Government Licence terms. The 10-year yield remains in the family. The 5-year replaces the requested 2-year, and the 20-year replaces the requested 30-year. Joint history starts on 4 January 2000 because that is the first IUDLNPY observation. The specification's proposal to show the 10-year yield as the primary maturity still fits this family, and it is part of the same owner decision.
 
 Keeping 2/10/30 would require a source this check did not find. The 2-year and 30-year columns on the Bank spot and forward sheets, the 5/10/20 zero-coupon codes, and DMO report D4H each fail the same-definition test. Building a local par curve, or relabelling a spot or forward rate as a par yield, is outside this qualification.
 
-The owner decision, before any work on #37, needs to record:
+The owner recorded the decision in issue #38: “Approve 5/10/20-year family.”
+Accordingly #37 is unblocked. The approved scope is:
 
-1. The selected codes, or an explicit rejection of this family.
-2. Acceptance that the maturities are 5, 10 and 20 years, and that the three series share a history only from 4 January 2000.
-3. Acceptance that the figures are fitted nominal par yields, so the Government page describes market financing conditions at those maturities rather than the average cost of debt already issued.
+1. IUDSNPY, IUDMNPY, IUDLNPY at 5, 10 and 20 years.
+2. Shared history begins 4 January 2000; 10-year is primary.
+3. Fitted par yields describe market financing conditions, not average cost of debt issued.
 
-Until that decision is recorded, #37 remains blocked. Debt statistics are independent of this gate.
+Debt statistics are independent of this gate.

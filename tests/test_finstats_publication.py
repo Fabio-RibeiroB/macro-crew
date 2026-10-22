@@ -401,6 +401,34 @@ def test_never_collected_public_debt_is_unavailable_not_zero(tmp_path):
     assert debt['latest'] is None and debt['history'] == []
 
 
+def test_gilt_series_failure_is_contained_and_retains_only_its_prior_vintage(tmp_path):
+    collect(tmp_path, transport=fixture_transport, clock=lambda: CPI_WHEN)
+    before = read_generation(tmp_path)['metrics']
+    assert all(before[key]['validation_status'] == 'verified' for key in ('gilt_5y', 'gilt_10y', 'gilt_20y'))
+    def one_gilt_fails(key):
+        return b'<html>unavailable</html>' if key == 'gilt_10y' else fixture_transport(key)
+    result = collect(tmp_path, transport=one_gilt_fails, clock=lambda: CPI_WHEN + timedelta(minutes=1))
+    assert result['failed_metrics'] == ['gilt_10y']
+    after = read_generation(tmp_path)['metrics']
+    assert after['gilt_5y']['validation_status'] == after['gilt_20y']['validation_status'] == 'verified'
+    assert after['gilt_5y']['latest'] == before['gilt_5y']['latest']
+    assert after['gilt_20y']['latest'] == before['gilt_20y']['latest']
+    assert after['gilt_10y']['validation_status'] == 'verified'
+    assert after['gilt_10y']['collection_status'] == 'degraded'
+    assert after['gilt_10y']['latest'] == before['gilt_10y']['latest']
+
+
+def test_never_collected_gilt_is_absent_not_zero_without_blocking_sibling_maturities(tmp_path):
+    def one_gilt_fails(key):
+        return b'<html>unavailable</html>' if key == 'gilt_10y' else fixture_transport(key)
+    result = collect(tmp_path, transport=one_gilt_fails, clock=lambda: CPI_WHEN)
+    assert result['failed_metrics'] == ['gilt_10y']
+    metrics = read_generation(tmp_path)['metrics']
+    assert metrics['gilt_10y']['validation_status'] == 'unavailable'
+    assert metrics['gilt_10y']['latest'] is None and metrics['gilt_10y']['history'] == []
+    assert metrics['gilt_5y']['validation_status'] == metrics['gilt_20y']['validation_status'] == 'verified'
+
+
 def test_activation_failure_preserves_previous_complete_generation(tmp_path):
     collect(tmp_path, fixtures=FIXTURES, clock=lambda: WHEN)
     original = read_generation(tmp_path)
