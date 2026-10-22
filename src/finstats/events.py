@@ -16,21 +16,21 @@ from finstats.storage import atomic_write, encode, timestamp
 LONDON = ZoneInfo('Europe/London')
 MAX_BYTES = 2_000_000
 SOURCES = {
-    'ons': ('https://api.beta.ons.gov.uk/v1/search/releases?limit=100&fromDate={today}&toDate={year}', 'https://www.ons.gov.uk/releasecalendar'),
+    'ons': ('https://api.beta.ons.gov.uk/v1/search/releases?limit=1000&offset=0&sort=release_date_asc&fromDate={today}&toDate={year}', 'https://www.ons.gov.uk/releasecalendar'),
     'boe_mpc': ('https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates', 'https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates'),
     'obr': ('https://obr.uk/publications/', 'https://obr.uk/publications/'),
-    'hm_treasury': ('https://www.gov.uk/search/news-and-communications?organisations%5B%5D=hm-treasury', 'https://www.gov.uk/search/news-and-communications?organisations%5B%5D=hm-treasury'),
+    'hm_treasury': ('https://www.gov.uk/government/publications/chancellor-letter-to-the-treasury-select-committee-tsc-budget-2026-date', 'https://www.gov.uk/government/publications/chancellor-letter-to-the-treasury-select-committee-tsc-budget-2026-date'),
     'desnz_fuel': ('https://www.gov.uk/government/statistics/weekly-road-fuel-prices', 'https://www.gov.uk/government/statistics/weekly-road-fuel-prices'),
-    'ofgem_energy': ('https://www.ofgem.gov.uk/your-energy-supply/your-energy-bill/energy-price-cap-and-standing-charges-explained', 'https://www.ofgem.gov.uk/your-energy-supply/your-energy-bill/energy-price-cap-and-standing-charges-explained'),
+    'ofgem_energy': ('https://www.ofgem.gov.uk/news/changes-energy-price-cap-between-1-october-and-31-december-2026', 'https://www.ofgem.gov.uk/energy-regulation/domestic-and-non-domestic/energy-pricing-rules/energy-price-cap'),
 }
 INDICATORS = {
     'boe_mpc':['uk.bank_rate.daily'],
     'desnz_fuel':['uk.road_fuel.unleaded_petrol_price','uk.road_fuel.diesel_price'],
     'ofgem_energy':['uk.energy.price_cap'],
-    'obr':['uk.public_debt.share_gdp'],
-    'hm_treasury':['uk.public_debt.share_gdp'],
+    'obr':['uk.public_debt.net_debt_gdp'],
+    'hm_treasury':['uk.public_debt.net_debt_gdp'],
 }
-UNQUALIFIED_SOURCES = {'obr','hm_treasury','ofgem_energy'}
+UNQUALIFIED_SOURCES = set()
 ONS_FAMILIES = {
     'inflation': ['uk.cpi.annual_rate','uk.cpih.annual_rate'],
     'gdp': ['uk.gdp.monthly_growth'],
@@ -40,13 +40,23 @@ ONS_FAMILIES = {
 }
 
 def _ons_indicators(title):
-    families=[]
-    if re.search(r'\b(CPIH?|consumer price|inflation)\b',title,re.I): families.append('inflation')
-    if re.search(r'\bGDP\b|gross domestic product',title,re.I): families.append('gdp')
-    if re.search(r'labour market|earnings|employment|unemployment|pay|vacancies',title,re.I): families.append('labour')
-    if re.search(r'private rent|private rental',title,re.I): families.append('rent')
-    if re.search(r'house price|house prices',title,re.I): families.append('housing')
-    return sorted({key for family in families for key in ONS_FAMILIES[family]})
+    title=' '.join(title.split())
+    if re.match(r'^Consumer price inflation(?:,|:|\b)',title,re.I):
+        return ONS_FAMILIES['inflation']
+    if re.match(r'^GDP monthly estimate(?:,|:|\b)',title,re.I):
+        return ONS_FAMILIES['gdp']
+    if re.match(r'^UK Labour Market(?:,|:|\b)',title,re.I):
+        return ONS_FAMILIES['labour']
+    # Earnings-only bulletins inform pay indicators, not unemployment.
+    if re.match(r'^(?:Employee earnings in the UK|Earnings and working hours)(?:,|:|\b)',title,re.I):
+        return ONS_FAMILIES['labour'][:2]
+    if re.match(r'^Private rent and house prices, UK(?:,|:|\b)',title,re.I):
+        return ONS_FAMILIES['rent'] + ONS_FAMILIES['housing']
+    if re.match(r'^Index of Private Housing Rental Prices, UK(?:,|:|\b)',title,re.I):
+        return ONS_FAMILIES['rent']
+    if re.match(r'^UK House Price Index(?:,|:|\b)',title,re.I):
+        return ONS_FAMILIES['housing']
+    return []
 
 class Text(HTMLParser):
     def __init__(self): super().__init__(); self.parts=[]
@@ -70,12 +80,17 @@ def _provider_url_valid(name,url):
     if name=='ons':
         return bool(parts.hostname=='api.beta.ons.gov.uk' and parts.port is None and
                     re.fullmatch(r'/v1/search/releases',parts.path) and
-                    re.fullmatch(r'limit=100&fromDate=\d{4}-\d{2}-\d{2}&toDate=\d{4}-\d{2}-\d{2}',parts.query))
+                    re.fullmatch(r'limit=1000&offset=0&sort=release_date_asc&fromDate=\d{4}-\d{2}-\d{2}&toDate=\d{4}-\d{2}-\d{2}',parts.query))
     return url==SOURCES[name][0]
 
 def _parse_ons(body, today):
     data=json.loads(body)
     if not isinstance(data.get('releases'),list): raise ValueError('invalid ONS release response')
+    total=(data.get('breakdown') or {}).get('total')
+    if not isinstance(total,int) or total<len(data['releases']):
+        raise ValueError('invalid ONS result count')
+    if total>len(data['releases']):
+        raise ValueError('ONS release page is truncated')
     out=[]
     for item in data['releases']:
         desc=item.get('description') or {}
@@ -115,6 +130,9 @@ def _date(text):
 
 def parse_source(source,body,today):
     if source=='ons': return _parse_ons(body,today)
+    if source=='obr': return _parse_obr(body,today)
+    if source=='hm_treasury': return _parse_hm_treasury(body,today)
+    if source=='ofgem_energy': return _parse_ofgem(body,today)
     text=_text(body)
     found=[]
     if source=='boe_mpc':
@@ -131,15 +149,77 @@ def parse_source(source,body,today):
             if d>=today.isoformat(): found.append(event('boe:mpc:'+d,'MPC decision and minutes',d,None,'scheduled',source,INDICATORS[source],SOURCES[source][1]))
     elif source=='desnz_fuel':
         # Only dated page-update notices are actual publication evidence; no weekly extrapolation.
-        release_matches=list(re.finditer(r'Road fuel prices for week commencing[^.]{0,100}published',text,re.I))
+        release_pattern=(r'Road fuel prices for week commencing\s+(?:Monday\s+)?'
+                         r'\d{1,2}\s+(?:'+'|'.join(MONTH)+r')\s+20\d{2}\s+'
+                         r'published\.\s*(\d{1,2}\s+(?:'+'|'.join(MONTH)+r')\s+20\d{2})')
+        release_matches=list(re.finditer(release_pattern,text,re.I))
         if not re.search(r'Weekly road fuel prices',text,re.I) or not re.search(r'Updates to this page',text,re.I) or not release_matches:
             raise ValueError('unrecognized DESNZ weekly fuel release page structure')
         for m in release_matches:
-            before=text[max(0,m.start()-45):m.start()]
-            d=_date(before)
-            if d and d>=today.isoformat(): found.append(event('desnz:fuel:'+d,'Weekly road fuel prices',d,None,'scheduled',source,INDICATORS[source],SOURCES[source][1]))
-    # These bounded pages have captured evidence, but no reviewed date grammar.
-    # They must remain explicitly unqualified until an adapter is reviewed.
+            # The update-history date after the notice is its publication date;
+            # the week-commencing date describes the data, not the release.
+            d=_date(m.group(1))
+            # The update history is evidence that this release has been published.
+            # A release dated today is not an upcoming event either.
+            if d and d>today.isoformat(): found.append(event('desnz:fuel:'+d,'Weekly road fuel prices',d,None,'published',source,INDICATORS[source],SOURCES[source][1]))
+    return found
+
+def _parse_obr(body,today):
+    html=body.decode('utf-8','replace')
+    blocks=re.findall(r'<div\b[^>]*class=["\'][^"\']*\bblock-pubs-footer\b[^"\']*["\'][^>]*>(.*?)</div\s*>',html,re.I|re.S)
+    if not blocks: raise ValueError('unrecognized OBR publication card structure')
+    forecasts=[]
+    for block in blocks:
+        title=re.search(r'<h4\b[^>]*>\s*<a\b[^>]*>(.*?)</a>',block,re.I|re.S)
+        if title and re.search(r'Economic\s+and\s+fiscal\s+outlook',_text(title.group(1).encode()),re.I):
+            forecasts.append(_text(block.encode()))
+    if len(forecasts)!=1 or not re.search(r'Next release\s*:',forecasts[0],re.I):
+        raise ValueError('unrecognized OBR forecast release structure')
+    match=re.search(r'Next release\s*:\s*(\d{1,2}\s+(?:'+'|'.join(MONTH)+r')\s+20\d{2})\b',forecasts[0],re.I)
+    if not match:
+        next_release=re.search(r'Next release\s*:\s*([^,;]+)',forecasts[0],re.I)
+        if not next_release or not re.fullmatch(r'(?:TBC|to be confirmed|to be announced|(?:winter|spring|summer|autumn)\s+20\d{2}(?:[-/]\d{2,4})?|20\d{2})',next_release.group(1).strip(),re.I):
+            raise ValueError('unrecognized OBR next-release date value')
+        return []
+    d=_date(match.group(1))
+    if d<today.isoformat(): return []
+    return [event('obr:efo','OBR Economic and fiscal outlook',d,None,'scheduled','obr',INDICATORS['obr'],SOURCES['obr'][0])]
+
+def _parse_hm_treasury(body,today):
+    html=body.decode('utf-8','replace')
+    heading=re.search(r'<h1\b[^>]*>(.*?)</h1\s*>',html,re.I|re.S)
+    if (not re.search(r'<main\b',html,re.I) or not heading
+            or not re.search(r'Budget\s+2026\s+date',_text(heading.group(1).encode()),re.I)
+            or not re.search(r'class=["\'][^"\']*\bgovspeak\b',html,re.I)):
+        raise ValueError('unrecognized HM Treasury budget announcement structure')
+    text=_text(body)
+    match=re.search(r'\bThe\s+Budget\s+will\s+be\s+held\s+on\s+(\d{1,2}\s+(?:'+'|'.join(MONTH)+r')\s+20\d{2})\b',text,re.I)
+    if not match:
+        if re.search(r'\bBudget\s+date\s+has\s+not\s+been\s+announced\b',text,re.I): return []
+        raise ValueError('unrecognized HM Treasury explicit Budget date')
+    d=_date(match.group(1))
+    if d<today.isoformat(): return []
+    return [event('hm_treasury:budget','HM Treasury Budget',d,None,'scheduled','hm_treasury',INDICATORS['hm_treasury'],SOURCES['hm_treasury'][0])]
+
+def _parse_ofgem(body,today):
+    html=body.decode('utf-8','replace')
+    heading=re.search(r'<h1\b[^>]*>(.*?)</h1\s*>',html,re.I|re.S)
+    section=re.search(r'<h[2-4]\b[^>]*>\s*Energy\s+price\s+cap\s+level\s+dates\s*</h[2-4]\s*>',html,re.I)
+    if (not heading or not re.search(r'Changes\s+to\s+energy\s+price\s+cap',_text(heading.group(1).encode()),re.I)
+            or not section):
+        raise ValueError('unrecognized Ofgem price-cap announcement structure')
+    text=_text(body)
+    anchor=re.search(r'Energy\s+price\s+cap\s+level\s+dates.*?levels\s+for\s+the\s+next\s+periods\s+will\s+be\s+announced\s+by\s*:\s*(.*?)(?:We\s+may\s+publish\s+before\s+these\s+dates|$)',text,re.I)
+    if not anchor: raise ValueError('unrecognized Ofgem announcement date context')
+    pattern=r'(\d{1,2}\s+(?:'+'|'.join(MONTH)+r')\s+20\d{2})\s*[–—-]\s*period\s+(\d{1,2}\s+(?:'+'|'.join(MONTH)+r')\s+20\d{2})\s+to\s+(\d{1,2}\s+(?:'+'|'.join(MONTH)+r')\s+20\d{2})'
+    matches=list(re.finditer(pattern,anchor.group(1),re.I))
+    if not matches and re.sub(r'\s+',' ',anchor.group(1)).strip():
+        raise ValueError('unrecognized Ofgem price-cap date rows')
+    found=[]
+    for match in matches:
+        announcement=_date(match.group(1)); start=_date(match.group(2)); end=_date(match.group(3))
+        if announcement>=today.isoformat():
+            found.append(event('ofgem:price-cap:'+start, f'Ofgem price cap announcement for {start} to {end}', announcement,None,'scheduled','ofgem_energy',INDICATORS['ofgem_energy'],SOURCES['ofgem_energy'][0]))
     return found
 
 def _paths(state):
@@ -214,11 +294,15 @@ def public_events(state):
     for name,p in data['providers'].items():
         if name not in SOURCES or not isinstance(p,dict): raise ValueError('unknown event provider')
         if p.get('evidence_kind')=='recorded_fixture': raise ValueError('fixture events cannot be published as official')
+        if p.get('qualification') not in {'qualified','unqualified'}:
+            raise ValueError('invalid provider qualification')
         if p.get('status') not in {'ok','stale','unavailable','unqualified'}:
             raise ValueError('invalid provider status')
         if p.get('status')=='unqualified':
             if p.get('qualification')!='unqualified' or p.get('events'):
                 raise ValueError('invalid unqualified provider')
+        elif p.get('qualification')!='qualified':
+            raise ValueError('qualified provider status mismatch')
         elif p.get('status')=='unavailable':
             if p.get('events'): raise ValueError('unavailable provider cannot contain events')
         elif p.get('evidence_kind')!='official_download': raise ValueError('event evidence kind is missing')
@@ -250,7 +334,7 @@ def public_events(state):
                         or e['id']!='ons:'+event_url.path):
                     raise ValueError('invalid ONS release URL')
             else:
-                if e.get('linked_indicators')!=INDICATORS[name] or e.get('source_url')!=SOURCES[name][1]:
+                if e.get('linked_indicators')!=INDICATORS[name] or e.get('source_url')!=SOURCES[name][0]:
                     raise ValueError('invalid event provenance')
         providers[name]={k:p.get(k) for k in ('status','qualification','retrieved_at','source_url','calendar_url','sha256','events','unknown_dates','last_failure_at') if k in p}
     shared=deduplicate_events(e for provider in providers.values() for e in provider.get('events',[]))

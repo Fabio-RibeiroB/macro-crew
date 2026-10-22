@@ -2,44 +2,67 @@
   "capture_date": "2026-10-22",
   "receipts": {
     "boe_mpc": {
-      "source_url": "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates",
-      "calendar_url": "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates",
-      "retrieved_at": "2026-10-22T14:32:39.282593Z",
-      "sha256": "ef7aa82cdb1048e1005aa4dd82b22bbf3187fb1c940327fd5552118fa41f3fa8",
       "bytes": 79208,
-      "fixture": "events_boe_mpc_capture.html",
+      "calendar_url": "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates",
       "evidence_kind": "official_download",
-      "qualification": "qualified_source_page_structure_capture"
+      "fixture": "events_boe_mpc_capture.html",
+      "qualification": "qualified_confirmed_date_table",
+      "retrieved_at": "2026-10-22T14:55:31.314065Z",
+      "sha256": "3c952da3ff8b1c426b85294015646f71877f643dfb5d86e557e9a58e704d142a",
+      "source_url": "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates"
+    },
+    "desnz_fuel": {
+      "bytes": 165691,
+      "calendar_url": "https://www.gov.uk/government/statistics/weekly-road-fuel-prices",
+      "evidence_kind": "official_download",
+      "fixture": "events_desnz_fuel_capture.html",
+      "qualification": "qualified_page_updates",
+      "retrieved_at": "2026-10-22T14:55:31.314065Z",
+      "sha256": "4f9a9534c25b0f0c7f010e95a3f3058d79e087bdd4ced4ec95d49f2573f28c2b",
+      "source_url": "https://www.gov.uk/government/statistics/weekly-road-fuel-prices"
     },
     "hm_treasury": {
-      "source_url": "https://www.gov.uk/search/news-and-communications?organisations%5B%5D=hm-treasury",
-      "calendar_url": "https://www.gov.uk/search/news-and-communications?organisations%5B%5D=hm-treasury",
-      "retrieved_at": "2026-10-22T14:32:39.282593Z",
-      "sha256": "0485dffc45344470fe2dd8b25b68ebff5aeec19f7ad713925e8d476556a2a2ac",
-      "bytes": 25169,
-      "fixture": "events_hm_treasury.html",
+      "bytes": 67739,
+      "calendar_url": "https://www.gov.uk/government/publications/chancellor-letter-to-the-treasury-select-committee-tsc-budget-2026-date",
       "evidence_kind": "official_download",
-      "qualification": "unqualified_no_reviewed_event_date_adapter"
+      "fixture": "events_hm_treasury.html",
+      "qualification": "qualified_explicit_budget_date_announcement",
+      "retrieved_at": "2026-10-22T14:55:31.314065Z",
+      "sha256": "ea6e1e12cc63cb1f84caa4b6f660c7738eef8baef7a552d11b9a65f318bbaa24",
+      "source_url": "https://www.gov.uk/government/publications/chancellor-letter-to-the-treasury-select-committee-tsc-budget-2026-date"
     },
     "obr": {
-      "source_url": "https://obr.uk/publications/",
-      "calendar_url": "https://obr.uk/publications/",
-      "retrieved_at": "2026-10-22T14:32:39.282593Z",
-      "sha256": "ec910455722bd5e06632ca71718283df48d047972f49bfa98e5e6d4dd980ab77",
       "bytes": 109997,
-      "fixture": "events_obr.html",
+      "calendar_url": "https://obr.uk/publications/",
       "evidence_kind": "official_download",
-      "qualification": "unqualified_no_reviewed_event_date_adapter"
+      "fixture": "events_obr.html",
+      "qualification": "qualified_explicit_next_release_context",
+      "retrieved_at": "2026-10-22T14:55:31.314065Z",
+      "sha256": "b2c62845c6f494cd52a70c8e9a4d5665af3c439d2687921a52fa41cc81685468",
+      "source_url": "https://obr.uk/publications/"
     },
     "ofgem_energy": {
-      "source_url": "https://www.ofgem.gov.uk/your-energy-supply/your-energy-bill/energy-price-cap-and-standing-charges-explained",
-      "calendar_url": "https://www.ofgem.gov.uk/your-energy-supply/your-energy-bill/energy-price-cap-and-standing-charges-explained",
-      "retrieved_at": "2026-10-22T14:32:39.282593Z",
-      "sha256": "b23f6d7b6be47f828be2bfac11c2fe1c63ba4b371da0918c97d293a5a82fc644",
-      "bytes": 208908,
-      "fixture": "events_ofgem_energy.html",
+      "bytes": 213673,
+      "calendar_url": "https://www.ofgem.gov.uk/energy-regulation/domestic-and-non-domestic/energy-pricing-rules/energy-price-cap",
       "evidence_kind": "official_download",
-      "qualification": "unqualified_no_reviewed_event_date_adapter"
+      "fixture": "events_ofgem_energy.html",
+      "qualification": "qualified_explicit_cap_announcement_dates",
+      "retrieved_at": "2026-10-22T14:55:31.314065Z",
+      "sha256": "11a0f23c760bac9b04c4eb9b3e5c6a725a0dfd3df2018a01ddf32b9647c796ad",
+      "source_url": "https://www.ofgem.gov.uk/news/changes-energy-price-cap-between-1-october-and-31-december-2026"
+    },
+    "ons": {
+      "bytes": 7958,
+      "calendar_url": "https://www.ons.gov.uk/releasecalendar",
+      "evidence_kind": "official_download",
+      "fixture": "events_ons_capture.json",
+      "page_limit": 1000,
+      "qualification": "qualified_date_family_adapter_paginated_results",
+      "results_returned": 9,
+      "results_total": 9,
+      "retrieved_at": "2026-10-22T14:55:31.314065Z",
+      "sha256": "381c844395cab6a666fe6a1772c09e521cdd757b5d178d6cd7a0b479f7e70f3d",
+      "source_url": "https://api.beta.ons.gov.uk/v1/search/releases?limit=1000&offset=0&sort=release_date_asc&fromDate=2026-10-22&toDate=2027-10-22"
     }
   }
 }
