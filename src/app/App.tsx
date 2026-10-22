@@ -1151,7 +1151,7 @@ export default function App({
     pathname ??
       (typeof window === "undefined" ? "/" : window.location.pathname),
   );
-  const needsData = ["overview", "prices", "economy", "jobs-pay", "housing"].includes(page.id);
+  const needsData = ["overview", "prices", "economy", "jobs-pay", "housing", "government"].includes(page.id);
   const [snapshot, setSnapshot] = useState(() =>
     refreshSnapshot(initialData, needsData ? "loading" : "idle"),
   );
