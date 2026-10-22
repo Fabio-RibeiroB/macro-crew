@@ -363,6 +363,44 @@ def test_unemployment_revision_preserves_rolling_window_and_prior_vintage(tmp_pa
     assert current['snapshot_id'] != original['snapshot_id']
 
 
+def test_public_debt_failure_retains_latest_and_revision_keeps_prior_vintage(tmp_path):
+    collect(tmp_path, transport=lambda key: fixture_transport(key), clock=lambda: CPI_WHEN)
+    original = read_generation(tmp_path)['metrics']['public_debt']
+    def revised(key):
+        body = fixture(key)
+        return body.replace(b'"2026 SEP","94.0"', b'"2026 SEP","94.1"') if key == 'public_debt' else fixture_transport(key)
+    collect(tmp_path, transport=revised, clock=lambda: CPI_WHEN + timedelta(minutes=1))
+    current = read_generation(tmp_path)['metrics']['public_debt']
+    assert current['latest']['value'] == '94.1'
+    assert current['latest']['period'] == original['latest']['period'] == '2026-09'
+    assert current['snapshot_id'] != original['snapshot_id']
+    store = Store(tmp_path)
+    try:
+        rows = store.db.execute("SELECT s.payload,a.raw_hash FROM snapshot s JOIN receipt r ON r.snapshot_id=s.id JOIN attempt a ON a.id=r.attempt_id WHERE s.key='public_debt' ORDER BY a.id").fetchall()
+        assert len(rows) == 2
+        assert len({row['raw_hash'] for row in rows}) == 2
+        assert all((tmp_path / 'raw' / f"{row['raw_hash']}.bin").is_file() for row in rows)
+    finally:
+        store.close()
+    def unavailable(key):
+        return b'<html>unavailable</html>' if key == 'public_debt' else fixture_transport(key)
+    result = collect(tmp_path, transport=unavailable, clock=lambda: CPI_WHEN + timedelta(days=1))
+    assert result['failed_metrics'] == ['public_debt']
+    retained = read_generation(tmp_path)['metrics']['public_debt']
+    assert retained['collection_status'] == 'degraded'
+    assert retained['latest'] == current['latest']
+
+
+def test_never_collected_public_debt_is_unavailable_not_zero(tmp_path):
+    def unavailable(key):
+        return b'<html>unavailable</html>' if key == 'public_debt' else fixture_transport(key)
+    result = collect(tmp_path, transport=unavailable, clock=lambda: CPI_WHEN)
+    assert result['failed_metrics'] == ['public_debt']
+    debt = read_generation(tmp_path)['metrics']['public_debt']
+    assert debt['validation_status'] == 'unavailable'
+    assert debt['latest'] is None and debt['history'] == []
+
+
 def test_activation_failure_preserves_previous_complete_generation(tmp_path):
     collect(tmp_path, fixtures=FIXTURES, clock=lambda: WHEN)
     original = read_generation(tmp_path)
