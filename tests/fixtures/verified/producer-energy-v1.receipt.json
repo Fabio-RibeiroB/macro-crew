@@ -5,6 +5,6 @@
   "verified_metric": "household_energy",
   "other_metrics": "unavailable by design in the isolated single-feed smoke",
   "generation_id": "23635a77216a456ca87b7992122001fa",
-  "public_manifest_sha256": "f0370157d8ceba82dba8e3df8ce7b4d3d286bb172c5372fa06d66bf4344f8297",
-  "public_data_sha256": "582f2178fd7c0791f61d972cfefa5c7418c45417eb55fca3d870e33bd1a89285"
+  "public_manifest_sha256": "bfa9737917b2c86e616dfae3c35b7d41121a34716e0835d78356026691801b6a",
+  "public_data_sha256": "709968237223e771b9154f0c5bf27d16b65341932585811abc5e57d07e357f3b"
 }
