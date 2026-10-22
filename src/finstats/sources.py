@@ -137,12 +137,20 @@ DEFINITIONS = {
         'https://www.gov.uk/government/statistics/weekly-road-fuel-prices',
         'https://www.gov.uk/government/statistics/weekly-road-fuel-prices',
         unit='pence_per_litre'),
+    'public_debt': Definition(
+        'uk.public_debt.net_debt_gdp', 'HF6X', 'PUSF',
+        'PS: Net Debt (excluding public sector banks) as a % of GDP: NSA',
+        'monthly', 'not_seasonally_adjusted', 'previous_month',
+        ONS + '/economy/governmentpublicsectorandtaxes/publicsectorfinance/timeseries/hf6x/pusf',
+        ONS + '/generator?format=csv&uri=%2Feconomy%2Fgovernmentpublicsectorandtaxes%2Fpublicsectorfinance%2Ftimeseries%2Fhf6x%2Fpusf',
+        unit='percent'),
 }
 
 # Optional metric members: registered public-definition fields the writer is
 # allowed to emit. The reader owns a matching code-owned contract; a mismatch
 # rejects the generation. Absent members stay absent, never zero.
 OPTIONAL_METRICS = {
+    'public_debt': {'geography': 'United Kingdom'},
     'cpi': {'geography': 'United Kingdom'},
     'regular_pay_nominal_growth': {'geography': 'Great Britain', 'window_months': 3},
     'regular_pay_real_growth': {'geography': 'Great Britain', 'window_months': 3, 'deflator': 'CPIH'},
@@ -176,6 +184,8 @@ def fixture_file(key):
         return 'regular_pay_real_a2fa_lms.json'
     if key == 'unemployment':
         return 'unemployment_mgsx_lms.json'
+    if key == 'public_debt':
+        return 'public_debt_hf6x_pusf.csv'
     if key.startswith('private_rent_'):
         return 'pipr_uk_monthly_price_statistics.xlsx'
     if key.startswith('house_price_'):
@@ -774,6 +784,17 @@ def recorded_hpi_release_evidence(source_url, source_published_date, retrieved_a
 
 def fetch(key: str) -> bytes:
     """One bounded request. Retry scheduling belongs to the caller, not the parser."""
+    if key == 'public_debt':
+        url = DEFINITIONS[key].download_url
+        request = Request(url, headers={
+            'User-Agent': 'FinStats/2.0 (+https://github.com/Fabio-RibeiroB/macro-crew)'})
+        with urlopen(request, timeout=30) as response:
+            if response.status != 200 or response.geturl() != url:
+                raise ValidationError('Unexpected ONS HF6X download response')
+            payload = response.read(MAX_BYTES + 1)
+        if len(payload) > MAX_BYTES:
+            raise ValidationError('ONS HF6X response exceeds size limit')
+        return payload
     if key in FUEL_COLUMNS:
         request = Request(FUEL_SOURCE_URL, headers={
             'User-Agent': 'FinStats/2.0 (+https://github.com/Fabio-RibeiroB/macro-crew)'})

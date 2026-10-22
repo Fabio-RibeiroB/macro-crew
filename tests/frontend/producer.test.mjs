@@ -114,6 +114,59 @@ test("DESNZ petrol and diesel render as two weekly UK prices with direct history
   } finally { await server.close(); }
 });
 
+test("ONS HF6X producer data renders only on Government with adjacent-month pp comparison", async () => {
+  const debtBytes = readFileSync(new URL("producer-fuel-v1.json", WIRE));
+  const debtManifest = JSON.parse(readFileSync(new URL("producer-fuel-v1.manifest.json", WIRE), "utf8"));
+  const producer = await loadVerified("/", fileFetcher(debtBytes, debtManifest));
+  const debt = producer.metrics.public_debt;
+  assert.equal(debt.definition.series, "HF6X");
+  assert.equal(debt.definition.unit, "percent");
+  assert.equal(debt.latest.period, "2026-09");
+  assert.equal(previousReading(debt).period, "2026-08");
+  assert.ok(Math.abs(Number(debt.latest.value) - Number(previousReading(debt).value) - 0.4) < 1e-9);
+  assert.equal(freshness({ ...debt, last_successful_check_at: "2026-11-21T12:00:00.000Z" }, new Date("2026-11-21T12:00:00Z")).label, "New release awaited");
+  const { createServer } = await import("vite");
+  const { createElement } = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+  try {
+    const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
+    const government = renderToStaticMarkup(createElement(App, { pathname: "/government-budget", initialData: producer }));
+    assert.match(government, /id="public-debt"/);
+    assert.ok(government.indexOf('id="public-debt"') < government.indexOf("Three things to keep separate"), "debt figures precede Government guide prose");
+    assert.match(government, /class="fs-number">94%/);
+    assert.match(government, /<span>\+0\.4 percentage points<\/span> compared with August 2026/);
+    assert.match(government, /end of September 2026/);
+    assert.match(government, /HF6X/);
+    assert.match(government, /deficit or net borrowing is the amount borrowed over a period/);
+    assert.match(government, /Public sector net financial liabilities \(PSNFL\) is a wider balance-sheet measure/);
+    assert.match(government, /ONS HF6X public debt series/);
+    assert.match(government, /source publication:|ONS release:/i);
+    const { HistoricalTrendCard } = await server.ssrLoadModule("/src/app/components/HistoricalTrendCard.tsx");
+    const chart = renderToStaticMarkup(createElement(HistoricalTrendCard, {
+      title: "Public sector net debt as a share of GDP", label: "Debt · % of GDP",
+      data: chartPoints(debt).slice(-3),
+    }));
+    assert.match(chart, /Exact values in percent/);
+    assert.match(chart, /94%/);
+    const home = renderToStaticMarkup(createElement(App, { pathname: "/", initialData: producer }));
+    assert.doesNotMatch(home, /<h2>Public debt<\/h2>/);
+    const stale = renderToStaticMarkup(createElement(App, {
+      pathname: "/government-budget", initialData: { ...producer, metrics: {
+        ...producer.metrics, public_debt: { ...debt, collection_status: "degraded" },
+      } },
+    }));
+    assert.match(stale, /Update delayed · showing last verified figure/);
+    const unavailable = renderToStaticMarkup(createElement(App, {
+      pathname: "/government-budget", initialData: { ...producer, metrics: {
+        ...producer.metrics, public_debt: { ...debt, latest: null, history: [], validation_status: "unavailable", collection_status: "unavailable" },
+      } },
+    }));
+    assert.match(unavailable, /A verified reading is not available yet/);
+    assert.doesNotMatch(unavailable, /class="fs-chart-grid fs-chart-count-1"/);
+  } finally { await server.close(); }
+});
+
 test("producer output passes the manifest checksum and the full reader contract", async () => {
   assert.equal(createHash("sha256").update(bytes).digest("hex"), manifest.sha256);
   const data = await loadVerified("/", fileFetcher(bytes));
