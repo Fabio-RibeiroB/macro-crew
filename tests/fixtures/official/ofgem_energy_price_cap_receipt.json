@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "source": "Ofgem energy price cap unit rates and standing charges",
+  "url": "https://www.ofgem.gov.uk/your-energy-supply/your-energy-bill/energy-price-cap-unit-rates-and-standing-charges",
+  "retrieved_at": "2026-10-22T14:32:40Z",
+  "evidence_kind": "official_download",
+  "file": "ofgem_energy_price_cap_2026-10.html.gz",
+  "bytes": 442483,
+  "sha256": "89e0dfdb60ef398d94ccef45c26b1760df9800e096b77f19d1b97fe0f566b8ba",
+  "effective_period": {
+    "start": "2026-10-01",
+    "end": "2026-12-31"
+  },
+  "note": "Official page response preserved verbatim. Ofgem states that cross-period costs cannot be compared directly because tax treatment changed. The page does not state a next-period announcement date.",
+  "storage": "deterministic gzip; SHA-256 covers decompressed source bytes"
+}

@@ -21,7 +21,7 @@ PUBLIC_FIELDS = (
     'publication_time_precision', 'source_published_at', 'next_release_date',
     'release_status', 'retrieved_at', 'source_download_url', 'source_sha256',
     'parser_version', 'vintage_ordering', 'snapshot_evidence_kind',
-    'quality_note', 'quality_source_url',
+    'quality_note', 'quality_source_url', 'upcoming_period',
 )
 
 
@@ -66,10 +66,13 @@ def deliver(state_dir, output_dir, event_failure_sink=None, event_unqualified_si
             approved_host |= key.startswith('house_price_') and url.hostname == 'publicdata.landregistry.gov.uk'
             approved_host |= key in {'petrol_price', 'diesel_price'} and url.hostname == 'assets.publishing.service.gov.uk'
             approved_host |= key.startswith('gilt_') and url.hostname == 'www.bankofengland.co.uk'
+            approved_host |= key == 'household_energy' and url.hostname == 'www.ofgem.gov.uk'
             if url.scheme != 'https' or not approved_host:
                 raise ValueError('Unexpected official download URL')
             if key.startswith('gilt_') and metric['source_download_url'] != definition.download_url:
                 raise ValueError('Unexpected BoE gilt download URL')
+            if key == 'household_energy' and metric['source_download_url'] != definition.download_url:
+                raise ValueError('Unexpected Ofgem source page URL')
             if key.startswith('private_rent_') and not re.fullmatch(
                     r'/file\?uri=(?:%2F|/)economy(?:%2F|/)inflationandpriceindices(?:%2F|/)datasets(?:%2F|/)priceindexofprivaterentsukmonthlypricestatistics(?:%2F|/)[0-9]{1,2}[a-z]+[0-9]{4}(?:%2F|/)priceindexofprivaterentsukmonthlypricestatistics\.xlsx',
                     url.path + ('?' + url.query if url.query else '')):

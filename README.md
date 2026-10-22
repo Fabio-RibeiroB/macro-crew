@@ -30,7 +30,12 @@ are imputed for those months. Labour figures retain their
 full three-month reference windows. UK House Price Index average price in pounds
 and annual change are separate UK-national series from HM Land Registry's
 Average price CSV, alongside DESNZ weekly UK-average unleaded petrol and diesel
-pump prices as separate pence-per-litre series. These describe integrated source coverage; the
+pump prices as separate pence-per-litre series. The Ofgem household-energy measure
+is its published annualised dual-fuel Direct Debit bill for Great Britain, with
+the cap period, revised medium consumption basis, average unit rates, standing
+charges and tax treatment retained. It is not a maximum household bill, and
+Ofgem's October 2026 tax change makes its movement from the prior period not
+directly comparable. These describe integrated source coverage; the
 [M2 acceptance record](docs/m2-acceptance.md) and [M3 rollout qualification](docs/m3-acceptance.md)
 record point-in-time evidence, not deployment.
 Reference period, official release date and FinStats check time are separate.

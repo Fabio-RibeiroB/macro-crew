@@ -33,6 +33,17 @@ export const METRICS = {
  * code-owned contracts, not payload-supplied rules.
  */
 export const OPTIONAL_METRICS = {
+  household_energy: {
+    metric_id: "uk.energy_price_cap.typical_dual_fuel_bill", series: "Ofgem dual-fuel Direct Debit cap",
+    dataset: "Energy price cap unit rates and standing charges", title: "Illustrative annual dual-fuel bill at typical consumption",
+    frequency: "quarterly", comparison: "previous_comparable_period", adjustment: "not_applicable", unit: "GBP_per_year", version: 1,
+    geography: "Great Britain", payment_method: "Direct Debit", tariff: "default variable tariff",
+    consumption_basis: "Ofgem typical domestic consumption values (medium; single-rate electricity)",
+    electricity_kwh_per_year: 2500, gas_kwh_per_year: 9500,
+    consumption_source_url: "https://www.ofgem.gov.uk/consultation/review-typical-domestic-consumption-values",
+    source_url: "https://www.ofgem.gov.uk/your-energy-supply/your-energy-bill/energy-price-cap-unit-rates-and-standing-charges",
+    download_url: "https://www.ofgem.gov.uk/your-energy-supply/your-energy-bill/energy-price-cap-unit-rates-and-standing-charges",
+  },
   cpi: {
     metric_id: "uk.cpi.annual_rate",
     series: "D7G7",
@@ -227,7 +238,7 @@ export function officialUrl(value) {
       url.protocol === "https:" &&
       !url.username &&
       !url.password &&
-      ["www.ons.gov.uk", "www.bankofengland.co.uk", "www.gov.uk", "publicdata.landregistry.gov.uk"].includes(url.hostname)
+      ["www.ons.gov.uk", "www.bankofengland.co.uk", "www.gov.uk", "publicdata.landregistry.gov.uk", "www.ofgem.gov.uk"].includes(url.hostname)
     );
   } catch {
     return false;
@@ -327,8 +338,32 @@ function validateDefinition(definition, spec) {
   } else if (definition.deflator !== undefined) {
     fail("Unexpected optional metric deflator");
   }
+  for (const field of ["payment_method", "tariff", "consumption_basis", "electricity_kwh_per_year", "gas_kwh_per_year", "consumption_source_url"]) {
+    if (spec[field] !== undefined ? definition[field] !== spec[field] : definition[field] !== undefined)
+      fail("Unexpected Ofgem consumption or payment basis");
+  }
 }
 function validateReference(point, spec) {
+  if (spec.metric_id === "uk.energy_price_cap.typical_dual_fuel_bill") {
+    const r = point.reference;
+    const fields = "announcement_date,comparison_status,consumption_basis,effective_end,effective_start,electricity,electricity_kwh_per_year,gas,gas_kwh_per_year,geography,payment_method,period_status,regional_basis,tariff,tax_treatment";
+    if (!object(r) || Object.keys(r).sort().join(",") !== fields.split(",").sort().join(",") ||
+      !isoDate(r.effective_start) || !isoDate(r.effective_end) || r.effective_start !== point.period ||
+      (r.announcement_date !== null && !isoDate(r.announcement_date)) || !["effective", "announced"].includes(r.period_status) ||
+      (r.period_status === "effective" && r.effective_start > r.effective_end) ||
+      (r.period_status === "announced" && r.effective_start <= r.effective_end) ||
+      r.geography !== "Great Britain" || r.payment_method !== "Direct Debit" || r.tariff !== "default variable tariff" ||
+      r.electricity_kwh_per_year !== 2500 || r.gas_kwh_per_year !== 9500 ||
+      !object(r.electricity) || !object(r.gas) ||
+      Object.keys(r.electricity).sort().join(",") !== "standing_charge_p_per_day,unit_rate_p_per_kwh" ||
+      Object.keys(r.gas).sort().join(",") !== "standing_charge_p_per_day,unit_rate_p_per_kwh" ||
+      !decimal(r.electricity.unit_rate_p_per_kwh) || !decimal(r.electricity.standing_charge_p_per_day) ||
+      !decimal(r.gas.unit_rate_p_per_kwh) || !decimal(r.gas.standing_charge_p_per_day) ||
+      typeof r.tax_treatment !== "string" || typeof r.consumption_basis !== "string" ||
+      typeof r.regional_basis !== "string" || !["not_comparable_tax_change", "compare_only_same_basis"].includes(r.comparison_status))
+      fail("Invalid Ofgem effective-period evidence");
+    return;
+  }
   if (spec.reference_kind === "weekly_observation") {
     const reference = point.reference;
     if (
@@ -431,6 +466,17 @@ function validateOptionalMetric(metric, spec) {
     JSON.stringify(metric.latest.reference ?? null) !== JSON.stringify(end.reference ?? null)
   )
     fail("Card and chart disagree");
+  if (spec.metric_id === "uk.energy_price_cap.typical_dual_fuel_bill") {
+    if (metric.latest.reference.period_status !== "effective") fail("Upcoming cap activated early");
+    if (metric.upcoming_period !== null) {
+      validatePoint(metric.upcoming_period, spec.frequency);
+      validateReference(metric.upcoming_period, spec);
+      if (metric.upcoming_period.reference.period_status !== "announced" ||
+          metric.upcoming_period.period <= metric.latest.period ||
+          metric.upcoming_period.reference.effective_start <= metric.latest.reference.effective_end)
+        fail("Invalid upcoming Ofgem period");
+    }
+  }
 }
 function piprDownloadUrl(value) {
   try {

@@ -11,6 +11,7 @@ import re
 from pathlib import Path
 import sqlite3
 import tempfile
+from zoneinfo import ZoneInfo
 
 from finstats.sources import (
     DEFINITIONS, MAX_SOURCE_PAGE_BYTES, ValidationError, parse,
@@ -183,6 +184,17 @@ class Store:
             WHERE s.key=?''' + cutoff + ' ORDER BY s.vintage DESC,a.id DESC LIMIT 1', params).fetchone()
         return dict(row) if row else None
 
+    def observations(self, key):
+        """Return all retained period observations, preferring later accepted revisions."""
+        rows = self.db.execute('''SELECT s.payload FROM snapshot s
+            JOIN receipt r ON r.snapshot_id=s.id JOIN attempt a ON a.id=r.attempt_id
+            WHERE s.key=? AND a.status='accepted' ORDER BY s.vintage,a.id''', (key,)).fetchall()
+        by_period = {}
+        for row in rows:
+            for point in json.loads(row['payload'])['observations']:
+                by_period[point['period']] = point
+        return [by_period[period] for period in sorted(by_period)]
+
     def ingest(self, key, body, when, source_url=None, evidence_kind='official_download',
                source_published_date=None, release_page_evidence=None):
         collected = timestamp(when)
@@ -194,7 +206,8 @@ class Store:
                 (key, collected, source_url or DEFINITIONS[key].download_url, evidence_kind, digest))
             attempt_id = cursor.lastrowid
         try:
-            candidate = parse(key, body, when.astimezone(timezone.utc).date())
+            source_today = when.astimezone(ZoneInfo('Europe/London')).date() if key == 'household_energy' else when.astimezone(timezone.utc).date()
+            candidate = parse(key, body, source_today)
             if key.startswith('house_price_'):
                 if source_published_date is None:
                     raise ValidationError('UK HPI release date missing from source receipt')
@@ -330,7 +343,7 @@ class Store:
                     del observation['reference']
             vintage = candidate.published_date or candidate.observations[-1].period
             previous = self.latest(key)
-            if previous and vintage >= previous['vintage']:
+            if key != 'household_energy' and previous and vintage >= previous['vintage']:
                 old_periods = {o['period'] for o in json.loads(previous['payload'])['observations']}
                 if not old_periods.issubset({o.period for o in candidate.observations}):
                     raise ValidationError('Source history lost reference periods; review required')

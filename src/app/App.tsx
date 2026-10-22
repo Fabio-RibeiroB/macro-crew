@@ -147,6 +147,13 @@ const topics = {
   house_price_level: {
     short: "House prices", Icon: Landmark, measurement: "UK average house price · pounds", color: "#547b8a", detailHref: "/housing#house-prices", meaning: "The average price of a home sold in the United Kingdom.", caution: "Recent UK HPI estimates are provisional and can be revised."
   },
+  household_energy: {
+    short: "Household energy", Icon: Fuel,
+    measurement: "Great Britain · typical dual-fuel bill · pounds per year",
+    color: "#547b8a", detailHref: "/prices#household-energy",
+    meaning: "Ofgem's illustrative annual bill for a typical household on a default variable tariff paying by Direct Debit.",
+    caution: "The cap limits rates, not total bills. Actual charges vary by region and use; it does not cover Northern Ireland or fixed tariffs.",
+  },
   petrol_price: {
     short: "Petrol & Diesel", Icon: Fuel,
     measurement: "UK average retail pump prices · pence per litre",
@@ -164,11 +171,25 @@ const topics = {
     caution: "The latest two UK months are provisional; Northern Ireland inputs are imputed and revised later.",
   },
 };
-const metricValue = (metric: any) => ["GBP_per_month", "GBP"].includes(metric?.definition?.unit)
+const metricValue = (metric: any) => ["GBP_per_month", "GBP", "GBP_per_year"].includes(metric?.definition?.unit)
   ? (metric.latest?.value == null ? "Not available" : `£${Number(metric.latest.value).toLocaleString("en-GB")}`)
   : metric?.definition?.unit === "pence_per_litre"
     ? (metric.latest?.value == null ? "Not available" : `${metric.latest.value}p`)
   : percent(metric?.latest?.value);
+function energyComparison(metric: any) {
+  const latest = metric?.latest;
+  const current = latest?.reference;
+  if (!latest || !current) return "A verified previous comparable cap period is not available.";
+  if (current.comparison_status === "not_comparable_tax_change")
+    return "No direct comparison: Ofgem says the tax treatment changed.";
+  const basis = (r: any) => [r.geography, r.payment_method, r.tariff, r.electricity_kwh_per_year,
+    r.gas_kwh_per_year, r.consumption_basis, r.tax_treatment].join("|");
+  const previous = [...(metric.history ?? [])].reverse().find((point: any) =>
+    point.period < latest.period && point.reference && basis(point.reference) === basis(current));
+  if (!previous) return "A previous cap period on the same consumption and tax basis is not available.";
+  const change = Number(latest.value) - Number(previous.value);
+  return `${change > 0 ? "+" : change < 0 ? "−" : ""}£${Math.abs(change).toLocaleString("en-GB")}/year compared with ${formatPeriod(previous.reference.effective_start)} to ${formatPeriod(previous.reference.effective_end)} on the same basis.`;
+}
 // CPI headlines the inflation card once a verified reading exists; CPIH stays
 // the labelled fallback and the supporting measure on the Prices page.
 function inflationKind(data: any) {
@@ -261,14 +282,17 @@ function MetricCard({
     const diesel = secondaryMetric;
     const fuel = (label: string, item: any) => {
       const previous = item?.latest ? previousReading(item) : null;
-      const comparison = previous && item.latest.value != null
-        ? `Change ${decimalDifference(item.latest.value, previous.value)}p per litre compared with ${formatPeriod(previous.period)}`
+      const fullComparison = previous && item.latest.value != null
+        ? `Change ${decimalDifference(item.latest.value, previous.value)} pence per litre compared with ${formatPeriod(previous.period)}`
         : "A directly comparable previous week is not available.";
+      const comparison = previous && item.latest.value != null
+        ? `${decimalDifference(item.latest.value, previous.value)}p/litre vs ${new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${previous.period}T00:00:00Z`))}`
+        : fullComparison;
       return <div className="fs-fuel-value" key={label}>
         <h4>{label}</h4>
         <p className="fs-number">{metricValue(item)}</p>
         <p className="fs-measure">pence per litre · {item?.latest ? formatPeriod(item.latest.period) : "dated reading unavailable"}</p>
-        <p className="fs-comparison">{comparison}</p>
+        <p className="fs-comparison" aria-label={fullComparison}>{comparison}</p>
         <p className={`fs-fresh fs-fresh-${item?.latest ? freshness(item).kind : "warning"}`}>
           {item?.latest ? freshness(item).label : "Unavailable"}
         </p>
@@ -314,7 +338,9 @@ function MetricCard({
             <strong>
               {currentWindow
                 ? `${formatPeriod(currentWindow.start_month)} to ${formatPeriod(currentWindow.end_month)}`
-                : formatPeriod(metric.latest.period)}
+                : kind === "household_energy"
+                  ? `${formatPeriod(metric.latest.reference?.effective_start)} to ${formatPeriod(metric.latest.reference?.effective_end)}`
+                  : formatPeriod(metric.latest.period)}
             </strong>
           </>
         ) : (
@@ -343,7 +369,7 @@ function MetricCard({
         </p>
       )}
       {kind === "private_rent_growth" && <p className="fs-comparison">Average monthly rent: {secondaryMetric?.latest?.value == null ? "not available" : `£${Number(secondaryMetric.latest.value).toLocaleString("en-GB")}`} {secondaryMetric?.latest?.period ? `in ${formatPeriod(secondaryMetric.latest.period)}` : ""}{secondaryMetric?.collection_status === "degraded" ? " · update delayed, showing the last verified rent" : ""}</p>}
-      {kind !== "house_price_level" && <div className="fs-comparison">
+      {kind !== "house_price_level" && kind !== "household_energy" && <div className="fs-comparison">
         {kind === "bank_rate" ? rateChange ? (
           <>
             Latest evidenced change: {rateChange.difference > 0 ? "+" : "−"}
@@ -369,6 +395,7 @@ function MetricCard({
           "A directly comparable previous reading is not available."
         )}
       </div>}
+      {kind === "household_energy" && <p className="fs-comparison">{energyComparison(metric)}</p>}
       {!compact && <p className="fs-stat-meaning">{topic.meaning}</p>}
       {(!compact || status.kind !== "ok") && <div className={`fs-fresh fs-fresh-${status.kind}`}>
         <ShieldCheck size={14} aria-hidden="true" />
@@ -586,6 +613,32 @@ function FuelPrices({ data, loading, error, refresh }: any) {
   </Statistics>;
 }
 
+function HouseholdEnergy({ data, loading, error, refresh }: any) {
+  const metric = data?.metrics?.household_energy;
+  const r = metric?.latest?.reference;
+  const upcoming = metric?.upcoming_period;
+  return <Statistics data={data} kinds={["household_energy"]} loading={loading} error={error}
+    refresh={refresh} sectionId="household-energy" title="Household energy"
+    eyebrow="Ofgem energy price cap · Great Britain">
+    <div className="fs-context-card">
+      <h3>Past cap periods</h3>
+      {metric?.history?.length ? <ol className="fs-energy-history">{[...metric.history].reverse().map((point: any) => <li key={point.period}>
+        <strong>{formatPeriod(point.reference.effective_start)} to {formatPeriod(point.reference.effective_end)} · £{Number(point.value).toLocaleString("en-GB")}/year</strong>
+        <span>{point.reference.electricity_kwh_per_year.toLocaleString("en-GB")} kWh electricity and {point.reference.gas_kwh_per_year.toLocaleString("en-GB")} kWh gas · {point.reference.tax_treatment}</span>
+      </li>)}</ol> : <p>A verified cap period is not available yet.</p>}
+      <h3>What this bill assumes</h3>
+      <p>Ofgem's illustrative annual dual-fuel bill uses a default variable tariff and Direct Debit. The benchmark is medium typical consumption: {r?.electricity_kwh_per_year?.toLocaleString("en-GB") ?? "2,500"} kWh of single-rate electricity and {r?.gas_kwh_per_year?.toLocaleString("en-GB") ?? "9,500"} kWh of gas per year. It is the Ofgem average for England, Scotland and Wales, not a quote for a particular region.</p>
+      {r && <><p>Effective {formatPeriod(r.effective_start)} to {formatPeriod(r.effective_end)}. Electricity: {r.electricity.unit_rate_p_per_kwh}p/kWh and {r.electricity.standing_charge_p_per_day}p/day. Gas: {r.gas.unit_rate_p_per_kwh}p/kWh and {r.gas.standing_charge_p_per_day}p/day.</p>
+      <p>Tax: {r.tax_treatment}. The annual figure is Ofgem's published amount, not recalculated from rounded rates. {energyComparison(metric)}</p></>}
+      {upcoming && <p>Announced upcoming cap: £{Number(upcoming.value).toLocaleString("en-GB")}/year for {formatPeriod(upcoming.reference.effective_start)} to {formatPeriod(upcoming.reference.effective_end)}. It will become current only when that effective period begins. Announcement date: {upcoming.reference.announcement_date ?? "not supplied"}.</p>}
+      <p>The cap limits unit rates and standing charges, not total bills. Actual costs depend on use and region. It does not cover Northern Ireland, fixed tariffs or heating oil.</p>
+      <p>Cap announcement date: {r?.announcement_date ?? "not supplied on this rates page"}. Source page publication date: {metric?.source_published_date ?? "not supplied"}. Last successful check: {checkedAt(metric?.last_successful_check_at ?? null)}. No next cap announcement is currently published on this source page.</p>
+      <OfficialLink href={metric?.definition.source_url ?? "https://www.ofgem.gov.uk/your-energy-supply/your-energy-bill/energy-price-cap-unit-rates-and-standing-charges"}>Ofgem energy cap rates and standing charges</OfficialLink>
+      <OfficialLink href={metric?.definition.consumption_source_url ?? "https://www.ofgem.gov.uk/consultation/review-typical-domestic-consumption-values"}>Ofgem decision on revised typical consumption values</OfficialLink>
+    </div>
+  </Statistics>;
+}
+
 function PageHeading({
   eyebrow,
   title,
@@ -787,8 +840,9 @@ function PriceGuide({ data }: any) {
             target.
           </p>
           <p className="fs-caption">
-            Food, fuel and energy breakdowns are not yet part of our verified
-            dataset. This page does not claim to measure your own bills.
+            Food-price breakdowns are not yet part of our verified dataset.
+            The Ofgem cap is an illustrative typical bill, not your own energy
+            charges.
           </p>
         </aside>
       </div>
@@ -1427,7 +1481,7 @@ export default function App({
           <>
             <Statistics
               {...stats}
-              kinds={[inflationKind(data), "bank_rate", "regular_pay_nominal_growth", "unemployment", "private_rent_growth", "house_price_level", "petrol_price", "gdp"]}
+              kinds={[inflationKind(data), "bank_rate", "regular_pay_nominal_growth", "unemployment", "private_rent_growth", "house_price_level", "household_energy", "petrol_price", "gdp"]}
               compact
               overview
             />
@@ -1444,6 +1498,7 @@ export default function App({
             <EventList {...eventProps} indicatorIds={["uk.cpi.annual_rate", "uk.cpih.annual_rate", "uk.road_fuel.unleaded_petrol_price", "uk.road_fuel.diesel_price", "uk.energy_price_cap.typical_dual_fuel_bill"]} compact />
             <PriceGuide data={data} />
             <Trends data={data} kinds={priceTrendKinds(data)} />
+            <HouseholdEnergy {...stats} />
             <FuelPrices {...stats} />
           </>
         )}

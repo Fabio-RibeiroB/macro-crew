@@ -23,6 +23,35 @@ const manifest = JSON.parse(
   readFileSync(new URL("producer-pay-v1.manifest.json", WIRE), "utf8"),
 );
 
+test("Ofgem live smoke producer output passes the strict reader and renders assumptions", async () => {
+  const energyBytes = readFileSync(new URL("producer-energy-v1.json", WIRE));
+  const energyManifest = JSON.parse(readFileSync(new URL("producer-energy-v1.manifest.json", WIRE), "utf8"));
+  const data = await loadVerified("/", fileFetcher(energyBytes, energyManifest));
+  const energy = data.metrics.household_energy;
+  assert.equal(energy.latest.value, "1723");
+  assert.equal(energy.latest.reference.effective_start, "2026-10-01");
+  assert.equal(energy.latest.reference.effective_end, "2026-12-31");
+  assert.equal(energy.latest.reference.comparison_status, "not_comparable_tax_change");
+  assert.equal(data.metrics.bank_rate.validation_status, "unavailable");
+  const { createServer } = await import("vite");
+  const { createElement } = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+  try {
+    const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
+    const home = renderToStaticMarkup(createElement(App, { pathname: "/", initialData: data }));
+    assert.match(home, /<h2>Household energy<\/h2>/);
+    assert.match(home, /£1,723/);
+    assert.match(home, /No direct comparison: Ofgem says the tax treatment changed/);
+    const prices = renderToStaticMarkup(createElement(App, { pathname: "/prices", initialData: data }));
+    assert.match(prices, /id="household-energy"/);
+    assert.match(prices, /2,500 kWh of single-rate electricity and 9,500 kWh of gas/);
+    assert.match(prices, /26\.32p\/kWh and 54\.83p\/day/);
+    assert.match(prices, /7\.97p\/kWh and 29\.68p\/day/);
+    assert.match(prices, /not supplied on this rates page/);
+  } finally { await server.close(); }
+});
+
 function fileFetcher(data, selectedManifest = manifest) {
   return async (url) =>
     url.endsWith("current.json")
@@ -59,10 +88,11 @@ test("DESNZ petrol and diesel render as two weekly UK prices with direct history
     assert.ok(card);
     assert.match(card, /Unleaded petrol/);
     assert.match(card, /174\.57p/);
-    assert.match(card, /Change −0\.71p per litre compared with 12 October 2026/);
+    assert.match(card, /−0\.71p\/litre vs 12 Oct 2026/);
+    assert.match(card, /aria-label="Change −0\.71 pence per litre compared with 12 October 2026"/);
     assert.match(card, /Diesel/);
     assert.match(card, /199\.33p/);
-    assert.match(card, /Change −0\.71p per litre compared with 12 October 2026/);
+    assert.match(card, /−0\.71p\/litre vs 12 Oct 2026/);
     assert.match(card, /href="\/prices#petrol-diesel"/);
     const delayed = renderToStaticMarkup(createElement(App, {
       pathname: "/", initialData: { ...producer, metrics: {

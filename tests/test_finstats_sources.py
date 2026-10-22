@@ -2,6 +2,7 @@
 from datetime import date
 from pathlib import Path
 import hashlib
+import gzip
 import io
 import json
 import zipfile
@@ -20,7 +21,8 @@ CPI_TODAY = date(2026, 10, 21)  # The recorded CPI release is dated 21 October.
 
 
 def fixture(key):
-    return (FIXTURES / fixture_file(key)).read_bytes()
+    body = (FIXTURES / fixture_file(key)).read_bytes()
+    return gzip.decompress(body) if key == 'household_energy' else body
 
 
 def fixture_transport(key):

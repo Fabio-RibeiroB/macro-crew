@@ -44,6 +44,16 @@ def publish(store, when):
                 member.update({'validation_status': 'unavailable', 'latest': None, 'history': []})
             else:
                 payload = json.loads(selected['payload'])
+                if key == 'household_energy':
+                    retained = store.observations(key)
+                    local_date = when.astimezone(ZoneInfo('Europe/London')).date().isoformat()
+                    payload['observations'] = [point for point in retained
+                        if point['reference']['period_status'] == 'effective'
+                        and point['reference']['effective_start'] <= local_date <= point['reference']['effective_end']]
+                    future = [point for point in retained
+                        if point['reference']['period_status'] == 'announced'
+                        and point['reference']['effective_start'] > local_date]
+                    payload['upcoming_period'] = min(future, key=lambda p: p['period']) if future else None
                 local_date = when.astimezone(ZoneInfo('Europe/London')).date().isoformat()
                 next_release = payload['next_release']
                 member.update({
@@ -62,9 +72,11 @@ def publish(store, when):
                     'parser_version': payload['parser_version'],
                     'vintage_ordering': 'source_date_then_first_seen',
                     'snapshot_evidence_kind': selected['evidence_kind'],
-                    'latest': payload['observations'][-1],
+                    'latest': payload['observations'][-1] if payload['observations'] else None,
                     'history': payload['observations'],
                 })
+                if key == 'household_energy':
+                    member['upcoming_period'] = payload['upcoming_period']
                 for field in ('quality_note', 'quality_source_url'):
                     if payload.get(field) is not None:
                         member[field] = payload[field]
