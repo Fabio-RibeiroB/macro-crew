@@ -71,19 +71,17 @@ class _VisibleText(HTMLParser):
         self.parts: list[str] = []
         self.drop_depth = 0
         self.chrome_depth = 0
-        self.scope_depth = 0
+        self.scope_tags: list[str] = []
         self.scopes = 0
         self.in_scope = False
+        self.invalid_scope_nesting = False
 
     def handle_starttag(self, tag, attrs):
         tag = tag.lower()
         if tag in {"main", "article"}:
             self.scopes += 1
-            if not self.in_scope:
-                self.in_scope = True
-                self.scope_depth = 1
-            else:
-                self.scope_depth += 1
+            self.scope_tags.append(tag)
+            self.in_scope = True
         if tag in self._CHROME:
             self.chrome_depth += 1
         if tag in self._DROP:
@@ -93,10 +91,12 @@ class _VisibleText(HTMLParser):
         tag = tag.lower()
         if tag in self._CHROME and self.chrome_depth:
             self.chrome_depth -= 1
-        if tag in {"main", "article"} and self.scope_depth:
-            self.scope_depth -= 1
-            if self.scope_depth == 0:
-                self.in_scope = False
+        if tag in {"main", "article"}:
+            if not self.scope_tags or self.scope_tags[-1] != tag:
+                self.invalid_scope_nesting = True
+            else:
+                self.scope_tags.pop()
+                self.in_scope = bool(self.scope_tags)
         if tag in self._DROP and self.drop_depth:
             self.drop_depth -= 1
 
@@ -120,7 +120,8 @@ def canonical_official_text(value: str | bytes) -> str:
         parser = _VisibleText()
         parser.feed(value)
         parser.close()
-        if parser.scopes != 1:
+        if (parser.scopes != 1 or parser.scope_tags
+                or parser.invalid_scope_nesting):
             raise ValueError("official HTML requires one unambiguous main or article scope")
         parts = parser.parts
     else:

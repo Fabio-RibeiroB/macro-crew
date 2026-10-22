@@ -47,6 +47,13 @@ def test_semantic_text_hash_ignores_html_whitespace_and_noncontent():
     assert canonical_official_text("<main><p>Inflation was 3.6%.</p></main>") != first
     with pytest.raises(ValueError, match="unambiguous"):
         canonical_official_text("<div><p>Unscoped page content</p></div>")
+    for malformed in (
+        "<main><article>Nested scope</article></main>",
+        "<main><p>Unclosed publication scope</p>",
+        "<main><p>Mismatched scope</p></article>",
+    ):
+        with pytest.raises(ValueError, match="unambiguous"):
+            canonical_official_text(malformed)
     assert canonical_official_text("bounded plain text") == "bounded plain text"
 
 
@@ -151,14 +158,17 @@ def test_fixture_release_never_qualifies_as_official():
 
 def test_text_input_requires_a_bounded_qualified_official_path(store):
     store.ingest("gdp", fixture("gdp"), WHEN, evidence_kind="recorded_fixture")
-    with pytest.raises(ValueError, match="qualified official paths"):
-        build_evidence(store, release=RELEASE, metric_keys=["gdp"],
-                       official_text="<main><p>text</p></main>",
-                       text_source_url="https://www.ons.gov.uk/other/unreviewed-path")
     with pytest.raises(ValueError, match="exactly match"):
-        build_evidence(store, release=RELEASE, metric_keys=["gdp"],
+        build_evidence(store, release={**RELEASE, "source_url":
+                                      "https://www.ons.gov.uk/releases/gdp-monthly-estimate-october-2026"},
+                       metric_keys=["gdp"],
                        official_text="<main><p>GDP wording</p></main>",
                        text_source_url="https://www.ons.gov.uk/releases/consumer-price-inflation-october-2026")
+    unqualified_url = "https://www.ons.gov.uk/other/unreviewed-path"
+    with pytest.raises(ValueError, match="qualified official paths"):
+        build_evidence(store, release={**RELEASE, "source_url": unqualified_url},
+                       metric_keys=["gdp"], official_text="<main><p>text</p></main>",
+                       text_source_url=unqualified_url)
     with pytest.raises(ValueError, match="evidence limit"):
         build_evidence(store, release=RELEASE, metric_keys=["gdp"],
                        official_text="x" * 64_001, text_source_url=RELEASE["source_url"])
