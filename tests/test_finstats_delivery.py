@@ -50,6 +50,7 @@ def test_public_delivery_is_readable_official_and_contains_no_private_files(tmp_
         assert receipt['source_csv_url'].startswith('https://assets.publishing.service.gov.uk/media/')
         assert hashlib.sha256((private / 'raw' / f"{receipt['release_page_sha256']}.bin").read_bytes()).hexdigest() == receipt['release_page_sha256']
         assert hashlib.sha256((private / 'raw' / f"{receipt['source_csv_sha256']}.bin").read_bytes()).hexdigest() == receipt['source_csv_sha256']
+
     store = Store(private)
     try:
         for receipt in receipts:
@@ -76,6 +77,108 @@ def test_public_delivery_is_readable_official_and_contains_no_private_files(tmp_
     assert 'release_page_sha256' not in public_text
     assert 'release_page_retrieved_at' not in public_text
     assert not list(public.rglob('*.html'))
+
+
+def test_additive_events_sidecar_is_separate_and_checksummed(tmp_path):
+    private, public = prepared(tmp_path)
+    event = {'id':'ons:/releases/gdp','title':'GDP monthly estimate, UK','date':'2027-01-01',
+             'time':None,'time_precision':'date','status':'scheduled','source':'ons',
+             'source_url':'https://www.ons.gov.uk/releases/gdp','linked_indicators':['uk.gdp.monthly_growth']}
+    (private / 'events.json').write_text(json.dumps({
+        'schema_version':1,'mode':'official','checked_at':'2026-10-22T12:00:00Z',
+        'providers':{'ons':{'status':'ok','qualification':'qualified','retrieved_at':'2026-10-22T12:00:00Z',
+          'source_url':'https://api.beta.ons.gov.uk/v1/search/releases?limit=1000&offset=0&sort=release_date_asc&fromDate=2026-10-22&toDate=2027-10-22',
+          'calendar_url':'https://www.ons.gov.uk/releasecalendar','sha256':'a'*64,
+          'evidence_kind':'official_download','events':[event]}},'attempts':[],'revisions':[]}))
+    deliver(private, public)
+    manifest=json.loads((public/'events-manifest.json').read_text())
+    assert manifest['data_url']==f"event-generations/{manifest['sha256']}.json"
+    payload=(public/manifest['data_url']).read_bytes()
+    assert manifest['sha256']==hashlib.sha256(payload).hexdigest()
+    assert json.loads(payload)['events']==[event]
+    assert not list(public.rglob('*.bin')) and not list(public.rglob('*.sqlite3'))
+
+
+def test_invalid_event_state_does_not_block_metric_activation_or_replace_event_manifest(tmp_path):
+    private, public = prepared(tmp_path)
+    public.mkdir()
+    old_events = b'{"data_url":"event-generations/old.json","sha256":"old"}'
+    (public/'events-manifest.json').write_bytes(old_events)
+    (private/'events.json').write_text(json.dumps({
+        'schema_version':1,'mode':'official','checked_at':'2026-10-22T12:00:00Z',
+        'providers':{'ons':{'status':'ok','qualification':'qualified',
+          'evidence_kind':'official_download','source_url':'https://api.beta.ons.gov.uk/v1/search/releases?limit=1000&offset=0&sort=release_date_asc&fromDate=2026-10-22&toDate=2027-10-22',
+          'calendar_url':'https://www.ons.gov.uk/releasecalendar','events':[{'id':'bad','source':'ons','title':'GDP release',
+          'date':'2027-01-01','time':None,'time_precision':'date','status':'scheduled',
+          'source_url':'https://evil.example/releases/gdp','linked_indicators':['uk.gdp.monthly_growth']}]}}
+    }))
+    failures=[]
+    deliver(private,public,event_failure_sink=failures)
+    assert failures==['event_validation']
+    assert read_public(public)['mode']=='official'
+    assert (public/'events-manifest.json').read_bytes()==old_events
+
+
+def test_event_payload_write_failure_keeps_old_event_manifest_and_publishes_metrics(tmp_path):
+    from unittest.mock import patch
+    import finstats.delivery as delivery
+    private, public = prepared(tmp_path)
+    public.mkdir()
+    old_events = b'previous verified events manifest'
+    (public/'events-manifest.json').write_bytes(old_events)
+    event={'id':'ons:/releases/gdp-release','title':'GDP monthly estimate, UK','date':'2027-01-01',
+           'time':None,'time_precision':'date','status':'scheduled','source':'ons',
+           'source_url':'https://www.ons.gov.uk/releases/gdp-release',
+           'linked_indicators':['uk.gdp.monthly_growth']}
+    (private/'events.json').write_text(json.dumps({
+        'schema_version':1,'mode':'official','checked_at':'2026-10-22T12:00:00Z',
+        'providers':{'ons':{'status':'ok','qualification':'qualified','retrieved_at':'2026-10-22T12:00:00Z',
+          'source_url':'https://api.beta.ons.gov.uk/v1/search/releases?limit=1000&offset=0&sort=release_date_asc&fromDate=2026-10-22&toDate=2027-10-22',
+          'calendar_url':'https://www.ons.gov.uk/releasecalendar','sha256':'a'*64,
+          'evidence_kind':'official_download','events':[event]}}}))
+    original=delivery.atomic_write
+    def broken_event_writer(path,*args,**kwargs):
+        if 'event-generations' in str(path): raise OSError('simulated event payload write failure')
+        return original(path,*args,**kwargs)
+    failures=[]
+    with patch('finstats.delivery.atomic_write',side_effect=broken_event_writer):
+        delivery.deliver(private,public,event_failure_sink=failures)
+    assert failures==['event_publication']
+    assert (public/'events-manifest.json').read_bytes()==old_events
+    assert read_public(public)['mode']=='official'
+
+
+def test_fixture_event_state_is_rejected_without_blocking_metrics(tmp_path):
+    from finstats.events import collect_events
+    private, public = prepared(tmp_path)
+    collect_events(private,clock=lambda:CPI_WHEN,fixtures=FIXTURES)
+    failures=[]
+    deliver(private,public,event_failure_sink=failures)
+    assert failures==['event_validation']
+    assert read_public(public)['mode']=='official'
+    assert not (public/'events-manifest.json').exists()
+
+
+def test_event_generation_pruning_keeps_active_symlinks_and_unexpected_files(tmp_path):
+    import os, time
+    from finstats.events import prune_event_generations
+    directory=tmp_path/'event-generations'; directory.mkdir()
+    active='a'*64; stale='b'*64; linked='c'*64
+    active_path=directory/f'{active}.json'; stale_path=directory/f'{stale}.json'
+    active_path.write_text('active'); stale_path.write_text('stale')
+    old=time.time()-20*86400
+    os.utime(active_path,(old,old)); os.utime(stale_path,(old,old))
+    target=tmp_path/'outside.json'; target.write_text('preserve')
+    (directory/f'{linked}.json').symlink_to(target)
+    unexpected=directory/'notes.txt'; unexpected.write_text('preserve')
+    (tmp_path/'events-manifest.json').write_text(json.dumps({
+        'data_url':f'event-generations/{active}.json','sha256':active}))
+    private=(tmp_path/'events-raw'); private.mkdir(); receipt=private/'receipt.bin'; receipt.write_bytes(b'private')
+    (tmp_path/'events.json').write_text('private receipts remain untouched')
+    prune_event_generations(tmp_path)
+    assert active_path.exists() and not stale_path.exists()
+    assert (directory/f'{linked}.json').is_symlink() and unexpected.exists()
+    assert receipt.read_bytes()==b'private' and (tmp_path/'events.json').exists()
 
 
 @pytest.mark.parametrize('failure', [

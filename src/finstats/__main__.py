@@ -11,6 +11,7 @@ import sqlite3
 import sys
 
 from finstats.publication import publish
+from finstats.events import collect_events
 from finstats.sources import DEFINITIONS, FUEL_SOURCE_URL, fetch, fixture_file, parse_fuel_release_page, recorded_hpi_release_evidence
 from finstats.storage import Store, timestamp, utc_now
 
@@ -29,7 +30,7 @@ def collector_lock(directory):
             fcntl.flock(stream, fcntl.LOCK_UN)
 
 
-def collect(directory, transport=fetch, clock=utc_now, fixtures=None):
+def collect(directory, transport=fetch, clock=utc_now, fixtures=None, event_collector=collect_events):
     failures = []
     shared_downloads = {}
     with collector_lock(Path(directory)):
@@ -110,7 +111,21 @@ def collect(directory, transport=fetch, clock=utc_now, fixtures=None):
                     print(json.dumps({'metric': key, 'status': 'failed',
                                       'error_type': type(exc).__name__}), file=sys.stderr)
             manifest = publish(store, clock())
+            try:
+                event_result = (event_collector(directory, clock=clock)
+                                if fixtures is None and (transport is fetch or event_collector is not collect_events)
+                                else {'failed_sources': []})
+                event_failures = event_result.get('failed_sources', [])
+                unqualified_events = event_result.get('unqualified_sources', [])
+            except Exception as exc:
+                # Event-state damage must not interrupt verified metric publication.
+                event_failures = ['event_state']
+                unqualified_events = []
+                print(json.dumps({'event_status': 'failed',
+                                  'error_type': type(exc).__name__}), file=sys.stderr)
             return {'generation_id': manifest['generation_id'], 'failed_metrics': failures,
+                    'failed_event_sources': event_failures,
+                    'unqualified_event_sources': unqualified_events,
                     'manifest': str(Path(directory) / 'shadow' / 'current.json')}
         finally:
             store.close()
@@ -132,7 +147,8 @@ def main(argv=None):
         print(json.dumps({'status': 'failed', 'error_type': type(exc).__name__}), file=sys.stderr)
         return 1
     print(json.dumps(result))
-    return 1 if result['failed_metrics'] else 0
+    return 1 if (result['failed_metrics'] or result.get('failed_event_sources')
+                 or result.get('unqualified_event_sources')) else 0
 
 
 if __name__ == '__main__':
