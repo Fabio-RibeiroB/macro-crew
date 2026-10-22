@@ -636,6 +636,14 @@ export function freshness(metric, now = new Date()) {
     month: "2-digit",
     day: "2-digit",
   }).format(now);
+  // A successful poll does not prove that a weekly attachment has advanced.
+  // This conservative age warning is a FinStats rule, not an official release date.
+  if (metric.definition.frequency === "weekly") {
+    const overdue = new Date(`${metric.latest.period}T00:00:00Z`);
+    overdue.setUTCDate(overdue.getUTCDate() + 14);
+    if (overdue.toISOString().slice(0, 10) <= today)
+      return { label: "Weekly observation at least two weeks old · showing last verified figure", kind: "warning" };
+  }
   if (metric.next_release_date && metric.next_release_date < today)
     return { label: "New release awaited", kind: "warning" };
   return { label: "Checked against official data", kind: "ok" };

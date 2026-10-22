@@ -97,6 +97,12 @@ test("DESNZ petrol and diesel render as two weekly UK prices with direct history
       if (dieselPresent) assert.match(partialCard, /199\.33p/);
       else assert.doesNotMatch(partialCard, /199\.33p/);
       assert.match(partialCard, /Not available/);
+      const partialPrices = renderToStaticMarkup(createElement(App, {
+        pathname: "/prices", initialData: { ...producer, metrics },
+      }));
+      for (const [label, present, metric] of [["Unleaded petrol", petrolPresent, petrol], ["Diesel", dieselPresent, diesel]]) {
+        assert.ok(partialPrices.includes(`${label}: source release date: ${present ? metric.source_published_date : "not supplied"}; last successful check:`));
+      }
     }
     const { HistoricalTrendCard } = await server.ssrLoadModule("/src/app/components/HistoricalTrendCard.tsx");
     const chart = renderToStaticMarkup(createElement(HistoricalTrendCard, {

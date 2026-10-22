@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   chartPoints,
+  freshness,
   parseDataset,
   parseManifest,
   previousReading,
@@ -58,4 +59,20 @@ test("a missing week remains a chart gap and cannot be compared with an adjacent
   explicitMissing.history.at(-2).value = null;
   explicitMissing.history.at(-2).status = "missing";
   assert.equal(previousReading(explicitMissing), null);
+});
+
+test("fresh polling cannot conceal a weekly observation that stops advancing", () => {
+  const metric = copy(data.metrics.petrol_price);
+  const at = (now) => {
+    metric.last_successful_check_at = now;
+    return freshness(metric, new Date(now));
+  };
+  assert.equal(at("2026-11-01T12:00:00Z").kind, "ok");
+  assert.match(at("2026-11-02T00:00:00Z").label, /at least two weeks old/);
+  assert.equal(at("2026-11-16T12:00:00Z").kind, "warning");
+  metric.latest.period = "2026-11-16";
+  assert.equal(at("2026-11-16T12:00:00Z").kind, "ok");
+  const diesel = copy(data.metrics.diesel_price);
+  diesel.last_successful_check_at = "2026-11-16T12:00:00Z";
+  assert.equal(freshness(diesel, new Date("2026-11-16T12:00:00Z")).kind, "warning");
 });

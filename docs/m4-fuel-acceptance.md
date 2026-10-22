@@ -76,3 +76,12 @@ manifest while preserving immutable generations; restore the previous frontend
 and compatible publisher source; then resume the previous timer. Retain the
 private database, fuel receipts, raw source archive and generated production
 reports. Do not downgrade or delete source history.
+
+## Weekly age warning
+
+A successful source check does not establish that the attachment advanced. The
+reader warns independently for each fuel when its Monday reference is at least
+14 London-calendar days old, even after successful polling. This conservative
+FinStats age threshold allows for routine publication and bank-holiday timing;
+it is not an asserted official next-release date. Prior verified figures remain
+visible. Each fuel also displays its own release date and successful check time.

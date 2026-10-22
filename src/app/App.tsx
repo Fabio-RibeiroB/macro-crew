@@ -548,7 +548,7 @@ function FuelPrices({ data, loading, error, refresh }: any) {
     <details className="fs-details fs-info"><summary>Source and method <ChevronDown size={15} aria-hidden="true" /></summary>
       <p>DESNZ Weekly road fuel prices CSV, 2018 onward. Petrol and diesel are independent pump-price series in pence per litre. Duty and VAT columns are retained in the private source evidence; the published pump prices already include the source's tax treatment and are not recalculated.</p>
       <p>The accompanying workbook describes a sales-weighted UK average from six companies, covering around 60% of market volume using 2022 sales. It specifies Monday morning sampling, or the next working morning on bank holidays. The observation date remains the Monday reference date.</p>
-      <p>Source release date: {petrol?.source_published_date ?? "not supplied"}; last successful check: {checkedAt(petrol?.last_successful_check_at ?? null)}.</p>
+      {[["Unleaded petrol", petrol], ["Diesel", diesel]].map(([label, metric]) => <p key={label}>{label}: source release date: {metric?.source_published_date ?? "not supplied"}; last successful check: {checkedAt(metric?.last_successful_check_at ?? null)}.</p>)}
       <OfficialLink href={petrol?.definition.source_url ?? "https://www.gov.uk/government/statistics/weekly-road-fuel-prices"}>DESNZ weekly road fuel prices and current downloads</OfficialLink>
     </details>
   </Statistics>;
