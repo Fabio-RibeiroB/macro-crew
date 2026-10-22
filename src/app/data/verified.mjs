@@ -117,6 +117,30 @@ export const OPTIONAL_METRICS = {
     source_url: "https://www.ons.gov.uk/economy/governmentpublicsectorandtaxes/publicsectorfinance/timeseries/hf6x/pusf",
     download_url: "https://www.ons.gov.uk/generator?format=csv&uri=%2Feconomy%2Fgovernmentpublicsectorandtaxes%2Fpublicsectorfinance%2Ftimeseries%2Fhf6x%2Fpusf",
   },
+  gilt_5y: {
+    metric_id: "uk.gilt_yield.nominal_par_5y", series: "IUDSNPY", dataset: "IADB",
+    title: "Yield from British Government Securities, 5 year Nominal Par Yield", frequency: "daily", comparison: "previous_trading_day",
+    adjustment: "not_applicable", unit: "percent", version: 1, geography: "United Kingdom",
+    maturity_years: 5, yield_type: "fitted_nominal_par", primary: false,
+    source_url: "https://www.bankofengland.co.uk/boeapps/database/",
+    download_url: "https://www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=04/Jan/2000&Dateto=now&SeriesCodes=IUDSNPY,IUDMNPY,IUDLNPY&CSVF=CN&UsingCodes=Y",
+  },
+  gilt_10y: {
+    metric_id: "uk.gilt_yield.nominal_par_10y", series: "IUDMNPY", dataset: "IADB",
+    title: "Yield from British Government Securities, 10 year Nominal Par Yield", frequency: "daily", comparison: "previous_trading_day",
+    adjustment: "not_applicable", unit: "percent", version: 1, geography: "United Kingdom",
+    maturity_years: 10, yield_type: "fitted_nominal_par", primary: true,
+    source_url: "https://www.bankofengland.co.uk/boeapps/database/",
+    download_url: "https://www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=04/Jan/2000&Dateto=now&SeriesCodes=IUDSNPY,IUDMNPY,IUDLNPY&CSVF=CN&UsingCodes=Y",
+  },
+  gilt_20y: {
+    metric_id: "uk.gilt_yield.nominal_par_20y", series: "IUDLNPY", dataset: "IADB",
+    title: "Yield from British Government Securities, 20 year Nominal Par Yield", frequency: "daily", comparison: "previous_trading_day",
+    adjustment: "not_applicable", unit: "percent", version: 1, geography: "United Kingdom",
+    maturity_years: 20, yield_type: "fitted_nominal_par", primary: false,
+    source_url: "https://www.bankofengland.co.uk/boeapps/database/",
+    download_url: "https://www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=04/Jan/2000&Dateto=now&SeriesCodes=IUDSNPY,IUDMNPY,IUDLNPY&CSVF=CN&UsingCodes=Y",
+  },
   private_rent_growth: {
     metric_id: "uk.private_rent.annual_growth", series: "Annual change",
     dataset: "Price Index of Private Rents, UK: monthly price statistics, Table 1",
@@ -262,8 +286,19 @@ function validateDefinition(definition, spec) {
     definition.download_url !== spec.download_url
   )
     fail("Unexpected optional metric definition");
+  if (spec.yield_type === "fitted_nominal_par" &&
+      Object.keys(definition).sort().join(",") !== [
+        "adjustment", "comparison", "dataset", "download_url", "frequency",
+        "geography", "maturity_years", "metric_id", "primary", "series",
+        "source_url", "title", "unit", "version", "yield_type",
+      ].sort().join(","))
+    fail("Unexpected gilt definition fields");
   if (spec.title !== undefined && definition.title !== spec.title)
     fail("Unexpected optional metric title");
+  for (const field of ["maturity_years", "yield_type", "primary"]) {
+    if (spec[field] !== undefined ? definition[field] !== spec[field] : definition[field] !== undefined)
+      fail("Unexpected optional metric qualification");
+  }
   if (spec.area_code !== undefined && definition.area_code !== spec.area_code)
     fail("Unexpected optional metric geography code");
   if (spec.release_caveat !== undefined && definition.release_caveat !== spec.release_caveat)
@@ -373,6 +408,9 @@ function validateOptionalMetric(metric, spec) {
   metric.history.forEach((point) => {
     validatePoint(point, spec.frequency);
     validateReference(point, spec);
+    if (spec.yield_type === "fitted_nominal_par" &&
+        [0, 6].includes(new Date(`${point.period}T00:00:00Z`).getUTCDay()))
+      fail("Gilt yield observation falls on a weekend");
   });
   if (
     metric.history.some(
@@ -382,6 +420,9 @@ function validateOptionalMetric(metric, spec) {
     fail("History is not ordered and unique");
   validatePoint(metric.latest, spec.frequency);
   validateReference(metric.latest, spec);
+  if (spec.yield_type === "fitted_nominal_par" &&
+      [0, 6].includes(new Date(`${metric.latest.period}T00:00:00Z`).getUTCDay()))
+    fail("Latest gilt yield falls on a weekend");
   const end = metric.history.at(-1);
   if (
     metric.latest.value === null ||

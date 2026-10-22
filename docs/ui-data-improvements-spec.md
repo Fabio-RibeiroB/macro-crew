@@ -5,10 +5,11 @@ Status: **Approved implementation scope, subject to the explicit gates below.**
 Date: 21 October 2026. Revision 3 reconciles the document with the approved scope
 recorded in PR #22 and the owner's instruction in the development oversight thread
 to adopt this workflow and merge the corrected specification.
-The homepage substitutions and Jobs & Pay grouping are approved. The gilt maturity
-and source choice remains unresolved: #38 must record the specific owner decision
-before #37 implements a yield adapter or UI. Source qualification and material-
-movement policies retain their review gates.
+The homepage substitutions and Jobs & Pay grouping are approved. The gilt
+qualification and owner decision are complete: #38 approves the BoE 5/10/20
+daily nominal par family, with 10-year primary and joint history from 4 January
+2000. Issue #37 implements that selection. Material-movement policy review gates
+remain specific to the relevant fuel and future source changes.
 
 This is the canonical product specification, committed to `main` through PR #22.
 It records agreed outcomes and constraints; it is not an outstanding approval gate
@@ -226,17 +227,17 @@ secondary and supporting series needs the same provenance and validation.
   percentage of GDP, ONS HF6X source family. Show month and previous-month
   percentage-point change. Explain the denominator and distinguish debt from
   borrowing/deficit and from net financial liabilities.
-- 10-year Gilt Yield: proposed official series BoE **IUDMNPY**, daily 10-year
-  nominal par yield. This is a fitted yield-curve measure, not necessarily the
-  quoted yield on a specific benchmark bond. Name that distinction in details.
+- Gilt yields: owner-approved BoE daily nominal par family: **IUDSNPY** (5y),
+  **IUDMNPY** (10y, primary), and **IUDLNPY** (20y). Shared history begins
+  4 January 2000. These fitted VRP model yields describe market financing
+  conditions, not benchmark redemption yields or average cost of outstanding debt.
 - Show yield change versus the previous available trading observation, with its
   date, preferably in basis points. Do not invent weekend observations.
-- Government yield maturity coverage is subject to the qualification and owner
-  decision below. Do not label a zero-coupon or forward rate as a par yield.
-  Explain that yields indicate market financing conditions, not the average cost
-  of all outstanding government debt.
+- Use only the approved 5/10/20 nominal par family; do not label a zero-coupon
+  or forward rate as a par yield. Explain that yields indicate market financing
+  conditions, not the average cost of all outstanding government debt.
 
-### Gilt-yield qualification finding and approval gate
+### Gilt-yield qualification and owner decision (approved 22 October 2026)
 
 Checked 21 October 2026: the [BoE instrument catalogue](https://www.bankofengland.co.uk/boeapps/database/CategoryIndex.asp?CategId=6&CategName=INSTRUMENTS&Travel=NIxAZx)
 lists nominal par-yield maturities of 5, 10 and 20 years. Its linked series pages
@@ -251,11 +252,10 @@ The BoE general curve downloads contain other yield concepts and are not evidenc
 that the requested par series exist. Do not synthesise or mix definitions to fill
 those gaps.
 
-**Recommended alternative for explicit owner approval:** Government presents
-**5-, 10- and 20-year nominal par yields**, using the confirmed BoE daily family,
-with 10-year visually primary. This preserves comparable definitions and retains
-shorter/longer maturity context, but changes the requested maturities. Adoption
-requires specific owner approval of this alternative, even if other work proceeds.
+The owner approved Government presentation of **5-, 10- and 20-year nominal par
+yields**, using the confirmed BoE daily family, with 10-year visually primary.
+The joint history starts 4 January 2000. This decision replaces the original
+2/10/30 proposal.
 
 If 2/10/30 remains essential, a separate source-decision task must qualify either
 an official same-definition 2/10/30 curve (accurately named, potentially spot rates)
@@ -592,19 +592,18 @@ history, with official source links, while homepage remains household-focused.
 
 Implementation slices:
 
-1. Resolve gilt source decision: record actual 2/10/30 availability findings and
-   capture reviewed contracts/fixtures for the owner-approved alternative. This
-   is a source/owner gate, not authority to implement an unapproved substitution.
+1. Record the source decision and its evidence in #38. Complete: the owner approved
+   BoE IUDSNPY/IUDMNPY/IUDLNPY at 5/10/20 years, joint history from 4 January
+   2000, with the 10-year maturity primary.
 2. Qualify/add public debt end to end with definition, history, source and event
    linkage; this can proceed independently of the gilt-source decision.
-3. Add the approved yield family end to end with consistent definitions,
-   trading-day comparisons, clear observation dates and source limits.
+3. Implement the approved yield family with consistent definitions, trading-day
+   comparisons, clear observation dates and source limits.
 
-**Acceptance:** debt and yield statistics are present on Government, not discarded
-or reintroduced as homepage clutter. No mixed par/spot/forward comparison. The
-candidate records the specific owner-approved maturity/definition decision and
-passes the shared integration/release gate. An unresolved yield decision is
-reported as incomplete scope rather than accepted as a placeholder.
+**Acceptance:** debt and approved 5/10/20 par-yield statistics are present on
+Government, not discarded or reintroduced as homepage clutter. No mixed
+par/spot/forward comparison. The owner decision is recorded in #38; the
+implementation passes the shared integration/release gate.
 
 ### M7 — Grounded explanations that follow releases
 
@@ -682,15 +681,16 @@ Approved amendments:
    Gilt Yield on the nine-card homepage; retain full supporting Government data.
 2. Combine Wages and Unemployment under Jobs & Pay with distinct direct anchors.
 
-Unresolved decision, not covered by general scope approval: 5/10/20-year nominal
-par yields remain a recommended alternative because the desired 2/10/30 par family
-has not been qualified. Record evidence and specific owner approval in #38 before
-starting yield implementation in #37. Public debt work in #36 is independent.
+The owner approved the BoE 5/10/20-year fitted nominal par family in issue #38 on
+22 October 2026: IUDSNPY, IUDMNPY and IUDLNPY, shared history from 4 January 2000,
+with 10-year primary. Issue #37 implements that decision. It describes market
+financing conditions, not the average cost of outstanding debt. Public debt work
+in #36 is independent.
 
 Release-driven explanations and milestone gates are incorporated as requested.
-Exact fuel/yield material-movement policies and any source-definition changes
+Exact fuel material-movement policies and any future source-definition changes
 remain specific review gates during qualification, not guesses delegated to an
-implementation model. Other milestones can progress without bypassing those gates.
+implementation model. Other milestones can progress independently.
 
 ## 15. Official references recorded during specification
 

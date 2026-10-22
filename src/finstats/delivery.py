@@ -65,8 +65,11 @@ def deliver(state_dir, output_dir, event_failure_sink=None, event_unqualified_si
             approved_host = url.hostname == urlsplit(definition.download_url).hostname
             approved_host |= key.startswith('house_price_') and url.hostname == 'publicdata.landregistry.gov.uk'
             approved_host |= key in {'petrol_price', 'diesel_price'} and url.hostname == 'assets.publishing.service.gov.uk'
+            approved_host |= key.startswith('gilt_') and url.hostname == 'www.bankofengland.co.uk'
             if url.scheme != 'https' or not approved_host:
                 raise ValueError('Unexpected official download URL')
+            if key.startswith('gilt_') and metric['source_download_url'] != definition.download_url:
+                raise ValueError('Unexpected BoE gilt download URL')
             if key.startswith('private_rent_') and not re.fullmatch(
                     r'/file\?uri=(?:%2F|/)economy(?:%2F|/)inflationandpriceindices(?:%2F|/)datasets(?:%2F|/)priceindexofprivaterentsukmonthlypricestatistics(?:%2F|/)[0-9]{1,2}[a-z]+[0-9]{4}(?:%2F|/)priceindexofprivaterentsukmonthlypricestatistics\.xlsx',
                     url.path + ('?' + url.query if url.query else '')):

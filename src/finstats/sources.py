@@ -47,6 +47,8 @@ class Definition:
 
 ONS = 'https://www.ons.gov.uk'
 BOE = 'https://www.bankofengland.co.uk'
+GILT_SERIES = ('IUDSNPY', 'IUDMNPY', 'IUDLNPY')
+GILT_DOWNLOAD_URL = BOE + '/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=04/Jan/2000&Dateto=now&SeriesCodes=' + ','.join(GILT_SERIES) + '&CSVF=CN&UsingCodes=Y'
 UNEMPLOYMENT_QUALITY = {
     'quality_note': "The Labour Force Survey unemployment rate's 95% confidence intervals remain wider than before the pandemic.",
     'quality_source_url': ONS + '/employmentandlabourmarket/peopleinwork/employmentandemployeetypes/articles/labourforcesurveyqualityupdate/october2026',
@@ -144,6 +146,9 @@ DEFINITIONS = {
         ONS + '/economy/governmentpublicsectorandtaxes/publicsectorfinance/timeseries/hf6x/pusf',
         ONS + '/generator?format=csv&uri=%2Feconomy%2Fgovernmentpublicsectorandtaxes%2Fpublicsectorfinance%2Ftimeseries%2Fhf6x%2Fpusf',
         unit='percent'),
+    'gilt_5y': Definition('uk.gilt_yield.nominal_par_5y', 'IUDSNPY', 'IADB', 'Yield from British Government Securities, 5 year Nominal Par Yield', 'daily', 'not_applicable', 'previous_trading_day', BOE + '/boeapps/database/', GILT_DOWNLOAD_URL),
+    'gilt_10y': Definition('uk.gilt_yield.nominal_par_10y', 'IUDMNPY', 'IADB', 'Yield from British Government Securities, 10 year Nominal Par Yield', 'daily', 'not_applicable', 'previous_trading_day', BOE + '/boeapps/database/', GILT_DOWNLOAD_URL),
+    'gilt_20y': Definition('uk.gilt_yield.nominal_par_20y', 'IUDLNPY', 'IADB', 'Yield from British Government Securities, 20 year Nominal Par Yield', 'daily', 'not_applicable', 'previous_trading_day', BOE + '/boeapps/database/', GILT_DOWNLOAD_URL),
 }
 
 # Optional metric members: registered public-definition fields the writer is
@@ -151,6 +156,9 @@ DEFINITIONS = {
 # rejects the generation. Absent members stay absent, never zero.
 OPTIONAL_METRICS = {
     'public_debt': {'geography': 'United Kingdom'},
+    'gilt_5y': {'geography': 'United Kingdom', 'maturity_years': 5, 'yield_type': 'fitted_nominal_par', 'primary': False},
+    'gilt_10y': {'geography': 'United Kingdom', 'maturity_years': 10, 'yield_type': 'fitted_nominal_par', 'primary': True},
+    'gilt_20y': {'geography': 'United Kingdom', 'maturity_years': 20, 'yield_type': 'fitted_nominal_par', 'primary': False},
     'cpi': {'geography': 'United Kingdom'},
     'regular_pay_nominal_growth': {'geography': 'Great Britain', 'window_months': 3},
     'regular_pay_real_growth': {'geography': 'Great Britain', 'window_months': 3, 'deflator': 'CPIH'},
@@ -186,6 +194,8 @@ def fixture_file(key):
         return 'unemployment_mgsx_lms.json'
     if key == 'public_debt':
         return 'public_debt_hf6x_pusf.csv'
+    if key.startswith('gilt_'):
+        return 'boe_nominal_par_yields_5_10_20_daily.csv'
     if key.startswith('private_rent_'):
         return 'pipr_uk_monthly_price_statistics.xlsx'
     if key.startswith('house_price_'):
@@ -669,17 +679,28 @@ def parse(key: str, body: bytes, today: date) -> Snapshot:
             raise ValidationError('Invalid UTF-8 CSV') from exc
         observations = []
         metadata = {}
-        if key == 'bank_rate':
+        if key == 'bank_rate' or key.startswith('gilt_'):
             if not rows or rows[0] != ['DATE', 'SERIES', 'VALUE']:
-                raise ValidationError('Bank Rate CSV header changed')
+                raise ValidationError('Bank Rate CSV header changed' if key == 'bank_rate' else 'BoE daily series CSV header changed')
+            target_series = set(GILT_SERIES) if key.startswith('gilt_') else {definition.series}
+            found_series = set()
             for index, row in enumerate(rows[1:], 2):
                 if not row:
                     continue
-                if len(row) != 3 or row[1] != definition.series:
-                    raise ValidationError('Unexpected Bank Rate series or row')
+                if len(row) != 3 or row[1] not in target_series:
+                    raise ValidationError('Unexpected Bank Rate series or row' if key == 'bank_rate' else 'Unexpected BoE series or row')
+                found_series.add(row[1])
+                if key.startswith('gilt_') and row[1] != definition.series:
+                    continue
                 period = human_date(row[0])
+                if key.startswith('gilt_') and date.fromisoformat(period).weekday() >= 5:
+                    raise ValidationError('BoE gilt observation falls on a weekend')
                 value, status = number(row[2])
                 observations.append(Observation(period, value, status, index))
+            if key.startswith('gilt_') and definition.series not in found_series:
+                raise ValidationError('BoE response is missing the requested series')
+            if key.startswith('gilt_') and (not observations or observations[0].period != '2000-01-04'):
+                raise ValidationError('BoE gilt history does not begin on the approved joint-history date')
             published = next_release = None  # Observation dates are not announcement dates.
         else:
             for index, row in enumerate(rows, 1):
@@ -784,6 +805,16 @@ def recorded_hpi_release_evidence(source_url, source_published_date, retrieved_a
 
 def fetch(key: str) -> bytes:
     """One bounded request. Retry scheduling belongs to the caller, not the parser."""
+    if key.startswith('gilt_'):
+        url = GILT_DOWNLOAD_URL
+        request = Request(url, headers={'User-Agent': 'FinStats/2.0 (+https://github.com/Fabio-RibeiroB/macro-crew)'})
+        with urlopen(request, timeout=30) as response:
+            if response.status != 200 or response.geturl() != url:
+                raise ValidationError('Unexpected BoE gilt yield response')
+            payload = response.read(MAX_BYTES + 1)
+        if len(payload) > MAX_BYTES:
+            raise ValidationError('BoE gilt yield response exceeds size limit')
+        return payload
     if key == 'public_debt':
         url = DEFINITIONS[key].download_url
         request = Request(url, headers={
