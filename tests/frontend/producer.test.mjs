@@ -133,6 +133,7 @@ test("ONS HF6X producer data renders only on Government with adjacent-month pp c
     const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
     const government = renderToStaticMarkup(createElement(App, { pathname: "/government-budget", initialData: producer }));
     assert.match(government, /id="public-debt"/);
+    assert.ok(government.indexOf('id="public-debt"') < government.indexOf("Three things to keep separate"), "debt figures precede Government guide prose");
     assert.match(government, /class="fs-number">94%/);
     assert.match(government, /<span>\+0\.4 percentage points<\/span> compared with August 2026/);
     assert.match(government, /end of September 2026/);

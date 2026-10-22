@@ -1399,8 +1399,8 @@ export default function App({
               What to look for in announcements about taxes, public services and
               the wider outlook.
             </PageHeading>
-            <GovernmentGuide />
             <PublicDebt {...stats} />
+            <GovernmentGuide />
           </>
         )}
         {page.id === "about" && (
