@@ -11,6 +11,7 @@ import sqlite3
 import sys
 
 from finstats.publication import publish
+from finstats.events import collect_events
 from finstats.sources import DEFINITIONS, FUEL_SOURCE_URL, fetch, fixture_file, parse_fuel_release_page, recorded_hpi_release_evidence
 from finstats.storage import Store, timestamp, utc_now
 
@@ -110,7 +111,11 @@ def collect(directory, transport=fetch, clock=utc_now, fixtures=None):
                     print(json.dumps({'metric': key, 'status': 'failed',
                                       'error_type': type(exc).__name__}), file=sys.stderr)
             manifest = publish(store, clock())
+            event_result = (collect_events(directory, clock=clock)
+                            if fixtures is None and transport is fetch
+                            else {'failed_sources': []})
             return {'generation_id': manifest['generation_id'], 'failed_metrics': failures,
+                    'failed_event_sources': event_result['failed_sources'],
                     'manifest': str(Path(directory) / 'shadow' / 'current.json')}
         finally:
             store.close()
@@ -132,7 +137,7 @@ def main(argv=None):
         print(json.dumps({'status': 'failed', 'error_type': type(exc).__name__}), file=sys.stderr)
         return 1
     print(json.dumps(result))
-    return 1 if result['failed_metrics'] else 0
+    return 1 if result['failed_metrics'] or result.get('failed_event_sources') else 0
 
 
 if __name__ == '__main__':

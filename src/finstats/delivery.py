@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 from finstats.__main__ import collect
 from finstats.sources import DEFINITIONS, UNEMPLOYMENT_QUALITY, public_definition
 from finstats.storage import atomic_write, encode
+from finstats.events import public_events
 
 PUBLIC_FIELDS = (
     'collection_status', 'last_attempt_at', 'last_successful_check_at', 'evidence_kind',
@@ -100,6 +101,8 @@ def deliver(state_dir, output_dir):
         public['metrics'][key] = member
     if not verified:
         raise ValueError('No verified series: keep the previously published generation')
+    # Validate event evidence before any manifest is activated.
+    events = public_events(state)
     output.mkdir(parents=True, exist_ok=True, mode=0o755)
     for directory in (output, output / 'generations', output / 'generations' / generation):
         directory.mkdir(exist_ok=True)
@@ -110,6 +113,20 @@ def deliver(state_dir, output_dir):
     public_manifest = {'schema_version': 1, 'generation_id': generation,
                        'published_at': public['published_at'], 'data_url': relative,
                        'sha256': hashlib.sha256(public_body).hexdigest()}
+    # Events use a parallel additive manifest so the strict metric reader and its
+    # checksummed generation contract remain unchanged until the UI adopts v1.
+    if events is not None:
+        event_body = encode(events)
+        event_hash = hashlib.sha256(event_body).hexdigest()
+        event_url = f'event-generations/{event_hash}.json'
+        event_root = output / 'event-generations'
+        event_root.mkdir(exist_ok=True, mode=0o755)
+        event_root.chmod(0o755)
+        atomic_write(event_root / f'{event_hash}.json', event_body, mode=0o644)
+        atomic_write(output / 'events-manifest.json', encode({
+            'schema_version': 1, 'mode': 'official', 'data_url': event_url,
+            'sha256': event_hash,
+        }), mode=0o644)
     atomic_write(output / 'current.json', encode(public_manifest), mode=0o644)
     return public_manifest
 
@@ -150,7 +167,7 @@ def main(argv=None):
         for root in (state / 'shadow', output):
             prune_generations(root)
         print(json.dumps({'generation_id': manifest['generation_id'], 'failed_metrics': result['failed_metrics']}))
-        return 1 if result['failed_metrics'] else 0
+        return 1 if result['failed_metrics'] or result.get('failed_event_sources') else 0
     except Exception as exc:
         # A failed DB/collection/export leaves the previous complete public manifest.
         print(json.dumps({'status': 'failed', 'error_type': type(exc).__name__}), file=sys.stderr)

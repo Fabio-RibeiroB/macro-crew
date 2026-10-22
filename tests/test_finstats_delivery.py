@@ -50,6 +50,7 @@ def test_public_delivery_is_readable_official_and_contains_no_private_files(tmp_
         assert receipt['source_csv_url'].startswith('https://assets.publishing.service.gov.uk/media/')
         assert hashlib.sha256((private / 'raw' / f"{receipt['release_page_sha256']}.bin").read_bytes()).hexdigest() == receipt['release_page_sha256']
         assert hashlib.sha256((private / 'raw' / f"{receipt['source_csv_sha256']}.bin").read_bytes()).hexdigest() == receipt['source_csv_sha256']
+
     store = Store(private)
     try:
         for receipt in receipts:
@@ -76,6 +77,25 @@ def test_public_delivery_is_readable_official_and_contains_no_private_files(tmp_
     assert 'release_page_sha256' not in public_text
     assert 'release_page_retrieved_at' not in public_text
     assert not list(public.rglob('*.html'))
+
+
+def test_additive_events_sidecar_is_separate_and_checksummed(tmp_path):
+    private, public = prepared(tmp_path)
+    event = {'id':'ons:/releases/gdp','title':'GDP release','date':'2027-01-01',
+             'time':None,'time_precision':'date','status':'scheduled','source':'ons',
+             'source_url':'https://www.ons.gov.uk/releases/gdp','linked_indicators':['uk.gdp.monthly_growth']}
+    (private / 'events.json').write_text(json.dumps({
+        'schema_version':1,'mode':'official','checked_at':'2026-10-22T12:00:00Z',
+        'providers':{'ons':{'status':'ok','retrieved_at':'2026-10-22T12:00:00Z',
+          'source_url':'https://www.ons.gov.uk/releasecalendar','sha256':'a'*64,
+          'evidence_kind':'official_download','events':[event]}},'attempts':[],'revisions':[]}))
+    deliver(private, public)
+    manifest=json.loads((public/'events-manifest.json').read_text())
+    assert manifest['data_url']==f"event-generations/{manifest['sha256']}.json"
+    payload=(public/manifest['data_url']).read_bytes()
+    assert manifest['sha256']==hashlib.sha256(payload).hexdigest()
+    assert json.loads(payload)['events']==[event]
+    assert not list(public.rglob('*.bin')) and not list(public.rglob('*.sqlite3'))
 
 
 @pytest.mark.parametrize('failure', [
