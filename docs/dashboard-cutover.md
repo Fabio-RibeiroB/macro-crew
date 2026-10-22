@@ -111,7 +111,7 @@ M1 reader test validates the additive fixture using its three-core contract and
 consumes only `bank_rate`, `cpih` and `gdp`; that test proves M1 compatibility only.
 It does not prove compatibility for every later strict reader. In particular, the
 currently deployed reader at `98226c2` rejects the candidate eleven-feed payload
-with `Unknown metric`, while candidate `8d7e3df` accepts the actual production
+with `Unknown metric`, while candidate `b079cd6` accepts the actual production
 nine-feed payload. See the [M3 rollout qualification](m3-acceptance.md) for the
 official collection and staging evidence.
 
