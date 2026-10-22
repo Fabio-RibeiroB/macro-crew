@@ -2,19 +2,23 @@
 
 **Status:** qualified for the documented reader-first rollout; not deployed.
 Production remains `deploy-2026-10-22.1`. Runtime `b079cd6` added the HPI
-edition-month completeness check. The current qualified runtime is
-`31b15822c699f600738a2d9ddf6d76ad9ae79b69`; the final PR #60 head contains this
-runtime and the following documentation correction. This remains rollout
-qualification, not deployment.
+edition-month completeness check. Runtime `31b1582` retained release-page
+provenance. The current qualified runtime is
+`2905a76ce057cd7d746d5b6ae3527250ff5643f1`, including the evidence-kind guard.
+The final PR #60 head contains this runtime and this documentation update. This
+remains rollout qualification, not deployment.
 
 ## Compatibility and collection evidence
 
-- A fresh official collect-and-deliver at runtime `31b1582`, against a new
-  isolated copy of the temporary production database, collected all 11 feeds
-  with no failures. All 11 public members were verified and `ok`; generation
-  `78727b47ea5848559b6c30a973b038e9` was delivered successfully. The preserved
-  database copy was not modified. No production files, services, timers or
-  databases were changed.
+- The fresh official collect-and-deliver at runtime `31b1582` verified all 11
+  feeds (generation `78727b47ea5848559b6c30a973b038e9`). To qualify runtime
+  `2905a76`, the archived full CSV and release-page bytes from that run were
+  replayed without network access into a separate copy of its isolated state.
+  Both HPI attempts were accepted with matching URL/date/hash-bound receipts;
+  all 11 delivered metrics remained verified, no collection failed, and all
+  existing snapshots were retained. Replay generation:
+  `0a16463dcc9043c7b50fc6c7378af8f1`. The source copy and production state were
+  not modified.
 - The accepted HPI attempts retain the exact CSV and GOV.UK release page in the
   private content-addressed `raw/<sha256>.bin` archive. Each
   `receipts/<attempt_id>.json` sidecar binds the metric key, CSV URL/hash, release
@@ -36,14 +40,14 @@ qualification, not deployment.
 
 ## Build and staging evidence
 
-- Checks for runtime `31b1582`: 126 focused source/storage/publication/delivery
-  tests and the full dependency-light core suite (185 tests) passed. The
+- Runtime `2905a76` passed the full dependency-light core suite (188 tests),
+  including the focused evidence-kind regressions. The
   frontend suite (159 tests), build and browser evidence remain from `8d7e3df`;
   frontend release inputs are unchanged. CI will run all four required checks
   for the final PR head; no final-head CI result is claimed here.
 - Frontend build/browser evidence was collected at `8d7e3df`, using the clean
   external release `/tmp/finstats-m3-8d7e3df/release` staged at `127.0.0.1:8179`.
-  A Git comparison from that revision to `31b1582` shows no changes to `src/app`,
+  A Git comparison from that revision to `2905a76` shows no changes to `src/app`,
   `src/styles`, `public`, build scripts/configuration or npm manifests/lockfile.
   That unchanged frontend artifact is reused; it is not claimed to be rebuilt
   from the later collector revision. The collector is qualified separately below.
