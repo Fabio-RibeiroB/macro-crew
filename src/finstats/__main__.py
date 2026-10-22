@@ -11,8 +11,8 @@ import sqlite3
 import sys
 
 from finstats.publication import publish
-from finstats.sources import DEFINITIONS, fetch, fixture_file
-from finstats.storage import Store, utc_now
+from finstats.sources import DEFINITIONS, fetch, fixture_file, recorded_hpi_release_evidence
+from finstats.storage import Store, timestamp, utc_now
 
 
 @contextmanager
@@ -38,11 +38,20 @@ def collect(directory, transport=fetch, clock=utc_now, fixtures=None):
             for key in DEFINITIONS:
                 body = None
                 when = clock()
+                release_page_evidence = None
                 try:
                     if fixtures:
                         body = (Path(fixtures) / fixture_file(key)).read_bytes()
                         kind = 'recorded_fixture'
                         url = f'fixture:{fixture_file(key)}'
+                        source_published_date = None
+                        if key.startswith('house_price_'):
+                            receipt = json.loads((Path(fixtures) / 'receipts.json').read_text()).get(fixture_file(key), {})
+                            source_published_date = receipt.get('source_published_date')
+                            url = receipt.get('originalURL', url)
+                            if source_published_date:
+                                release_page_evidence = recorded_hpi_release_evidence(
+                                    url, source_published_date, timestamp(when))
                     else:
                         if transport is fetch and key.startswith('private_rent_'):
                             fetched = shared_downloads.get('pipr')
@@ -55,15 +64,31 @@ def collect(directory, transport=fetch, clock=utc_now, fixtures=None):
                                     shared_downloads['pipr'] = exc
                                     raise
                                 shared_downloads['pipr'] = fetched
+                        elif transport is fetch and key.startswith('house_price_'):
+                            fetched = shared_downloads.get('hpi')
+                            if isinstance(fetched, Exception):
+                                raise fetched
+                            if fetched is None:
+                                try:
+                                    fetched = transport(key)
+                                except (ValueError, OSError, HTTPException, sqlite3.Error) as exc:
+                                    shared_downloads['hpi'] = exc
+                                    raise
+                                shared_downloads['hpi'] = fetched
                         else:
                             fetched = transport(key)
                         if isinstance(fetched, tuple):
-                            body, url = fetched
+                            body, url, *metadata = fetched
+                            source_published_date = metadata[0] if metadata else None
+                            release_page_evidence = metadata[1] if len(metadata) > 1 else None
                         else:
                             body, url = fetched, DEFINITIONS[key].download_url
+                            source_published_date = None
                         kind = 'official_download'
                     when = clock()
-                    store.ingest(key, body, when, source_url=url, evidence_kind=kind)
+                    store.ingest(key, body, when, source_url=url, evidence_kind=kind,
+                                 source_published_date=source_published_date,
+                                 release_page_evidence=release_page_evidence)
                 except (ValueError, OSError, HTTPException, sqlite3.Error) as exc:
                     failures.append(key)
                     if isinstance(exc, sqlite3.Error):

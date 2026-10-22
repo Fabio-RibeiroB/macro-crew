@@ -2,20 +2,22 @@ import hashlib
 import json
 from pathlib import Path
 import stat
+from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 from finstats.__main__ import collect
 from finstats.delivery import deliver, main
-from finstats.storage import atomic_write
+from finstats.storage import Store, atomic_write
+from finstats.sources import parse_hpi_release_page
 from tests.test_finstats_sources import FIXTURES, fixture, fixture_transport
 from tests.test_finstats_storage import CPI_WHEN, WHEN
 
 
 def prepared(tmp_path):
     private, public = tmp_path / 'private', tmp_path / 'public'
-    collect(private, transport=fixture_transport, clock=lambda: WHEN)
+    collect(private, transport=fixture_transport, clock=lambda: CPI_WHEN)
     return private, public
 
 
@@ -39,6 +41,104 @@ def test_public_delivery_is_readable_official_and_contains_no_private_files(tmp_
     assert 'source_row' not in json.dumps(data)
     assert 'raw/' not in json.dumps(data)
     assert str(private) not in json.dumps(data)
+    receipts = [json.loads(path.read_text()) for path in (private / 'receipts').glob('*.json')]
+    assert len(receipts) == 2
+    store = Store(private)
+    try:
+        for receipt in receipts:
+            assert receipt['release_page_evidence_kind'] == 'official_download'
+            page = (private / 'raw' / f"{receipt['release_page_sha256']}.bin").read_bytes()
+            csv = (private / 'raw' / f"{receipt['source_csv_sha256']}.bin").read_bytes()
+            assert hashlib.sha256(page).hexdigest() == receipt['release_page_sha256']
+            assert hashlib.sha256(csv).hexdigest() == receipt['source_csv_sha256']
+            assert parse_hpi_release_page(page) == (
+                receipt['parsed_published_date'], receipt['parsed_csv_url'])
+            assert receipt['parsed_published_date'] == receipt['source_published_date']
+            assert receipt['parsed_csv_url'] == receipt['source_csv_url']
+            attempt = store.db.execute(
+                'SELECT status,source_url,raw_hash FROM attempt WHERE id=?',
+                (receipt['attempt_id'],),
+            ).fetchone()
+            assert tuple(attempt) == ('accepted', receipt['source_csv_url'], receipt['source_csv_sha256'])
+            assert store.db.execute(
+                'SELECT 1 FROM receipt WHERE attempt_id=?', (receipt['attempt_id'],),
+            ).fetchone()
+    finally:
+        store.close()
+    public_text = json.dumps(data)
+    assert 'release_page_sha256' not in public_text
+    assert 'release_page_retrieved_at' not in public_text
+    assert not list(public.rglob('*.html'))
+
+
+@pytest.mark.parametrize('failure', [
+    'date_mismatch', 'link_mismatch', 'missing_page', 'page_archive', 'receipt_archive',
+])
+def test_hpi_release_evidence_failures_reject_only_hpi_and_publish_other_metrics(tmp_path, failure):
+    private, public = tmp_path / 'private', tmp_path / 'public'
+    collect(private, transport=fixture_transport, clock=lambda: CPI_WHEN)
+    deliver(private, public)
+    before_store = Store(private)
+    try:
+        before = {key: before_store.latest(key)['id']
+                  for key in ('house_price_level', 'house_price_growth')}
+    finally:
+        before_store.close()
+
+    hpi_values = fixture_transport('house_price_level')
+    page_body = hpi_values[3]['body'] + (b' ' if failure == 'page_archive' else b'')
+
+    def transport(key):
+        values = fixture_transport(key)
+        if not key.startswith('house_price_'):
+            return values
+        body, url, published, page = values
+        page = dict(page)
+        if failure == 'date_mismatch':
+            published = '2026-10-20'
+        elif failure == 'link_mismatch':
+            url += '&unlisted=1'
+        elif failure == 'missing_page':
+            page = None
+        elif failure == 'page_archive':
+            page['body'] = page_body
+        return body, url, published, page
+
+    if failure in ('page_archive', 'receipt_archive'):
+        page_hash = hashlib.sha256(page_body).hexdigest()
+        original = atomic_write
+
+        def fail_page_archive(path, body, **kwargs):
+            if failure == 'page_archive' and path.parent.name == 'raw' and path.name == page_hash + '.bin':
+                raise OSError('private page archive unavailable')
+            if failure == 'receipt_archive' and path.parent.name == 'receipts':
+                raise OSError('private page archive unavailable')
+            return original(path, body, **kwargs)
+
+        with patch('finstats.storage.atomic_write', side_effect=fail_page_archive):
+            result = collect(private, transport=transport, clock=lambda: CPI_WHEN + timedelta(days=1))
+    else:
+        result = collect(private, transport=transport, clock=lambda: CPI_WHEN + timedelta(days=1))
+
+    assert result['failed_metrics'] == ['house_price_level', 'house_price_growth']
+    after_store = Store(private)
+    try:
+        for key, snapshot_id in before.items():
+            assert after_store.latest(key)['id'] == snapshot_id
+            status = after_store.db.execute(
+                'SELECT status FROM attempt WHERE key=? ORDER BY id DESC LIMIT 1', (key,),
+            ).fetchone()['status']
+            assert status == 'rejected'
+    finally:
+        after_store.close()
+    deliver(private, public)
+    data = read_public(public)
+    assert all(data['metrics'][key]['collection_status'] == 'degraded'
+               for key in before)
+    assert all(data['metrics'][key]['latest']['value'] is not None for key in before)
+    assert all(data['metrics'][key]['collection_status'] == 'ok'
+               for key in data['metrics'] if key not in before)
+    assert 'release_page_sha256' not in json.dumps(data)
 
 
 def test_delivery_publishes_cpi_headline_with_core_metrics_retained(tmp_path):
@@ -49,7 +149,8 @@ def test_delivery_publishes_cpi_headline_with_core_metrics_retained(tmp_path):
     assert set(data['metrics']) == {
         'bank_rate', 'cpih', 'gdp', 'cpi',
         'regular_pay_nominal_growth', 'regular_pay_real_growth', 'unemployment',
-        'private_rent_growth', 'private_rent_level'}
+        'private_rent_growth', 'private_rent_level',
+        'house_price_level', 'house_price_growth'}
     cpi = data['metrics']['cpi']
     assert cpi['validation_status'] == 'verified'
     assert cpi['snapshot_evidence_kind'] == 'official_download'
@@ -89,12 +190,30 @@ def test_delivery_publishes_cpi_headline_with_core_metrics_retained(tmp_path):
     assert level['definition']['unit'] == 'GBP_per_month'
     assert growth['latest']['period'] == level['latest']['period'] == '2026-09'
     assert level['latest']['value'] == '1406'
+    house_level = data['metrics']['house_price_level']
+    house_growth = data['metrics']['house_price_growth']
+    assert house_level['definition']['geography'] == 'United Kingdom'
+    assert house_level['definition']['area_code'] == 'K02000001'
+    assert house_level['definition']['unit'] == 'GBP'
+    assert house_growth['definition']['unit'] == 'percent'
+    assert house_level['latest']['period'] == house_growth['latest']['period'] == '2026-08'
+    assert house_level['latest']['value'] == '273037'
+    assert house_growth['latest']['value'] == '0.9'
+    assert house_level['source_published_date'] == '2026-10-21'
 
 
 def test_checked_in_producer_generation_regenerates_byte_identically(tmp_path):
     private, public = tmp_path / 'private', tmp_path / 'public'
+    calls = 0
+    def producer_clock():
+        nonlocal calls
+        calls += 1
+        # Keep the nine established source timestamps byte-identical. The
+        # retained release page was captured the following day, so only the two
+        # HPI ingests and final publication use that later controlled time.
+        return CPI_WHEN - timedelta(days=1) if calls <= 18 else CPI_WHEN
     with patch('finstats.publication.uuid4', return_value=SimpleNamespace(hex='c' * 32)):
-        collect(private, transport=fixture_transport, clock=lambda: CPI_WHEN)
+        collect(private, transport=fixture_transport, clock=producer_clock)
         deliver(private, public)
     wire = Path(__file__).parent / 'fixtures' / 'verified'
     manifest = json.loads((public / 'current.json').read_text())
@@ -104,7 +223,12 @@ def test_checked_in_producer_generation_regenerates_byte_identically(tmp_path):
     candidate = json.loads((wire / 'producer-pay-v1.json').read_bytes())
     previous = json.loads((wire / 'producer-cpi-v1.json').read_bytes())
     for key in ('bank_rate', 'cpih', 'gdp', 'cpi'):
-        assert candidate['metrics'][key] == previous['metrics'][key]
+        current_core = dict(candidate['metrics'][key])
+        previous_core = dict(previous['metrics'][key])
+        # This field depends on the publication clock, unlike core source data.
+        current_core.pop('release_status', None)
+        previous_core.pop('release_status', None)
+        assert current_core == previous_core
 
 
 def test_shared_wire_fixtures_keep_m1_core_identical_and_add_optional_members():
@@ -135,6 +259,38 @@ def test_fixture_replay_cannot_be_published_as_official(tmp_path):
     with pytest.raises(ValueError, match='fixtures'):
         deliver(private, public)
     assert not (public / 'current.json').exists()
+
+
+def test_mocked_collection_cannot_publish_hpi_backed_by_recorded_page(tmp_path):
+    from finstats.sources import recorded_hpi_release_evidence
+
+    private, public = tmp_path / 'private', tmp_path / 'public'
+    def transport(key):
+        values = fixture_transport(key)
+        if key.startswith('house_price_'):
+            body, url, published, _ = values
+            return (body, url, published,
+                    recorded_hpi_release_evidence(url, published, '2026-10-21T23:06:23Z'))
+        return values
+
+    result = collect(private, transport=transport, clock=lambda: CPI_WHEN)
+    assert result['failed_metrics'] == ['house_price_level', 'house_price_growth']
+    store = Store(private)
+    try:
+        for key in ('house_price_level', 'house_price_growth'):
+            assert store.latest(key) is None
+            assert store.db.execute(
+                "SELECT status FROM attempt WHERE key=? ORDER BY id DESC LIMIT 1", (key,),
+            ).fetchone()[0] == 'rejected'
+    finally:
+        store.close()
+    deliver(private, public)
+    data = read_public(public)
+    for key in ('house_price_level', 'house_price_growth'):
+        assert data['metrics'][key]['validation_status'] == 'unavailable'
+        assert data['metrics'][key]['latest'] is None
+        assert data['metrics'][key]['history'] == []
+    assert data['metrics']['gdp']['latest']['value'] is not None
 
 
 def test_invalid_source_hash_or_path_never_replaces_public_manifest(tmp_path):

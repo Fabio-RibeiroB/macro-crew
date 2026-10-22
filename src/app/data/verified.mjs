@@ -125,6 +125,22 @@ export const OPTIONAL_METRICS = {
     source_url: "https://www.ons.gov.uk/economy/inflationandpriceindices/datasets/priceindexofprivaterentsukmonthlypricestatistics",
     download_url: "https://www.ons.gov.uk/economy/inflationandpriceindices/datasets/priceindexofprivaterentsukmonthlypricestatistics",
   },
+  house_price_level: {
+    metric_id: "uk.house_price.average_level", series: "Average_Price", dataset: "UK House Price Index: Average price",
+    title: "Average house price", frequency: "monthly", comparison: "level", adjustment: "not_seasonally_adjusted",
+    unit: "GBP", version: 1, geography: "United Kingdom", area_code: "K02000001",
+    release_caveat: "Recent observations provisional and subject to revision",
+    source_url: "https://www.gov.uk/government/collections/uk-house-price-index-reports",
+    download_url: "https://www.gov.uk/government/statistical-data-sets/uk-house-price-index-data-downloads", house_price_download: true,
+  },
+  house_price_growth: {
+    metric_id: "uk.house_price.annual_change", series: "Annual_Change", dataset: "UK House Price Index: Average price",
+    title: "Annual change in average house price", frequency: "monthly", comparison: "year_on_year", adjustment: "not_seasonally_adjusted",
+    unit: "percent", version: 1, geography: "United Kingdom", area_code: "K02000001",
+    release_caveat: "Recent observations provisional and subject to revision",
+    source_url: "https://www.gov.uk/government/collections/uk-house-price-index-reports",
+    download_url: "https://www.gov.uk/government/statistical-data-sets/uk-house-price-index-data-downloads", house_price_download: true,
+  },
 };
 const fail = (message) => {
   throw new Error(message);
@@ -151,7 +167,7 @@ export function officialUrl(value) {
       url.protocol === "https:" &&
       !url.username &&
       !url.password &&
-      ["www.ons.gov.uk", "www.bankofengland.co.uk"].includes(url.hostname)
+      ["www.ons.gov.uk", "www.bankofengland.co.uk", "www.gov.uk", "publicdata.landregistry.gov.uk"].includes(url.hostname)
     );
   } catch {
     return false;
@@ -216,6 +232,8 @@ function validateDefinition(definition, spec) {
     fail("Unexpected optional metric geography code");
   if (spec.release_caveat !== undefined && definition.release_caveat !== spec.release_caveat)
     fail("Unexpected optional metric release caveat");
+  if (spec.house_price_download !== undefined && definition.house_price_download !== spec.house_price_download)
+    fail("Unexpected UK HPI source qualification");
   if (spec.window_months !== undefined) {
     if (definition.window_months !== spec.window_months)
       fail("Unexpected optional metric window");
@@ -279,6 +297,7 @@ function validateOptionalMetric(metric, spec) {
     metric.snapshot_evidence_kind !== "official_download" ||
     !(spec.table_download
       ? piprDownloadUrl(metric.source_download_url)
+      : spec.house_price_download ? hpiDownloadUrl(metric.source_download_url)
       : metric.source_download_url === spec.download_url) ||
     !/^[a-f0-9]{64}$/.test(metric.source_sha256) ||
     !instant(metric.retrieved_at)
@@ -322,6 +341,13 @@ function piprDownloadUrl(value) {
     return url.protocol === "https:" && url.hostname === "www.ons.gov.uk" &&
       /^\/file$/.test(url.pathname) &&
       /^uri=(?:%2F|\/)economy(?:%2F|\/)inflationandpriceindices(?:%2F|\/)datasets(?:%2F|\/)priceindexofprivaterentsukmonthlypricestatistics(?:%2F|\/)[0-9]{1,2}[a-z]+[0-9]{4}(?:%2F|\/)priceindexofprivaterentsukmonthlypricestatistics\.xlsx$/.test(url.search.slice(1));
+  } catch { return false; }
+}
+function hpiDownloadUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === "publicdata.landregistry.gov.uk" &&
+      /^\/market-trend-data\/house-price-index-data\/Average-prices-[0-9]{4}-[0-9]{2}\.csv$/.test(url.pathname);
   } catch { return false; }
 }
 export function parseDataset(value, manifest) {

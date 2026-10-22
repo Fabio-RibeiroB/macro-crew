@@ -41,7 +41,7 @@ test("producer output passes the manifest checksum and the full reader contract"
   const data = await loadVerified("/", fileFetcher(bytes));
   assert.deepEqual(
     Object.keys(data.metrics).sort(),
-    ["bank_rate", "cpi", "cpih", "gdp", "private_rent_growth", "private_rent_level", "regular_pay_nominal_growth", "regular_pay_real_growth", "unemployment"],
+    ["bank_rate", "cpi", "cpih", "gdp", "house_price_growth", "house_price_level", "private_rent_growth", "private_rent_level", "regular_pay_nominal_growth", "regular_pay_real_growth", "unemployment"],
   );
 });
 
@@ -52,7 +52,7 @@ test("producer pay-v1 output remains accepted by the deployed M1 reader", () => 
   );
   assert.deepEqual(Object.keys(deployedView.metrics).sort(), [
     "bank_rate", "cpi", "cpih", "gdp",
-    "private_rent_growth", "private_rent_level",
+    "house_price_growth", "house_price_level", "private_rent_growth", "private_rent_level",
     "regular_pay_nominal_growth", "regular_pay_real_growth", "unemployment",
   ]);
   assert.equal(deployedView.metrics.bank_rate.latest.value, "3.75");
@@ -124,6 +124,93 @@ test("producer PIPR data preserves UK geography, workbook identity and distinct 
   assert.equal(growth.definition.release_caveat, "UK latest two months provisional; Northern Ireland latest two months imputed");
   assert.deepEqual(chartPoints(growth).slice(-2).map((point) => point.value), [3.8, 3.8]);
   assert.equal(chartPoints(level).at(-1).value, 1406);
+});
+
+test("producer UK HPI output carries release, reference, geography and independent chart units", async () => {
+  const data = await loadVerified("/", fileFetcher(bytes));
+  const level = data.metrics.house_price_level;
+  const growth = data.metrics.house_price_growth;
+  assert.equal(level.latest.period, "2026-08");
+  assert.equal(level.latest.value, "273037");
+  assert.equal(growth.latest.period, level.latest.period);
+  assert.equal(growth.latest.value, "0.9");
+  assert.equal(level.source_published_date, "2026-10-21");
+  assert.equal(growth.source_download_url, level.source_download_url);
+  assert.equal(level.definition.geography, "United Kingdom");
+  assert.equal(level.definition.area_code, "K02000001");
+  assert.equal(level.definition.unit, "GBP");
+  assert.equal(growth.definition.unit, "percent");
+  assert.equal(level.history.length, growth.history.length);
+  assert.ok(level.history.length >= 60);
+});
+
+test("Housing renders a national house-price card and separate pounds and percentage charts", async () => {
+  const { createServer } = await import("vite");
+  const { createElement } = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+  try {
+    const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
+    const producer = await loadVerified("/", fileFetcher(bytes));
+    const html = renderToStaticMarkup(createElement(App, { pathname: "/housing", initialData: producer }));
+    assert.match(html, /id="house-prices"/);
+    assert.match(html, /House prices/);
+    assert.match(html, /£273,037/);
+    assert.match(html, /Annual change in average house prices/);
+    assert.match(html, /class="fs-number">0\.9%/);
+    assert.match(html, /Source release date: 2026-10-21/);
+    assert.equal((html.match(/class="fs-number">£273,037/g) || []).length, 1);
+    assert.doesNotMatch(html, /Annual change: 0\.9%/);
+    assert.doesNotMatch(html, /percentage points compared with July 2026/);
+    assert.match(html, /Recent observations are provisional and subject to revision/);
+    const home = renderToStaticMarkup(createElement(App, { pathname: "/", initialData: producer }));
+    const visibleCards = [...home.matchAll(/<article class="fs-stat fs-stat-compact\b[\s\S]*?<\/article>/g)]
+      .map(([card]) => card.replace(/<details\b[^>]*>[\s\S]*?<\/details>/g, ""));
+    const houseCard = visibleCards.find((card) => card.includes("<h2>House prices</h2>"));
+    assert.ok(houseCard, "the house-price homepage card is present");
+    assert.match(houseCard, /Annual change: 0\.9% for August 2026/);
+    assert.doesNotMatch(houseCard, /<details/);
+    const rentCard = visibleCards.find((card) => card.includes("<h2>Rent</h2>"));
+    assert.match(rentCard, /Average monthly rent: £1,406 in September 2026/);
+    assert.match(rentCard, /<span>Unchanged<\/span> compared with August 2026/);
+    const delayedGrowth = { ...producer.metrics.house_price_growth, collection_status: "degraded" };
+    const missingLevelHome = renderToStaticMarkup(createElement(App, {
+      pathname: "/",
+      initialData: { ...producer, metrics: { ...producer.metrics, house_price_level: null, house_price_growth: delayedGrowth } },
+    }));
+    const missingLevelCard = [...missingLevelHome.matchAll(/<article class="fs-stat fs-stat-compact\b[\s\S]*?<\/article>/g)]
+      .map(([card]) => card.replace(/<details\b[^>]*>[\s\S]*?<\/details>/g, ""))
+      .find((card) => card.includes("<h2>House prices</h2>"));
+    assert.match(missingLevelCard, /Not available/);
+    assert.match(missingLevelCard, /Annual change: 0\.9% for August 2026 · update delayed; last verified figure shown/);
+    const { HistoricalTrendCard } = await server.ssrLoadModule("/src/app/components/HistoricalTrendCard.tsx");
+    const pounds = renderToStaticMarkup(createElement(HistoricalTrendCard, {
+      title: "Average house price", label: "Average house price", unit: "£",
+      unitDescription: "pounds",
+      data: chartPoints(producer.metrics.house_price_level).slice(-2),
+    }));
+    const percentChart = renderToStaticMarkup(createElement(HistoricalTrendCard, {
+      title: "Annual change", label: "Annual change", unit: "%",
+      data: chartPoints(producer.metrics.house_price_growth).slice(-2),
+    }));
+    assert.match(pounds, /Exact values in pounds\./);
+    assert.doesNotMatch(pounds, /Exact values in pounds per month/);
+    assert.match(percentChart, /Exact values in percent/);
+    assert.doesNotMatch(pounds, /0\.9%/);
+    assert.doesNotMatch(percentChart, /£273,037/);
+
+    const levelUnavailable = { ...producer.metrics.house_price_level, latest: null, history: [], collection_status: "unavailable" };
+    const growthDelayed = { ...producer.metrics.house_price_growth, collection_status: "degraded" };
+    const partial = renderToStaticMarkup(createElement(App, {
+      pathname: "/housing",
+      initialData: { ...producer, metrics: { ...producer.metrics, house_price_level: levelUnavailable, house_price_growth: growthDelayed } },
+    }));
+    assert.match(partial, /House prices/);
+    assert.match(partial, /class="fs-number">Not available/);
+    assert.match(partial, /class="fs-number">0\.9%/);
+    assert.match(partial, /Source release date: 2026-10-21/);
+    assert.match(partial, /delayed/i);
+  } finally { await server.close(); }
 });
 
 test("Housing renders real producer rent values and keeps growth visible through level failures", async () => {

@@ -1,7 +1,7 @@
 """Append-only evidence and source vintages. No dependency on AI or public JSON."""
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from decimal import Decimal
 import hashlib
@@ -12,7 +12,10 @@ from pathlib import Path
 import sqlite3
 import tempfile
 
-from finstats.sources import DEFINITIONS, ValidationError, parse, public_definition
+from finstats.sources import (
+    DEFINITIONS, MAX_SOURCE_PAGE_BYTES, ValidationError, parse,
+    parse_hpi_release_page, public_definition,
+)
 
 
 def utc_now():
@@ -132,6 +135,26 @@ class Store:
     def close(self):
         self.db.close()
 
+    def _archive_raw(self, body):
+        digest = hashlib.sha256(body).hexdigest()
+        raw_path = self.directory / 'raw' / (digest + '.bin')
+        if not raw_path.exists():
+            atomic_write(raw_path, body)
+        elif hashlib.sha256(raw_path.read_bytes()).hexdigest() != digest:
+            raise OSError('Archived source evidence failed integrity check')
+        return digest
+
+    def _write_hpi_evidence_receipt(self, attempt_id, receipt):
+        path = self.directory / 'receipts' / f'{attempt_id}.json'
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        path.parent.chmod(0o700)
+        body = encode(receipt)
+        if path.exists():
+            if path.read_bytes() != body:
+                raise OSError('HPI source receipt is immutable')
+            return
+        atomic_write(path, body)
+
     def failed(self, key, when, error, source_url=None, evidence_kind='official_download'):
         with self.db:
             self.db.execute('''INSERT INTO attempt
@@ -149,14 +172,10 @@ class Store:
             WHERE s.key=?''' + cutoff + ' ORDER BY s.vintage DESC,a.id DESC LIMIT 1', params).fetchone()
         return dict(row) if row else None
 
-    def ingest(self, key, body, when, source_url=None, evidence_kind='official_download'):
+    def ingest(self, key, body, when, source_url=None, evidence_kind='official_download',
+               source_published_date=None, release_page_evidence=None):
         collected = timestamp(when)
-        digest = hashlib.sha256(body).hexdigest()
-        raw_path = self.directory / 'raw' / (digest + '.bin')
-        if not raw_path.exists():
-            atomic_write(raw_path, body)
-        elif hashlib.sha256(raw_path.read_bytes()).hexdigest() != digest:
-            raise OSError('Archived source evidence failed integrity check')
+        digest = self._archive_raw(body)
         with self.db:
             cursor = self.db.execute('''INSERT INTO attempt
                 (key,collected_at,source_url,evidence_kind,raw_hash,status)
@@ -165,6 +184,79 @@ class Store:
             attempt_id = cursor.lastrowid
         try:
             candidate = parse(key, body, when.astimezone(timezone.utc).date())
+            if key.startswith('house_price_'):
+                if source_published_date is None:
+                    raise ValidationError('UK HPI release date missing from source receipt')
+                try:
+                    datetime.strptime(source_published_date, '%Y-%m-%d')
+                except (TypeError, ValueError) as exc:
+                    raise ValidationError('Invalid UK HPI release date') from exc
+                if source_published_date > when.date().isoformat():
+                    raise ValidationError('Future UK HPI release date')
+                release_month = source_published_date[:7]
+                edition = re.search(r'/Average-prices-(\d{4}-\d{2})\.csv(?:\?|$)', source_url or '')
+                if not edition:
+                    raise ValidationError('UK HPI source URL is not a dated Average price CSV edition')
+                latest_period = max(item.period for item in candidate.observations)
+                if latest_period > release_month or latest_period > edition.group(1):
+                    raise ValidationError('UK HPI reference period is later than its source release')
+                if latest_period != edition.group(1):
+                    raise ValidationError('UK HPI latest reference period does not match its source URL edition')
+                if not isinstance(release_page_evidence, dict):
+                    raise ValidationError('UK HPI release page evidence missing from source receipt')
+                page_body = release_page_evidence.get('body')
+                page_url = release_page_evidence.get('url')
+                retrieved_at = release_page_evidence.get('retrieved_at')
+                page_kind = release_page_evidence.get('evidence_kind')
+                if not isinstance(page_body, bytes):
+                    raise ValidationError('Invalid UK HPI release page bytes')
+                if len(page_body) > MAX_SOURCE_PAGE_BYTES:
+                    raise ValidationError('UK HPI release page exceeds size limit')
+                if page_kind not in ('official_download', 'recorded_fixture'):
+                    raise ValidationError('Invalid UK HPI release page evidence kind')
+                if page_kind != evidence_kind:
+                    raise ValidationError('UK HPI release page evidence kind disagrees with snapshot evidence kind')
+                if not isinstance(page_url, str) or not re.fullmatch(
+                    r'https://www\.gov\.uk/government/statistical-data-sets/uk-house-price-index-data-downloads-[a-z]+-[0-9]{4}(?:--[0-9]+)?',
+                    page_url,
+                ):
+                    raise ValidationError('Unexpected UK HPI release page URL')
+                try:
+                    page_time = datetime.fromisoformat(retrieved_at.replace('Z', '+00:00'))
+                except (AttributeError, TypeError, ValueError) as exc:
+                    raise ValidationError('Invalid UK HPI release page retrieval time') from exc
+                if page_time.tzinfo is None or page_time.utcoffset() is None:
+                    raise ValidationError('Invalid UK HPI release page retrieval time')
+                if page_kind == 'official_download' and page_time.astimezone(timezone.utc) > when.astimezone(timezone.utc):
+                    raise ValidationError('Future UK HPI release page retrieval time')
+                try:
+                    page_digest = self._archive_raw(page_body)
+                except OSError as exc:
+                    raise ValidationError('UK HPI release page archival failed') from exc
+                page_published, page_csv_url = parse_hpi_release_page(page_body)
+                release_receipt = {
+                    'schema_version': 1,
+                    'attempt_id': attempt_id,
+                    'metric_key': key,
+                    'source_csv_url': source_url,
+                    'source_csv_sha256': digest,
+                    'source_published_date': source_published_date,
+                    'release_page_url': page_url,
+                    'release_page_sha256': page_digest,
+                    'release_page_retrieved_at': timestamp(page_time),
+                    'release_page_evidence_kind': page_kind,
+                    'parsed_published_date': page_published,
+                    'parsed_csv_url': page_csv_url,
+                }
+                try:
+                    self._write_hpi_evidence_receipt(attempt_id, release_receipt)
+                except OSError as exc:
+                    raise ValidationError('UK HPI source receipt archival failed') from exc
+                if page_published != source_published_date:
+                    raise ValidationError('UK HPI release page publication date disagrees with source receipt')
+                if page_csv_url != source_url:
+                    raise ValidationError('UK HPI release page CSV link disagrees with source URL')
+                candidate = replace(candidate, published_date=source_published_date)
             if key.startswith('private_rent_') and evidence_kind == 'official_download':
                 edition = re.search(r'(?:%2F|/)([0-9]{1,2}[a-z]+[0-9]{4})(?:%2F|/)', source_url or '')
                 released = candidate.published_date
