@@ -181,6 +181,8 @@ class Store:
                 latest_period = max(item.period for item in candidate.observations)
                 if latest_period > release_month or latest_period > edition.group(1):
                     raise ValidationError('UK HPI reference period is later than its source release')
+                if latest_period != edition.group(1):
+                    raise ValidationError('UK HPI latest reference period does not match its source URL edition')
                 candidate = replace(candidate, published_date=source_published_date)
             if key.startswith('private_rent_') and evidence_kind == 'official_download':
                 edition = re.search(r'(?:%2F|/)([0-9]{1,2}[a-z]+[0-9]{4})(?:%2F|/)', source_url or '')

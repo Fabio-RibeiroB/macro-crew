@@ -101,6 +101,55 @@ def test_hpi_reference_period_cannot_exceed_recorded_release_month(store):
                      source_published_date='2026-07-31')
 
 
+@pytest.mark.parametrize('key', ['house_price_level', 'house_price_growth'])
+def test_hpi_truncated_edition_rejects_and_retains_prior_snapshot(store, tmp_path, key):
+    body = b''.join(
+        line for line in fixture('house_price_level').splitlines(keepends=True)
+        if not line.startswith(b'2026-08-01,United Kingdom,K02000001,')
+    )
+    july_url = 'https://publicdata.landregistry.gov.uk/market-trend-data/house-price-index-data/Average-prices-2026-07.csv'
+    august_url = 'https://publicdata.landregistry.gov.uk/market-trend-data/house-price-index-data/Average-prices-2026-08.csv'
+    prior_id = store.ingest(key, body, CPI_WHEN, source_url=july_url,
+                            source_published_date='2026-07-31')
+    prior = store.latest(key)
+    prior_history = store.db.execute(
+        'SELECT period,value,status,source_row FROM observation WHERE snapshot_id=? ORDER BY period',
+        (prior_id,),
+    ).fetchall()
+    assert json.loads(prior['payload'])['published_date'] == '2026-07-31'
+    assert json.loads(prior['payload'])['observations'][-1]['period'] == '2026-07'
+
+    with pytest.raises(ValidationError, match='latest reference period does not match'):
+        store.ingest(key, body, CPI_WHEN, source_url=august_url,
+                     source_published_date='2026-10-21')
+
+    current = store.latest(key)
+    assert current['id'] == prior_id
+    assert current['payload'] == prior['payload']
+    assert current['source_url'] == july_url
+    assert store.db.execute(
+        'SELECT period,value,status,source_row FROM observation WHERE snapshot_id=? ORDER BY period',
+        (prior_id,),
+    ).fetchall() == prior_history
+    rejected = store.db.execute(
+        'SELECT status,source_url FROM attempt WHERE key=? ORDER BY id DESC LIMIT 1', (key,),
+    ).fetchone()
+    assert tuple(rejected) == ('rejected', august_url)
+    assert store.db.execute('SELECT count(*) FROM snapshot WHERE key=?', (key,)).fetchone()[0] == 1
+
+    cold = Store(tmp_path / f'cold-{key}')
+    try:
+        with pytest.raises(ValidationError, match='latest reference period does not match'):
+            cold.ingest(key, body, CPI_WHEN, source_url=august_url,
+                        source_published_date='2026-10-21')
+        assert cold.latest(key) is None
+        assert cold.db.execute(
+            "SELECT status FROM attempt WHERE key=? ORDER BY id DESC LIMIT 1", (key,),
+        ).fetchone()['status'] == 'rejected'
+    finally:
+        cold.close()
+
+
 def test_metrics_fail_independently_and_no_ai_is_required(store):
     store.ingest('cpih', fixture('cpih'), WHEN)
     store.failed('gdp', WHEN, 'HTTP 503')
