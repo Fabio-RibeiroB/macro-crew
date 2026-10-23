@@ -175,6 +175,8 @@ def test_claim_values_are_bound_to_metric_unit_period_and_reference_window():
 
 def test_revision_claim_provenance_is_distinct_from_current_or_previous_observation():
     evidence = bundle()
+    evidence["metrics"]["cpi_inflation"]["observations"].append(
+        {"period": "2026-07", "value": "2.4", "status": "revised"})
     evidence["metrics"]["cpi_inflation"]["revisions"] = [
         {"period": "2026-07", "previous": "2.3", "current": "2.4"}
     ]
@@ -184,6 +186,30 @@ def test_revision_claim_provenance_is_distinct_from_current_or_previous_observat
     wrong_new_observation = claim(value="2.4", period="2026-07", provenance="current_observation")
     with pytest.raises(ValueError, match="does not match"):
         worker.validate_summary(answer(wrong_new_observation), evidence)
+
+
+def test_old_rolling_revision_without_retained_reference_window_is_rejected():
+    evidence = bundle()
+    metric = evidence["metrics"]["cpi_inflation"]
+    metric["reference_window"] = "year_on_year"
+    metric["observations"] = [{
+        "period": "2026-08", "value": "2.4",
+        "reference": {"kind": "rolling_months", "start_month": "2026-06", "end_month": "2026-08"},
+    }]
+    metric["revisions"] = [
+        {"period": "2024-01", "previous": "2.1", "current": "2.2"},
+        {"period": "2026-08", "previous": "2.3", "current": "2.4"},
+    ]
+    old_revision = claim(value="2.2", period="2024-01", provenance="revision",
+                         previous_value="2.1", reference_window="year_on_year")
+    with pytest.raises(ValueError, match="does not match"):
+        worker.validate_summary(answer(old_revision), evidence)
+
+    exact_revision = claim(
+        value="2.4", period="2026-08", provenance="revision", previous_value="2.3",
+        reference_window={"kind": "rolling_months", "start_month": "2026-06", "end_month": "2026-08"},
+    )
+    assert "2026-06 to 2026-08" in worker.validate_summary(answer(exact_revision), evidence)["summary"]
 
 
 def test_model_cannot_supply_unvalidated_numeric_prose():
@@ -312,6 +338,43 @@ def test_activated_manifest_reconciles_missing_seen_identity_without_inference(t
     assert (output / "summary-manifest.json").read_bytes() == committed_manifest
     assert correction["evidence_identity"] in json.loads(
         (state / "summary-identities.json").read_text())["identities"]
+
+
+def test_manifest_visible_before_atomic_write_error_is_committed_and_reconciled(tmp_path, monkeypatch):
+    candidate = make_candidate()
+    state, output = setup_worker(tmp_path, monkeypatch, candidate)
+    previous = invoke(output, state, lambda _: answer(claim()))
+    assert previous["status"] == "published"
+    original_manifest = (output / "summary-manifest.json").read_bytes()
+
+    correction = make_candidate("8" * 64, "2.7", "2026-09")
+    monkeypatch.setattr(worker, "discover_published_release_evidence",
+                        lambda store, seen_identities=(): {
+                            "candidates": [] if correction["evidence_identity"] in seen_identities else [correction]
+                        })
+    real_atomic_write = worker.atomic_write
+    def write_manifest_then_raise(path, body, mode=0o600):
+        real_atomic_write(path, body, mode)
+        if path.name == "summary-manifest.json":
+            raise OSError("injected post-replacement directory sync failure")
+    monkeypatch.setattr(worker, "atomic_write", write_manifest_then_raise)
+    calls = []
+    committed = invoke(output, state, lambda _: calls.append(True) or answer(
+        claim(value="2.7", period="2026-09")))
+    assert committed["status"] == "published"
+    assert committed["reason"] == "manifest_durability_uncertain"
+    assert (output / "summary-manifest.json").read_bytes() != original_manifest
+    status = json.loads((output / "summary-status.json").read_text())
+    assert status["status"] == "current"
+    assert status["reason"] == "manifest_durability_uncertain"
+    attempts_after_commit = json.loads((state / "attempts.json").read_text())["attempts"]
+
+    monkeypatch.setattr(worker, "atomic_write", real_atomic_write)
+    retried = invoke(output, state, lambda _: pytest.fail("committed manifest must deduplicate without inference"))
+    assert retried["status"] == "current"
+    assert calls == [True]
+    assert json.loads((state / "attempts.json").read_text())["attempts"] == attempts_after_commit
+    assert json.loads((output / "summary-status.json").read_text())["reason"] == "manifest_durability_uncertain"
 
 
 def test_manifest_rollback_reactivates_processed_version_without_attempt_or_inference(tmp_path, monkeypatch):

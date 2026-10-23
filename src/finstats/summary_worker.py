@@ -117,8 +117,11 @@ def _available_claims(bundle: dict) -> tuple[set[tuple], set[str]]:
         current_by_period = {item["period"]: item for item in metric.get("observations", [])}
         for revision in metric.get("revisions", []):
             current = current_by_period.get(revision["period"], {})
-            reference = (_reference_window(metric, current) if current
-                         else metric.get("reference_window"))
+            # A revision needs the exact observation window for that period.
+            # The metric-level comparison cannot reconstruct old rolling bounds.
+            if not current:
+                continue
+            reference = _reference_window(metric, current)
             if (isinstance(revision.get("previous"), str)
                     and isinstance(revision.get("current"), str)
                     and reference):
@@ -237,6 +240,21 @@ def _status(path: Path, status: str, reason: str | None = None):
     if reason:
         payload["reason"] = reason
     atomic_write(path, encode(payload), 0o644)
+
+
+def _durability_warning(path: Path) -> str | None:
+    if path.is_symlink() or not path.exists():
+        return None
+    try:
+        status = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+    if isinstance(status, dict):
+        reason = status.get("reason")
+        if (status.get("status") in {"current", "disabled"}
+                and isinstance(reason, str) and reason.startswith("manifest_durability_uncertain")):
+            return reason
+    return None
 
 
 def _read_manifest(path: Path, output: Path) -> dict:
@@ -365,7 +383,20 @@ def _activate_version(manifest_path: Path, output: Path, version: dict, version_
         "version": version_relative,
     }
     manifest["updated_at"] = version["generated_at"]
-    atomic_write(manifest_path, encode(manifest), 0o644)
+    intended_bytes = encode(manifest)
+    try:
+        atomic_write(manifest_path, intended_bytes, 0o644)
+    except OSError:
+        # os.replace may have committed the pointer before directory fsync failed.
+        # Exact visible bytes identify that post-replacement case without claiming
+        # that the directory entry is durable across a power loss.
+        try:
+            if manifest_path.read_bytes() == intended_bytes:
+                return True
+        except OSError:
+            pass
+        raise
+    return False
 
 
 def process_summaries(
@@ -412,7 +443,9 @@ def process_summaries(
             candidates = result["candidates"][:max_queue]
             if not candidates:
                 status = "current" if inference_enabled else "disabled"
-                reason = "no_new_qualifying_release" if inference_enabled else "owner_activation_required"
+                reason = (_durability_warning(status_path)
+                          or ("no_new_qualifying_release" if inference_enabled
+                              else "owner_activation_required"))
                 _status(status_path, status, reason)
                 return {"status": status, "processed": 0,
                         "unsupported": result.get("unsupported", [])}
@@ -437,17 +470,23 @@ def process_summaries(
                         or staged["release"] != release
                         or validate_summary(staged_response, bundle) != staged["summary"]):
                     raise ValueError("Staged summary does not match current release evidence")
-                _activate_version(manifest_path, output, staged, version_relative)
+                durability_warning = _activate_version(manifest_path, output, staged, version_relative)
                 committed = True
                 try:
                     _write_seen(seen_path, [*seen, evidence_id])
                 except OSError:
-                    _status(status_path, "current", "identity_reconciliation_pending")
+                    reason = ("manifest_durability_uncertain_identity_reconciliation_pending"
+                              if durability_warning else "identity_reconciliation_pending")
+                    _status(status_path, "current", reason)
                     return {"status": "published", "processed": 1,
-                            "reason": "identity_reconciliation_pending"}
-                _status(status_path, "current")
-                return {"status": "published", "processed": 1, "version": str(version_path),
-                        "recovered": True}
+                            "reason": reason}
+                reason = "manifest_durability_uncertain" if durability_warning else None
+                _status(status_path, "current", reason)
+                result = {"status": "published", "processed": 1, "version": str(version_path),
+                          "recovered": True}
+                if reason:
+                    result["reason"] = reason
+                return result
             if not inference_enabled:
                 _status(status_path, "disabled", "owner_activation_required")
                 return {"status": "disabled", "processed": 0}
@@ -462,18 +501,24 @@ def process_summaries(
                        "evidence_identity": evidence_id, "summary": summary}
             encoded_version = encode(version)
             atomic_write(version_path, encoded_version, 0o644)
-            _activate_version(manifest_path, output, version, version_relative)
+            durability_warning = _activate_version(manifest_path, output, version, version_relative)
             committed = True
             # Manifest replacement is the commit point. A ledger failure is
             # reconciled on the next invocation and must not report uncommitted data.
             try:
                 _write_seen(seen_path, [*seen, evidence_id])
             except OSError:
-                _status(status_path, "current", "identity_reconciliation_pending")
+                reason = ("manifest_durability_uncertain_identity_reconciliation_pending"
+                          if durability_warning else "identity_reconciliation_pending")
+                _status(status_path, "current", reason)
                 return {"status": "published", "processed": 1,
-                        "reason": "identity_reconciliation_pending"}
-            _status(status_path, "current")
-            return {"status": "published", "processed": 1, "version": str(version_path)}
+                        "reason": reason}
+            reason = "manifest_durability_uncertain" if durability_warning else None
+            _status(status_path, "current", reason)
+            result = {"status": "published", "processed": 1, "version": str(version_path)}
+            if reason:
+                result["reason"] = reason
+            return result
     except Exception as exc:
         # Before manifest replacement, failures preserve its prior bytes. If the
         # replacement committed, identity reconciliation is handled separately.

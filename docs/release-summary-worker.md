@@ -34,8 +34,12 @@ immutable version for the candidate.
 
 The public manifest replacement is the commit point: failures before it
 preserve the prior manifest and all previous summary periods. If the manifest
-commits but the private seen ledger fails, the next invocation reconciles that
-published identity before discovery, without another inference call. Discovery
+replacement is visible but its write reports an error, the worker verifies the
+exact intended bytes, reports `manifest_durability_uncertain`, and reconciles
+the identity without another inference call; the warning does not assert
+directory-entry durability and remains visible in status on harmless retries.
+If the manifest commits but the private seen
+ledger fails, the next invocation reconciles that published identity before discovery, without another inference call. Discovery
 deduplicates against identities in the current public manifest, not only the
 private paid-work ledger. If an operator rolls the manifest back, a retained
 validated immutable version can be reactivated without admission or inference.
