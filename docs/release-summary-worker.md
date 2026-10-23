@@ -82,3 +82,69 @@ without calling inference. A later owner-authorised activation must separately
 review the provider, restricted project/key and hard spend cap, timeout/token
 limits, private service state, and deployment. Tests use only deterministic
 mock callbacks and make no provider calls.
+
+## Issue #42 example review (human decision pending)
+
+The snippets below are **labelled mock evidence**, for review of behavior and
+claim boundaries only. They are not official observations, model outputs,
+golden prose, or production figures. The model returns checked claim tuples;
+the worker renders numeric sentences deterministically. Review factual meaning,
+source and reference-period alignment, and restraint. Do not require identical
+wording. A completed agent check or passing test is not human approval.
+
+| Case | Labelled mock evidence and acceptable boundary | Existing coverage / unsupported boundary | Owner review |
+| --- | --- | --- | --- |
+| Inflation slows; prices still rise | Mock: in one hypothetical official CPI release bundle, annual CPI inflation is 3.0% for 2026-06 and 2.5% for 2026-07, while the CPI index level rises between those reference months. Attribute each rate to its period and do not say prices fell. | `tests/test_summary_worker.py::test_claim_values_are_bound_to_metric_unit_period_and_reference_window` checks value/unit/period binding. There is no price-level claim in the worker contract; the distinction between inflation and the price level needs this explicit restraint review. | **PENDING — owner** |
+| Unemployment, overlapping three-month windows | Mock: UK unemployment is 4.8% for rolling months 2026-06 to 2026-08, after 4.7% for 2026-05 to 2026-07. Name both full windows; do not call this a one-month change or treat the windows as independent. | `tests/test_finstats_release_detector.py::test_real_pay_and_unemployment_windows_validate_through_summary_claims` checks the full window survives into deterministic rendering. | **PENDING — owner** |
+| Older revision, no new period | Mock: an existing 2026-07 observation changes from 2.3% to 2.4%; no newer reference period is supplied. Say “was revised”, retain that period and both values; do not describe it as a new July observation or a new month. | `tests/test_summary_worker.py::test_revision_claim_provenance_is_distinct_from_current_or_previous_observation` and `test_old_rolling_revision_without_retained_reference_window_is_rejected` cover revision provenance and missing window evidence. Historical periods without retained evidence are unsupported. | **PENDING — owner** |
+| Ofgem cap announced, not yet active | Mock: an Ofgem announcement published 2026-10-20 names an effective period beginning 2027-01-01. It may be described as announced with that future period only when official event evidence establishes both dates; never say the cap is already in force or apply it to the current bill. | **Unsupported for summary generation:** the private summary candidate path currently qualifies published ONS monthly releases only. An Ofgem announcement is not a qualifying summary candidate; no Ofgem sentence is generated. `tests/test_finstats_release_detector.py::test_daily_rate_or_yield_observation_does_not_qualify_but_policy_identity_does` exercises release-identity qualification boundaries, not Ofgem summary support. | **PENDING — owner** |
+| Unchanged, low-information release | Mock: a new published release has no changed values or revisions. State only that the checked figures were unchanged, if represented by supported evidence; do not invent a cause, trend, household effect, or forecast. | `tests/test_finstats_release_detector.py::test_new_monthly_release_with_unchanged_values_is_explicitly_low_information` labels this case; `tests/test_summary_worker.py::test_valid_summary_is_immutable_and_refetch_is_deduplicated` covers repeat-release no-call behavior. | **PENDING — owner** |
+
+**Human review record:** pending owner review. Reviewer: __________  Date:
+__________  Decision/comments: ____________________________________________
+
+Coverage boundary: source catch-up is not guaranteed; a release dropped from
+the current event projection or superseded before worker invocation can be
+missed. MPC decision summaries, Budget summaries and OBR forecast summaries
+are unsupported. These examples do not add forecast generation, household
+advice, or service activation. About/Sources application copy is left to the
+active #41/#74 UI review; this document records worker behavior only.
+
+## Operator handoff
+
+The worker is not deployed or scheduled. The production site remains at
+`deploy-2026-10-22.6`; a deployment attempt is currently blocked because the
+required host `sudo` access is unavailable. This documentation change does not
+change that state. Do not treat fixture replay, mock callbacks, or tests as
+production evidence or as owner authorization for inference.
+
+When a separately authorized private worker is eventually operated, inspect
+both its return value and `summary-status.json`; a nonzero/failed process or
+`status: stale` is an explanation failure, not a statistics publication
+failure. `status: disabled` with `owner_activation_required` means inference
+is off. `current` can carry `manifest_durability_uncertain` or
+`identity_reconciliation_pending`; investigate these before relying on the
+summary pointer. `stale` reasons include `timeout`, `admission_or_lock`,
+`invalid_summary`, `inference_failed`, `fixture_evidence` and
+`operator_review_required`. Status is deliberately coarse and contains no raw
+source text or traces. Official statistics/events continue through their
+independent publisher path.
+
+Before investigating, keep the previous public manifest and immutable version
+files intact. The manifest replacement is the summary commit point: a failure
+before replacement preserves its previous bytes. For an operator rollback,
+restore the prior reviewed `summary-manifest.json` atomically from a trusted
+copy; keep both generations and the private identity ledger. A later invocation
+can reactivate a retained, validated version without inference, including while
+inference is disabled. Never delete a version to force regeneration; a processed
+identity with a missing/corrupt version requires operator review. A visible
+manifest replacement with a durability warning is not proof of durable storage;
+verify the pointer and storage before further action.
+
+Inference remains off unless an owner separately authorizes the provider,
+restricted project/key, enforced spend limit, timeout/token limits, private
+runtime and deployment. The worker requires all three gates: an injected
+inference callback, `enabled=True`, and private `FINSTATS_AI_ENABLED=true`.
+Setting the environment flag false disables new paid inference but still allows
+no-call recovery/reconciliation. Do not reset the admission ledger to retry a
+failed call. No production activation is part of issue #42.
