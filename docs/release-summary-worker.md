@@ -18,7 +18,11 @@ no provider, browser, network, shell, or filesystem tool. Its response must be
 JSON with exactly `claims` and `citations`; it cannot supply free-form summary
 prose. Each claim has exactly `metric_key`, `unit`, `period`,
 `reference_window`, `value`, `previous_value`, and `provenance`. The worker checks
-the complete tuple against the same metric's evidence. Provenance is one of
+the complete tuple against the same metric's evidence. `reference_window` is
+preserved as provided by evidence: a string for named comparisons or the exact
+object `{ "kind": "rolling_months", "start_month": "YYYY-MM",
+"end_month": "YYYY-MM" }` for ONS rolling windows. The rendered sentence names
+both rolling-window endpoints. Provenance is one of
 `current_observation`, `previous_observation`, or `revision`; revision claims
 must match the exact current/previous pair for that period. The worker then
 renders all numeric sentences deterministically from those checked tuples.

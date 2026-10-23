@@ -76,8 +76,25 @@ def _read_seen(path: Path) -> list[str]:
     return value["identities"]
 
 
-def _reference_window(metric: dict, observation: dict) -> str:
+def _reference_window(metric: dict, observation: dict):
     return observation.get("reference") or metric.get("reference_window") or metric["definition"]["comparison"]
+
+
+def _canonical_reference_window(window: object) -> str:
+    if isinstance(window, str) and window:
+        return window
+    if (isinstance(window, dict) and set(window) == {"kind", "start_month", "end_month"}
+            and window.get("kind") == "rolling_months"
+            and all(isinstance(window.get(key), str) and re.fullmatch(r"\d{4}-\d{2}", window[key])
+                    for key in ("start_month", "end_month"))):
+        return json.dumps(window, sort_keys=True, separators=(",", ":"))
+    raise ValueError("Summary claim has an invalid reference window")
+
+
+def _display_reference_window(window: object) -> str:
+    if isinstance(window, str):
+        return window
+    return f"rolling months {window['start_month']} to {window['end_month']}"
 
 
 def _available_claims(bundle: dict) -> tuple[set[tuple], set[str]]:
@@ -88,21 +105,25 @@ def _available_claims(bundle: dict) -> tuple[set[tuple], set[str]]:
         for observation in metric.get("observations", []):
             if observation.get("status", "observed") == "observed" and isinstance(observation.get("value"), str):
                 allowed.add((metric_key, unit, observation["period"],
-                             _reference_window(metric, observation), observation["value"], None,
+                             _canonical_reference_window(_reference_window(metric, observation)),
+                             observation["value"], None,
                              "current_observation"))
         for observation in metric.get("previous_observations", []):
             if observation.get("status", "observed") == "observed" and isinstance(observation.get("value"), str):
                 allowed.add((metric_key, unit, observation["period"],
-                             _reference_window(metric, observation), observation["value"], None,
+                             _canonical_reference_window(_reference_window(metric, observation)),
+                             observation["value"], None,
                              "previous_observation"))
         current_by_period = {item["period"]: item for item in metric.get("observations", [])}
         for revision in metric.get("revisions", []):
             current = current_by_period.get(revision["period"], {})
-            reference = _reference_window(metric, current) if current else metric.get("reference_window")
+            reference = (_reference_window(metric, current) if current
+                         else metric.get("reference_window"))
             if (isinstance(revision.get("previous"), str)
                     and isinstance(revision.get("current"), str)
                     and reference):
-                allowed.add((metric_key, unit, revision["period"], reference,
+                allowed.add((metric_key, unit, revision["period"],
+                             _canonical_reference_window(reference),
                              revision["current"], revision["previous"], "revision"))
         for url in (metric.get("source_url"), (metric.get("previous_provenance") or {}).get("source_url")):
             if url:
@@ -119,11 +140,12 @@ def _claim_tuple(claim: dict) -> tuple:
     required = {"metric_key", "unit", "period", "reference_window", "value", "previous_value", "provenance"}
     if (not isinstance(claim, dict) or set(claim) != required
             or not all(isinstance(claim[key], str) and claim[key] for key in
-                       ("metric_key", "unit", "period", "reference_window", "value", "provenance"))
+                       ("metric_key", "unit", "period", "value", "provenance"))
             or (claim["previous_value"] is not None and not isinstance(claim["previous_value"], str))
             or claim["provenance"] not in {"current_observation", "previous_observation", "revision"}):
         raise ValueError("Summary claim has an invalid structure")
-    return (claim["metric_key"], claim["unit"], claim["period"], claim["reference_window"],
+    return (claim["metric_key"], claim["unit"], claim["period"],
+            _canonical_reference_window(claim["reference_window"]),
             claim["value"], claim["previous_value"], claim["provenance"])
 
 
@@ -131,7 +153,7 @@ def _render_claims(claims: list[dict]) -> str:
     sentences = []
     for claim in claims:
         metric = claim["metric_key"].replace("_", " ").capitalize()
-        context = f"{metric} ({claim['period']}; {claim['reference_window']})"
+        context = f"{metric} ({claim['period']}; {_display_reference_window(claim['reference_window'])})"
         unit = {"percent": "%", "GBP": "GBP", "GBP_per_month": "GBP/month",
                 "GBP_per_year": "GBP/year", "pence_per_litre": "pence/litre"}.get(
                     claim["unit"], claim["unit"])

@@ -14,6 +14,7 @@ from finstats.release_detector import (
     semantic_fingerprint,
 )
 from finstats.storage import Store
+from finstats.summary_worker import validate_summary
 from tests.test_finstats_sources import fixture
 
 
@@ -123,6 +124,37 @@ def test_rolling_metric_evidence_preserves_full_reference_window(store):
     assert latest["reference"] == {
         "kind": "rolling_months", "start_month": "2026-06", "end_month": "2026-08",
     }
+
+
+def test_real_pay_and_unemployment_windows_validate_through_summary_claims(store):
+    keys = ["regular_pay_nominal_growth", "unemployment"]
+    for key in keys:
+        store.ingest(key, fixture(key), WHEN, evidence_kind="official_download")
+    evidence = build_evidence(
+        store, release={**RELEASE, "evidence_kind": "official_download"}, metric_keys=keys)
+    claims = []
+    for key in keys:
+        metric = evidence["metrics"][key]
+        observation = metric["observations"][-1]
+        claims.append({
+            "metric_key": key,
+            "unit": metric["definition"]["unit"],
+            "period": observation["period"],
+            "reference_window": observation["reference"],
+            "value": observation["value"],
+            "previous_value": None,
+            "provenance": "current_observation",
+        })
+    summary = validate_summary({
+        "claims": claims,
+        "citations": list(dict.fromkeys(evidence["metrics"][key]["source_url"] for key in keys)),
+    }, evidence)
+    assert all(claim["reference_window"] == {
+        "kind": "rolling_months", "start_month": "2026-06", "end_month": "2026-08",
+    } for claim in summary["claims"])
+    assert "rolling months 2026-06 to 2026-08" in summary["summary"]
+    assert all(evidence["metrics"][key]["observations"][-1]["value"] in summary["summary"]
+               for key in keys)
 
 
 def test_corrected_number_and_corrected_official_text_create_distinct_dated_identity(store):
