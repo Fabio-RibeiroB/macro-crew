@@ -17,7 +17,7 @@ export function ReleaseSummaries({ subject, data, metrics, loading, error, refre
   return <section className="fs-container fs-section" aria-labelledby={`release-explanations-${subject}`}>
     <div className="fs-context-card">
       <div className="fs-stat-top">
-        <h2 id={`release-explanations-${subject}`}>Official release explanations · {title}</h2>
+        <h2 id={`release-explanations-${subject}`}>AI explanations of official data · {title}</h2>
         <button type="button" className="fs-icon-button" onClick={refresh} aria-label={`Refresh ${title.toLowerCase()} explanations`} disabled={loading}>
           <RefreshCw size={17} aria-hidden="true" />
         </button>

@@ -82,6 +82,7 @@ test("mocked worker output validates, matches current tuples and stays on its ow
     assert.match(pricesHtml, /Matches the current verified reading/);
     assert.match(pricesHtml, /Earlier release period · July 2026/);
     assert.match(pricesHtml, /CPI inflation for August 2026 \(year-on-year\): 2\.5 %/);
+    assert.match(pricesHtml, /AI explanations of official data/);
     assert.doesNotMatch(pricesHtml, /Unemployment rate for August 2026/);
     assert.doesNotMatch(pricesHtml, /year_on_year/);
     assert.match(jobsHtml, /Unemployment rate for August 2026: 4\.8 %/);
