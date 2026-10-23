@@ -47,7 +47,7 @@ def publish(store, when):
             else:
                 payload = json.loads(selected['payload'])
                 if key == 'household_energy':
-                    retained = store.observations(key)
+                    retained = store.observations(key, selected['evidence_kind'])
                     local_date = when.astimezone(ZoneInfo('Europe/London')).date().isoformat()
                     history, active, future = [], [], []
                     for original in retained:

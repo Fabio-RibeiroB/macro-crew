@@ -33,6 +33,15 @@ def future_period_page():
       <p>Costs cannot be compared directly to previous periods because of this change.</p>'''.encode()
 
 
+def later_quarter_page():
+    body = future_period_page()
+    return (body.replace(b'1 October to 31 December 2026', b'__FIRST__')
+            .replace(b'1 January to 31 March 2027', b'1 April to 30 June 2027')
+            .replace(b'__FIRST__', b'1 January to 31 March 2027')
+            .replace(b'1 October 2026 to 31 March 2027',
+                     b'1 January 2027 to 30 June 2027'))
+
+
 def test_ofgem_effective_period_bill_rates_basis_and_tax_break():
     body = BODY
     receipt = json.loads((FIXTURES / 'ofgem_energy_price_cap_receipt.json').read_text())
@@ -144,6 +153,40 @@ def test_published_source_snapshots_accumulate_quarter_history(tmp_path):
         assert energy['history'][0]['reference']['period_status'] == 'expired'
         assert energy['upcoming_period'] is None
         assert len(shadow['metrics']) == len(DEFINITIONS)
+    finally:
+        store.close()
+
+
+@pytest.mark.parametrize(('old_evidence_kind', 'expected_periods'), [
+    ('recorded_fixture', ['2027-01-01']),
+    ('official_download', ['2026-10-01', '2027-01-01']),
+])
+def test_official_history_isolated_by_evidence_kind(tmp_path, old_evidence_kind, expected_periods):
+    store = Store(tmp_path)
+    try:
+        store.ingest('household_energy', BODY,
+                     datetime(2026, 11, 30, tzinfo=timezone.utc),
+                     source_url=DEFINITIONS['household_energy'].download_url,
+                     evidence_kind=old_evidence_kind)
+        store.ingest('household_energy', later_quarter_page(),
+                     datetime(2027, 1, 1, tzinfo=timezone.utc),
+                     source_url=DEFINITIONS['household_energy'].download_url,
+                     evidence_kind='official_download')
+        store.ingest('bank_rate', (FIXTURES / 'bank_rate.csv').read_bytes(),
+                     datetime(2027, 1, 1, tzinfo=timezone.utc),
+                     source_url=DEFINITIONS['bank_rate'].download_url,
+                     evidence_kind='official_download')
+        publish(store, datetime(2027, 1, 1, tzinfo=timezone.utc))
+        public_dir = tmp_path.with_name(tmp_path.name + '-public')
+        deliver(tmp_path, public_dir)
+        manifest = json.loads((public_dir / 'current.json').read_text())
+        data = json.loads((public_dir / manifest['data_url']).read_text())
+        energy = data['metrics']['household_energy']
+        assert energy['validation_status'] == 'verified'
+        assert energy['snapshot_evidence_kind'] == 'official_download'
+        assert [point['period'] for point in energy['history']] == expected_periods
+        assert energy['latest']['period'] == '2027-01-01'
+        assert data['metrics']['bank_rate']['latest']['value'] == '3.75'
     finally:
         store.close()
 

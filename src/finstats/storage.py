@@ -184,11 +184,14 @@ class Store:
             WHERE s.key=?''' + cutoff + ' ORDER BY s.vintage DESC,a.id DESC LIMIT 1', params).fetchone()
         return dict(row) if row else None
 
-    def observations(self, key):
-        """Return all retained period observations, preferring later accepted revisions."""
-        rows = self.db.execute('''SELECT s.payload FROM snapshot s
+    def observations(self, key, evidence_kind=None):
+        """Return retained observations from one evidence kind, preferring later revisions."""
+        evidence_filter = '' if evidence_kind is None else ' AND a.evidence_kind=?'
+        params = (key,) if evidence_kind is None else (key, evidence_kind)
+        rows = self.db.execute("""SELECT s.payload FROM snapshot s
             JOIN receipt r ON r.snapshot_id=s.id JOIN attempt a ON a.id=r.attempt_id
-            WHERE s.key=? AND a.status='accepted' ORDER BY s.vintage,a.id''', (key,)).fetchall()
+            WHERE s.key=? AND a.status='accepted'""" + evidence_filter +
+            ' ORDER BY s.vintage,a.id', params).fetchall()
         by_period = {}
         for row in rows:
             for point in json.loads(row['payload'])['observations']:
