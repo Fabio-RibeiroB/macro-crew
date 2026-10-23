@@ -51,6 +51,8 @@ import {
 } from "./data/interactions.mjs";
 import { loadEvents } from "./data/events.mjs";
 import { EventList } from "./components/EventList";
+import { ReleaseSummaries } from "./components/ReleaseSummaries";
+import { createSummaryRefreshController, loadSummaries } from "./data/summaries.mjs";
 import "../styles/friendly.css";
 
 const topics = {
@@ -1250,18 +1252,23 @@ export default function App({
   pathname,
   initialData = null,
   initialEvents = null,
-}: { pathname?: string; initialData?: any; initialEvents?: any } = {}) {
+  initialSummaries = null,
+}: { pathname?: string; initialData?: any; initialEvents?: any; initialSummaries?: any } = {}) {
   const page = resolvePage(
     pathname ??
       (typeof window === "undefined" ? "/" : window.location.pathname),
   );
   const needsData = ["overview", "prices", "economy", "jobs-pay", "housing", "government"].includes(page.id);
+  const needsSummaries = ["prices", "economy", "jobs-pay", "housing", "government"].includes(page.id);
   const needsEvents = ["overview", "calendar", "prices", "economy", "jobs-pay", "housing", "government"].includes(page.id);
   const [snapshot, setSnapshot] = useState(() =>
     refreshSnapshot(initialData, needsData ? "loading" : "idle"),
   );
   const [reportSnapshot, setReportSnapshot] = useState(() =>
     refreshSnapshot(null),
+  );
+  const [summarySnapshot, setSummarySnapshot] = useState(() =>
+    refreshSnapshot(initialSummaries, needsSummaries ? (initialSummaries ? "success" : "loading") : "idle"),
   );
   const [eventSnapshot, setEventSnapshot] = useState(() =>
     refreshSnapshot(initialEvents, needsEvents ? "loading" : "idle"),
@@ -1283,6 +1290,7 @@ export default function App({
     typeof createRefreshController
   > | null>(null);
   const eventsOwner = useRef<ReturnType<typeof createRefreshController> | null>(null);
+  const summariesOwner = useRef<ReturnType<typeof createRefreshController> | null>(null);
   const header = useRef<HTMLElement>(null);
   const menuToggle = useRef<HTMLButtonElement>(null);
   const menuWasOpen = useRef(false);
@@ -1390,6 +1398,21 @@ export default function App({
     };
   }, [needsEvents]);
   useEffect(() => {
+    if (!needsSummaries) return;
+    const owner = createSummaryRefreshController({
+      initialData: initialSummaries,
+      load: (signal) => loadSummaries(import.meta.env.BASE_URL, (url, options) =>
+        fetch(url, { ...options, signal }), signal),
+      onState: setSummarySnapshot,
+    });
+    summariesOwner.current = owner;
+    const cleanup = bindRefreshLifecycle(owner, window);
+    return () => {
+      cleanup();
+      if (summariesOwner.current === owner) summariesOwner.current = null;
+    };
+  }, [needsSummaries]);
+  useEffect(() => {
     if (page.id !== "economy") return;
     const owner = createRefreshController({
       load: async (signal) => {
@@ -1413,6 +1436,14 @@ export default function App({
   const reportTime = reportSnapshot.data?.metadata?.generated_at ?? null;
   const stats = { data, error, loading, refresh };
   const eventView = refreshView(eventSnapshot);
+  const summaryView = refreshView(summarySnapshot);
+  const summaryProps = {
+    data: summaryView.data,
+    metrics: data?.metrics,
+    loading: summaryView.loading,
+    error: summaryView.error,
+    refresh: () => summariesOwner.current?.refresh(),
+  };
   const refreshEvents = () => eventsOwner.current?.refresh();
   const eventProps = { payload: eventView.data, error: eventView.error, loading: eventView.loading, refresh: refreshEvents };
   return (
@@ -1497,6 +1528,7 @@ export default function App({
             </PageHeading>
             <Statistics {...stats} kinds={priceKinds(data)} />
             <EventList {...eventProps} indicatorIds={["uk.cpi.annual_rate", "uk.cpih.annual_rate", "uk.road_fuel.unleaded_petrol_price", "uk.road_fuel.diesel_price", "uk.energy_price_cap.typical_dual_fuel_bill"]} compact />
+            <ReleaseSummaries subject="prices" {...summaryProps} />
             <PriceGuide data={data} />
             <Trends data={data} kinds={priceTrendKinds(data)} />
             <HouseholdEnergy {...stats} />
@@ -1511,6 +1543,7 @@ export default function App({
             </PageHeading>
             <Statistics {...stats} kinds={["bank_rate", "gdp"]} />
             <EventList {...eventProps} indicatorIds={["uk.bank_rate.daily", "uk.gdp.monthly_growth"]} compact />
+            <ReleaseSummaries subject="economy" {...summaryProps} />
             <InterestGuide />
             <GrowthGuide />
             <Trends data={data} kinds={["bank_rate", "gdp"]} />
@@ -1525,9 +1558,10 @@ export default function App({
             <Wages {...stats} />
             <Unemployment {...stats} />
             <EventList {...eventProps} indicatorIds={["uk.regular_pay.nominal_annual_growth", "uk.regular_pay.real_annual_growth", "uk.unemployment.rate"]} compact />
+            <ReleaseSummaries subject="jobs-pay" {...summaryProps} />
           </>
         )}
-        {page.id === "housing" && <><Housing {...stats} /><EventList {...eventProps} indicatorIds={["uk.private_rent.annual_growth", "uk.private_rent.monthly_level", "uk.house_price.average_level", "uk.house_price.annual_change"]} compact /></>}
+        {page.id === "housing" && <><Housing {...stats} /><EventList {...eventProps} indicatorIds={["uk.private_rent.annual_growth", "uk.private_rent.monthly_level", "uk.house_price.average_level", "uk.house_price.annual_change"]} compact /><ReleaseSummaries subject="housing" {...summaryProps} /></>}
         {page.id === "government" && (
           <>
             <PageHeading eyebrow="Government & Budget" title={page.title}>
@@ -1537,6 +1571,7 @@ export default function App({
             <PublicDebt {...stats} />
             <GiltYields {...stats} />
             <GovernmentGuide />
+            <ReleaseSummaries subject="government" {...summaryProps} />
             <EventList {...eventProps} indicatorIds={["uk.public_debt.net_debt_gdp"]} compact />
           </>
         )}
