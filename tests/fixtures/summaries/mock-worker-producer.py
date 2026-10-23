@@ -16,6 +16,8 @@ def make_candidate(index: int):
     period = "2026-08" if index == 0 else "2026-07"
     cpi_value = "2.5" if index == 0 else "2.4"
     unemployment_value = "4.8" if index == 0 else "4.7"
+    pay_value = "3.7" if index == 0 else "3.6"
+    pay_window = {"kind": "rolling_months", "start_month": "2026-06" if index == 0 else "2026-05", "end_month": period}
     return {
         "evidence_identity": ("a" if index == 0 else "b") * 64,
         "evidence": {
@@ -32,6 +34,11 @@ def make_candidate(index: int):
                                  "reference_window": "level", "source_url": URL,
                                  "observations": [{"period": period, "value": unemployment_value}],
                                  "previous_observations": [], "revisions": []},
+                "regular_pay_nominal_growth": {
+                    "definition": {"unit": "percent", "comparison": "three_month_average"},
+                    "reference_window": "three_month_average", "source_url": URL,
+                    "observations": [{"period": period, "value": pay_value, "reference": pay_window}],
+                    "previous_observations": [], "revisions": []},
             },
         },
     }
@@ -51,12 +58,16 @@ for candidate in candidates:
     period = evidence["metrics"]["cpi"]["observations"][0]["period"]
     cpi_value = evidence["metrics"]["cpi"]["observations"][0]["value"]
     unemployment_value = evidence["metrics"]["unemployment"]["observations"][0]["value"]
+    pay_observation = evidence["metrics"]["regular_pay_nominal_growth"]["observations"][0]
     claims = [
         {"metric_key": "cpi", "unit": "percent", "period": period,
          "reference_window": "year_on_year", "value": cpi_value,
          "previous_value": None, "provenance": "current_observation"},
         {"metric_key": "unemployment", "unit": "percent", "period": period,
          "reference_window": "level", "value": unemployment_value,
+         "previous_value": None, "provenance": "current_observation"},
+        {"metric_key": "regular_pay_nominal_growth", "unit": "percent", "period": period,
+         "reference_window": pay_observation["reference"], "value": pay_observation["value"],
          "previous_value": None, "provenance": "current_observation"},
     ]
     result = worker.process_summaries(

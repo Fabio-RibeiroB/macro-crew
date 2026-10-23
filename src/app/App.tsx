@@ -52,7 +52,7 @@ import {
 import { loadEvents } from "./data/events.mjs";
 import { EventList } from "./components/EventList";
 import { ReleaseSummaries } from "./components/ReleaseSummaries";
-import { loadSummaries } from "./data/summaries.mjs";
+import { createSummaryRefreshController, loadSummaries } from "./data/summaries.mjs";
 import "../styles/friendly.css";
 
 const topics = {
@@ -1399,8 +1399,8 @@ export default function App({
   }, [needsEvents]);
   useEffect(() => {
     if (!needsSummaries) return;
-    const owner = createRefreshController({
-      initialStatus: "loading",
+    const owner = createSummaryRefreshController({
+      initialData: initialSummaries,
       load: (signal) => loadSummaries(import.meta.env.BASE_URL, (url, options) =>
         fetch(url, { ...options, signal }), signal),
       onState: setSummarySnapshot,

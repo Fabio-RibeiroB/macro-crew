@@ -5,8 +5,7 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadSummaries, summariesForSubject } from "../../src/app/data/summaries.mjs";
-import { createRefreshController } from "../../src/app/data/refresh.mjs";
+import { createSummaryRefreshController, loadSummaries, summariesForSubject, summaryPeriodLabel } from "../../src/app/data/summaries.mjs";
 
 const repo = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
@@ -29,8 +28,9 @@ async function mockedWorkerData() {
 
 function currentMetrics() {
   return Object.fromEntries([
-    ["cpi", { validation_status: "verified", definition: { unit: "percent", comparison: "year_on_year" }, latest: { period: "2026-08", value: "2.5" } }],
-    ["unemployment", { validation_status: "verified", definition: { unit: "percent", comparison: "level" }, latest: { period: "2026-08", value: "4.8" } }],
+    ["cpi", { collection_status: "ok", validation_status: "verified", definition: { unit: "percent", comparison: "year_on_year" }, latest: { period: "2026-08", value: "2.5" } }],
+    ["unemployment", { collection_status: "ok", validation_status: "verified", definition: { unit: "percent", comparison: "level" }, latest: { period: "2026-08", value: "4.8" } }],
+    ["regular_pay_nominal_growth", { collection_status: "ok", validation_status: "verified", definition: { unit: "percent", comparison: "three_month_average" }, latest: { period: "2026-08", value: "3.7", reference: { kind: "rolling_months", start_month: "2026-06", end_month: "2026-08" } } }],
   ]);
 }
 
@@ -41,15 +41,34 @@ test("mocked worker output validates, matches current tuples and stays on its ow
   const prices = summariesForSubject(data, "prices", metrics);
   const jobs = summariesForSubject(data, "jobs-pay", metrics);
   assert.equal(prices.length, 2);
-  assert.equal(jobs.length, 2);
+  assert.equal(jobs.length, 4);
   assert.equal(prices.find((claim) => claim.period === "2026-08").matchesCurrent, true);
   assert.equal(prices.find((claim) => claim.period === "2026-07").matchesCurrent, false);
   assert.equal(jobs.find((claim) => claim.period === "2026-08").matchesCurrent, true);
   assert.equal(jobs.find((claim) => claim.period === "2026-07").matchesCurrent, false);
+  const rolling = jobs.find((claim) => claim.metric_key === "regular_pay_nominal_growth" && claim.period === "2026-08");
+  assert.equal(rolling.matchesCurrent, true);
+  assert.match(rolling.summaryText, /Regular pay growth for August 2026 \(rolling three-month window from June 2026 to August 2026\)/);
+  const changedWindow = structuredClone(metrics);
+  changedWindow.regular_pay_nominal_growth.latest.reference.start_month = "2026-05";
+  assert.equal(summariesForSubject(data, "jobs-pay", changedWindow).find((claim) => claim.metric_key === "regular_pay_nominal_growth" && claim.period === "2026-08").matchesCurrent, false);
+  const degraded = structuredClone(metrics);
+  degraded.cpi.collection_status = "degraded";
+  assert.equal(summariesForSubject(data, "prices", degraded).find((claim) => claim.metric_key === "cpi" && claim.period === "2026-08").matchesCurrent, false);
+  const unavailable = structuredClone(metrics);
+  unavailable.cpi.validation_status = "unavailable";
+  assert.equal(summariesForSubject(data, "prices", unavailable).find((claim) => claim.metric_key === "cpi" && claim.period === "2026-08").matchesCurrent, false);
+  const cpiAugust = prices.find((claim) => claim.metric_key === "cpi" && claim.period === "2026-08");
+  const cpiJuly = prices.find((claim) => claim.metric_key === "cpi" && claim.period === "2026-07");
+  assert.equal(summaryPeriodLabel(cpiAugust, undefined), "Reference period · August 2026");
+  assert.equal(summaryPeriodLabel(cpiAugust, { latest: { period: "2026-07" } }), "Reference period · August 2026");
+  assert.equal(summaryPeriodLabel(cpiJuly, { latest: { period: "2026-08" } }), "Earlier release period · July 2026");
+  assert.equal(summaryPeriodLabel(cpiAugust, { latest: { period: "2026-08" } }), "Does not match the current verified reading");
 
   const pageData = JSON.parse(await readFile(join(repo, "tests/fixtures/verified/producer-pay-v1.json"), "utf8"));
   pageData.metrics.cpi.latest = { period: "2026-08", value: "2.5" };
   pageData.metrics.unemployment.latest = { period: "2026-08", value: "4.8" };
+  pageData.metrics.regular_pay_nominal_growth.latest = { period: "2026-08", value: "3.7", reference: { kind: "rolling_months", start_month: "2026-06", end_month: "2026-08" } };
 
   const { createServer } = await import("vite");
   const { createElement } = await import("react");
@@ -61,11 +80,13 @@ test("mocked worker output validates, matches current tuples and stays on its ow
     const pricesHtml = render("/prices");
     const jobsHtml = render("/jobs-pay");
     assert.match(pricesHtml, /Matches the current verified reading/);
-    assert.match(pricesHtml, /Earlier release period · 2026-07/);
-    assert.match(pricesHtml, /Cpi \(2026-08; year_on_year\): 2\.5 %/i);
-    assert.doesNotMatch(pricesHtml, /Unemployment \(2026-08/);
-    assert.match(jobsHtml, /Unemployment \(2026-08; level\): 4\.8 %/);
-    assert.doesNotMatch(jobsHtml, /Cpi \(2026-08/);
+    assert.match(pricesHtml, /Earlier release period · July 2026/);
+    assert.match(pricesHtml, /CPI inflation for August 2026 \(year-on-year\): 2\.5 %/);
+    assert.doesNotMatch(pricesHtml, /Unemployment rate for August 2026/);
+    assert.doesNotMatch(pricesHtml, /year_on_year/);
+    assert.match(jobsHtml, /Unemployment rate for August 2026: 4\.8 %/);
+    assert.match(jobsHtml, /Regular pay growth for August 2026 \(rolling three-month window from June 2026 to August 2026\): 3\.7 %/);
+    assert.doesNotMatch(jobsHtml, /year_on_year|three_month_average/);
     assert.match(pricesHtml, /https:\/\/www\.ons\.gov\.uk\/releases\/consumer-contract-test/);
     assert.doesNotMatch(pricesHtml, /checksum/i);
 
@@ -77,7 +98,8 @@ test("mocked worker output validates, matches current tuples and stays on its ow
       ["/government-budget", "release-explanations-government"],
     ];
     for (const [path, heading] of subjects) assert.match(render(path), new RegExp(heading));
-    assert.match(render("/government-budget"), /MPC decisions, Budget announcements and OBR forecasts are not covered/);
+    assert.match(render("/economy"), /MPC meeting dates are published, but MPC policy decisions are not covered/);
+    assert.match(render("/government-budget"), /Budget announcements and OBR forecasts are not covered/);
   } finally {
     await server.close();
   }
@@ -106,10 +128,12 @@ test("summary loader rejects traversal, oversized files and incompatible claim u
 test("summary refresh fails independently and retains its prior snapshot", async () => {
   const data = await mockedWorkerData();
   const states = [];
-  const owner = createRefreshController({
-    initialData: data, initialStatus: "success", load: async () => { throw new Error("offline"); },
+  const owner = createSummaryRefreshController({
+    initialData: data, load: async () => { throw new Error("offline"); },
     onState: (state) => states.push(state),
   });
+  assert.equal(owner.snapshot.status, "success");
+  assert.equal(owner.snapshot.data, data);
   await owner.refresh();
   assert.equal(owner.snapshot.status, "error");
   assert.equal(owner.snapshot.data, data);

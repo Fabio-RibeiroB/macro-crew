@@ -1,3 +1,6 @@
+import { formatPeriod } from "./verified.mjs";
+import { createRefreshController } from "./refresh.mjs";
+
 const LIMITS = { manifest: 65_536, status: 4_096, version: 65_536, entries: 100, claims: 8, citations: 8 };
 const SOURCES = new Set(["ons", "boe", "boe_mpc", "obr", "hm_treasury", "desnz", "desnz_fuel", "ofgem"]);
 const METRICS = {
@@ -35,6 +38,32 @@ function renderClaim(claim) {
   const window = typeof claim.reference_window === "string" ? claim.reference_window : `rolling months ${claim.reference_window.start_month} to ${claim.reference_window.end_month}`;
   const unit = { percent: "%", GBP: "GBP", GBP_per_month: "GBP/month", GBP_per_year: "GBP/year", pence_per_litre: "pence/litre" }[claim.unit] ?? claim.unit;
   const context = `${label} (${claim.period}; ${window})`;
+  if (claim.provenance === "revision") return `${context} was revised from ${claim.previous_value} to ${claim.value} ${unit}.`;
+  if (claim.provenance === "previous_observation") return `Previous ${context}: ${claim.value} ${unit}.`;
+  return `${context}: ${claim.value} ${unit}.`;
+}
+const METRIC_LABELS = {
+  cpi: "CPI inflation", cpih: "CPIH inflation", household_energy: "Household energy bill",
+  petrol_price: "Petrol price", diesel_price: "Diesel price", private_rent_growth: "Private rent growth",
+  private_rent_level: "Average monthly private rent", house_price_level: "Average house price",
+  house_price_growth: "House price growth", regular_pay_nominal_growth: "Regular pay growth",
+  regular_pay_real_growth: "Real regular pay growth", unemployment: "Unemployment rate",
+  gdp: "Monthly GDP growth", bank_rate: "Bank Rate", public_debt: "Public sector net debt",
+  gilt_5y: "5-year gilt yield", gilt_10y: "10-year gilt yield", gilt_20y: "20-year gilt yield",
+};
+const COMPARISON_LABELS = {
+  year_on_year: "year-on-year", month_on_month: "month-on-month", level: "",
+  previous_comparable_period: "compared with the previous comparable period",
+  previous_trading_day: "compared with the previous trading day", previous_week: "compared with the previous week",
+  three_month_average: "three-month average", not_applicable: "",
+};
+function presentClaim(claim) {
+  const label = METRIC_LABELS[claim.metric_key];
+  const window = typeof claim.reference_window === "object"
+    ? `rolling three-month window from ${formatPeriod(claim.reference_window.start_month)} to ${formatPeriod(claim.reference_window.end_month)}`
+    : COMPARISON_LABELS[claim.reference_window] ?? "";
+  const context = `${label} for ${formatPeriod(claim.period)}${window ? ` (${window})` : ""}`;
+  const unit = { percent: "%", GBP: "GBP", GBP_per_month: "GBP/month", GBP_per_year: "GBP/year", pence_per_litre: "pence/litre" }[claim.unit] ?? claim.unit;
   if (claim.provenance === "revision") return `${context} was revised from ${claim.previous_value} to ${claim.value} ${unit}.`;
   if (claim.provenance === "previous_observation") return `Previous ${context}: ${claim.value} ${unit}.`;
   return `${context}: ${claim.value} ${unit}.`;
@@ -94,7 +123,7 @@ export async function loadSummaries(base = "/", fetcher = fetch, signal) {
   return { manifest, status, summaries };
 }
 function exactPeriodWindow(claim, metric) {
-  if (!metric?.latest || metric.validation_status !== "verified" || metric.latest.value === null || claim.unit !== metric.definition?.unit || claim.period !== metric.latest.period) return false;
+  if (!metric?.latest || metric.validation_status !== "verified" || metric.collection_status !== "ok" || metric.latest.value === null || claim.unit !== metric.definition?.unit || claim.period !== metric.latest.period) return false;
   const currentWindow = metric.latest.reference ?? metric.definition.comparison;
   return canonicalWindow(claim.reference_window) === canonicalWindow(currentWindow) && claim.value === metric.latest.value && ["current_observation", "revision"].includes(claim.provenance);
 }
@@ -103,8 +132,24 @@ export function summariesForSubject(data, subject, metrics) {
   for (const item of data?.summaries ?? []) for (const claim of item.version.summary.claims) {
     if (METRICS[claim.metric_key]?.subject !== subject) continue;
     const metric = metrics?.[claim.metric_key];
-    claims.push({ ...claim, key: item.key, release: item.version.release, generated_at: item.version.generated_at, citations: item.version.summary.citations, summaryText: renderClaim(claim), matchesCurrent: exactPeriodWindow(claim, metric) });
+    claims.push({ ...claim, key: item.key, release: item.version.release, generated_at: item.version.generated_at, citations: item.version.summary.citations, summaryText: presentClaim(claim), matchesCurrent: exactPeriodWindow(claim, metric) });
   }
   return claims.sort((a, b) => b.release.published_date.localeCompare(a.release.published_date) || a.metric_key.localeCompare(b.metric_key));
+}
+export function summaryPeriodLabel(claim, metric) {
+  const currentPeriod = metric?.latest?.period;
+  if (currentPeriod === claim.period) return "Does not match the current verified reading";
+  const period = formatPeriod(claim.period);
+  return currentPeriod && /^\d{4}-(0[1-9]|1[0-2])$/.test(currentPeriod) && claim.period < currentPeriod
+    ? `Earlier release period · ${period}`
+    : `Reference period · ${period}`;
+}
+export function createSummaryRefreshController({ initialData, load, onState }) {
+  return createRefreshController({
+    initialData,
+    initialStatus: initialData ? "success" : "loading",
+    load,
+    onState,
+  });
 }
 export function summarySubjects() { return METRICS; }
