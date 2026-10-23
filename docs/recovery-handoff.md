@@ -9,9 +9,12 @@ owner's lasting delivery preferences. Recheck production and access on resumptio
 Restore the original automatic CrewAI release-summary experience, then reproduce
 and fix chart year/range controls, and verify both journeys live. Do not expand
 the replacement engine or add architectural features while these regressions
-remain unresolved. The owner authorized recovery and deployment in this thread;
-do not confuse unavailable host privileges with absent authorization. New paid
-services or increased spending are not authorized by this handoff.
+remain unresolved. The owner authorized recovery and deployment in the originating
+thread. That historical approval remains applicable when actually resuming that
+thread within its approved scope; unavailable host privileges are a separate
+blocker. An unrelated session must establish explicit owner authorization before
+deployment and must not infer it from this handoff alone. This document grants no
+permission for new paid services or increased spending.
 
 ## Last verified state
 
