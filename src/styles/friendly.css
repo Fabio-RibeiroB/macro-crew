@@ -348,6 +348,23 @@
   margin-top: 16px;
   padding-top: 12px;
 }
+.fs-summary-list {
+  margin: 18px 0;
+  padding-left: 22px;
+}
+.fs-summary-list > li {
+  border-top: 1px solid var(--fs-line);
+  padding: 12px 0;
+}
+.fs-summary-list p {
+  margin: 6px 0;
+}
+.fs-summary-list .fs-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 10px;
+}
 .fs-details summary {
   list-style: none;
   display: flex;
