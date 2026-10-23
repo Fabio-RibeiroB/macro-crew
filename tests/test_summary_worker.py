@@ -158,9 +158,11 @@ def test_correction_gets_new_version_and_failed_correction_preserves_manifest(tm
     assert len(list((output / "summary-versions").rglob("*.json"))) == 2
 
 
-def test_failed_atomic_manifest_write_keeps_previous_manifest(tmp_path, monkeypatch):
+def test_manifest_failure_recovers_staged_version_without_new_inference(tmp_path, monkeypatch):
     candidate = make_candidate()
     state, output = setup_worker(tmp_path, monkeypatch, candidate)
+    ticks = iter([f"2026-10-23T01:03:{second:02d}Z" for second in range(20)])
+    monkeypatch.setattr(worker, "_now", lambda: next(ticks))
     invoke(output, state, lambda _: {
         "summary": "Inflation was 2.5 percent.", "period": "2026-08", "citations": [URL]
     })
@@ -174,13 +176,88 @@ def test_failed_atomic_manifest_write_keeps_previous_manifest(tmp_path, monkeypa
             raise OSError("injected replacement failure")
         atomic_write(path, body, mode)
     monkeypatch.setattr(worker, "atomic_write", fail_manifest)
-    result = invoke(output, state, lambda _: {
+    calls = []
+    result = invoke(output, state, lambda _: calls.append(True) or {
         "summary": "Inflation was revised to 2.7 percent.", "period": "2026-09", "citations": [URL]
     })
     assert result["status"] == "stale"
     assert (output / "summary-manifest.json").read_bytes() == previous
+    charged_before_recovery = json.loads((state / "attempts.json").read_text())["attempts"]
+    version_path = output / "summary-versions" / __import__("hashlib").sha256(
+        b"ons:ons:example").hexdigest() / f"2026-09-15-{'e' * 64}.json"
+    staged_bytes = version_path.read_bytes()
+    staged_generated_at = json.loads(staged_bytes)["generated_at"]
+    assert staged_generated_at == "2026-10-23T01:03:02Z"
+    retry_generated_at = "2026-10-23T01:03:04Z"
+    assert retry_generated_at != staged_generated_at
     monkeypatch.setattr(worker, "atomic_write", atomic_write)
-    retried = invoke(output, state, lambda _: {
+    retried = invoke(output, state, lambda _: calls.append(True) or {
         "summary": "Inflation was revised to 2.7 percent.", "period": "2026-09", "citations": [URL]
     })
     assert retried["status"] == "published"
+    assert retried["recovered"] is True
+    assert len(calls) == 1
+    assert json.loads((state / "attempts.json").read_text())["attempts"] == charged_before_recovery
+    assert version_path.read_bytes() == staged_bytes
+    assert json.loads((output / "summary-manifest.json").read_text())[
+        "summaries"]["ons:ons:example"]["generated_at"] == staged_generated_at
+
+
+def test_activated_manifest_reconciles_missing_seen_identity_without_inference(tmp_path, monkeypatch):
+    original = make_candidate()
+    state, output = setup_worker(tmp_path, monkeypatch, original)
+    invoke(output, state, lambda _: {
+        "summary": "Inflation was 2.5 percent.", "period": "2026-08", "citations": [URL]
+    })
+    prior = (output / "summary-manifest.json").read_bytes()
+    correction = make_candidate("f" * 64, "2.7", "2026-09")
+    calls = []
+    monkeypatch.setattr(worker, "discover_published_release_evidence",
+                        lambda store, seen_identities=(): {
+                            "candidates": [] if correction["evidence_identity"] in seen_identities else [correction]
+                        })
+    atomic_write = worker.atomic_write
+    def fail_seen(path, body, mode=0o600):
+        if path.name == "summary-identities.json":
+            raise OSError("injected identity ledger failure")
+        atomic_write(path, body, mode)
+    monkeypatch.setattr(worker, "atomic_write", fail_seen)
+    first = invoke(output, state, lambda _: calls.append(True) or {
+        "summary": "Inflation was revised to 2.7 percent.", "period": "2026-09", "citations": [URL]
+    })
+    assert first == {"status": "published", "processed": 1,
+                     "reason": "identity_reconciliation_pending"}
+    committed_manifest = (output / "summary-manifest.json").read_bytes()
+    assert committed_manifest != prior
+    charged_before_reconciliation = json.loads((state / "attempts.json").read_text())["attempts"]
+    monkeypatch.setattr(worker, "atomic_write", atomic_write)
+    second = invoke(output, state, lambda _: pytest.fail("activated identity must reconcile without inference"))
+    assert second["status"] == "current"
+    assert len(calls) == 1
+    assert json.loads((state / "attempts.json").read_text())["attempts"] == charged_before_reconciliation
+    assert (output / "summary-manifest.json").read_bytes() == committed_manifest
+    assert correction["evidence_identity"] in json.loads(
+        (state / "summary-identities.json").read_text())["identities"]
+
+
+def test_version_write_failure_preserves_prior_manifest(tmp_path, monkeypatch):
+    original = make_candidate()
+    state, output = setup_worker(tmp_path, monkeypatch, original)
+    invoke(output, state, lambda _: {
+        "summary": "Inflation was 2.5 percent.", "period": "2026-08", "citations": [URL]
+    })
+    previous = (output / "summary-manifest.json").read_bytes()
+    correction = make_candidate("1" * 64, "2.7", "2026-09")
+    monkeypatch.setattr(worker, "discover_published_release_evidence",
+                        lambda store, seen_identities=(): {"candidates": [correction]})
+    atomic_write = worker.atomic_write
+    def fail_version(path, body, mode=0o600):
+        if path.name.endswith("1" * 64 + ".json"):
+            raise OSError("injected version write failure")
+        atomic_write(path, body, mode)
+    monkeypatch.setattr(worker, "atomic_write", fail_version)
+    failed = invoke(output, state, lambda _: {
+        "summary": "Inflation was revised to 2.7 percent.", "period": "2026-09", "citations": [URL]
+    })
+    assert failed["status"] == "stale"
+    assert (output / "summary-manifest.json").read_bytes() == previous

@@ -4,22 +4,26 @@
 `discover_published_release_evidence`. It reads the retained event identities
 and accepted metric evidence locally; it performs no discovery requests and
 does not run from the collector, static site, or event/metric publisher. It
-handles one candidate per invocation, with a maximum candidate queue of eight
-and a 60-second inference deadline. Subsequent invocations rediscover retained
-published events, so bounded catch-up is not tied to the current calendar day.
-An unchanged evidence identity is skipped. A changed evidence fingerprint
-(including a correction or changed release text) gets a separate immutable
-version under the original release identity.
+handles at most one candidate per invocation (the configurable candidate cap
+is 1–8) with a 60-second inference deadline. #39 reads the current private event
+projection and latest accepted metric snapshots. A release dropped from that
+projection, or superseded before a worker invocation, is not guaranteed to be
+recovered; this worker does not provide historical backfill. An unchanged
+evidence identity is skipped. A changed evidence fingerprint (including a
+correction or changed release text) gets a separate immutable version under the
+original release identity.
 
 The inference callback receives only the evidence bundle. This module provides
 no provider, browser, network, shell, or filesystem tool. Its response must be
 JSON with exactly `summary`, `period`, and `citations`; unsupported numeric
 claims, periods, and URLs are rejected. Fixture evidence is rejected upstream
-by #39. A rejected response or admission/timeout failure writes a generic
-status and leaves the public manifest and all previous summary periods intact.
-The version file is written before an atomic independent manifest replacement;
-statistical metrics and events are published by their existing paths regardless
-of this worker's outcome.
+by #39. Before admission, the worker recovers and validates any staged immutable
+version for the candidate. The public manifest replacement is the commit point:
+failures before it preserve the prior manifest and all previous summary periods.
+If the manifest commits but the private seen ledger fails, the next invocation
+reconciles that published identity before discovery, without another inference
+call. Statistical metrics and events are published by their existing paths
+regardless of this worker's outcome.
 
 The #41 consumer contract is intentionally small and static:
 `summary-manifest.json` contains `schema_version: 1`, `updated_at`, and a

@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 import fcntl
+from hashlib import sha256
 import json
 import os
 from pathlib import Path
@@ -175,6 +176,95 @@ def _status(path: Path, status: str, reason: str | None = None):
     atomic_write(path, encode(payload), 0o644)
 
 
+def _read_manifest(path: Path, output: Path) -> dict:
+    if path.is_symlink():
+        raise ValueError("Summary manifest must not be a symlink")
+    value = json.loads(path.read_text())
+    if (not isinstance(value, dict) or set(value) != {"schema_version", "updated_at", "summaries"}
+            or value["schema_version"] != SCHEMA_VERSION
+            or not isinstance(value["updated_at"], str)
+            or not isinstance(value["summaries"], dict)):
+        raise ValueError("Invalid public summary manifest")
+    for release_key, entry in value["summaries"].items():
+        if (not isinstance(release_key, str) or not isinstance(entry, dict)
+                or set(entry) != {"published_date", "period", "generated_at", "evidence_identity", "version"}
+                or not isinstance(entry["evidence_identity"], str)
+                or not re.fullmatch(r"[0-9a-f]{64}", entry["evidence_identity"])
+                or not all(isinstance(entry[key], str) for key in
+                           ("published_date", "period", "generated_at", "version"))):
+            raise ValueError("Invalid summary entry in public manifest")
+        relative = Path(entry["version"])
+        if relative.is_absolute() or ".." in relative.parts or not relative.parts:
+            raise ValueError("Summary version path escapes output directory")
+        version_path = output / relative
+        cursor = output
+        for part in relative.parts:
+            cursor = cursor / part
+            if cursor.is_symlink():
+                raise ValueError("Summary version path must not contain symlinks")
+        resolved_output = output.resolve()
+        resolved_version = version_path.resolve(strict=True)
+        if resolved_output not in resolved_version.parents:
+            raise ValueError("Summary version path escapes output directory")
+        version = _read_version(version_path)
+        release = version["release"]
+        if (f"{release['source']}:{release['id']}" != release_key
+                or version["evidence_identity"] != entry["evidence_identity"]
+                or release["published_date"] != entry["published_date"]
+                or version["generated_at"] != entry["generated_at"]
+                or version["summary"]["period"] != entry["period"]):
+            raise ValueError("Summary manifest and immutable version disagree")
+    return value
+
+
+def _read_version(path: Path) -> dict:
+    if path.is_symlink():
+        raise ValueError("Summary version must not be a symlink")
+    value = json.loads(path.read_text())
+    if (not isinstance(value, dict) or set(value) != {
+            "schema_version", "release", "generated_at", "evidence_identity", "summary"}
+            or value["schema_version"] != SCHEMA_VERSION
+            or not isinstance(value["release"], dict)
+            or not isinstance(value["generated_at"], str)
+            or not isinstance(value["evidence_identity"], str)
+            or not re.fullmatch(r"[0-9a-f]{64}", value["evidence_identity"])
+            or not isinstance(value["summary"], dict)
+            or set(value["summary"]) != {"summary", "period", "citations"}
+            or not isinstance(value["summary"]["summary"], str)
+            or not isinstance(value["summary"]["period"], str)
+            or not isinstance(value["summary"]["citations"], list)):
+        raise ValueError("Invalid immutable summary version")
+    return value
+
+
+def _write_seen(path: Path, identities: list[str]):
+    atomic_write(path, encode({"schema_version": SCHEMA_VERSION,
+                               "identities": list(dict.fromkeys(identities))}), 0o600)
+
+
+def _version_location(output: Path, release: dict, evidence_id: str) -> tuple[Path, str]:
+    release_key = f"{release['source']}:{release['id']}"
+    folder = sha256(release_key.encode()).hexdigest()
+    relative = Path("summary-versions") / folder / f"{release['published_date']}-{evidence_id}.json"
+    return output / relative, str(relative)
+
+
+def _activate_version(manifest_path: Path, output: Path, version: dict, version_relative: str):
+    release = version["release"]
+    release_key = f"{release['source']}:{release['id']}"
+    manifest = _read_manifest(manifest_path, output) if manifest_path.exists() else {
+        "schema_version": SCHEMA_VERSION, "updated_at": version["generated_at"], "summaries": {}}
+    manifest["summaries"][release_key] = {
+        "published_date": release["published_date"],
+        "period": version["summary"]["period"],
+        "generated_at": version["generated_at"],
+        "evidence_identity": version["evidence_identity"],
+        "version": version_relative,
+    }
+    manifest["updated_at"] = version["generated_at"]
+    atomic_write(manifest_path, encode(manifest), 0o644)
+
+
 def process_summaries(
     store: Store, *, state_dir: str | Path, output_dir: str | Path,
     infer: Callable[[dict], object] | None = None, enabled: bool = False,
@@ -186,70 +276,102 @@ def process_summaries(
     state = _safe_private_dir(Path(state_dir))
     output = Path(output_dir).expanduser()
     manifest_path, status_path = _public_files(output)
-    if infer is None or enabled is not True or os.environ.get("FINSTATS_AI_ENABLED", "").lower() != "true":
-        _status(status_path, "disabled", "owner_activation_required")
-        return {"status": "disabled", "processed": 0}
+    inference_enabled = (infer is not None and enabled is True
+                         and os.environ.get("FINSTATS_AI_ENABLED", "").lower() == "true")
 
+    committed = False
     try:
         with _worker_lock(state):
             seen_path = state / "summary-identities.json"
             seen = _read_seen(seen_path)
+            # The manifest is the publication commit point. Reconcile it into the
+            # private dedupe ledger before discovery or admission; a ledger write
+            # failure must never make an already published identity call inference.
+            if manifest_path.exists():
+                manifest = _read_manifest(manifest_path, output)
+                activated = [entry["evidence_identity"]
+                             for entry in manifest["summaries"].values()]
+                reconciled = list(dict.fromkeys([*seen, *activated]))
+                if reconciled != seen:
+                    try:
+                        _write_seen(seen_path, reconciled)
+                    except OSError:
+                        _status(status_path, "current", "identity_reconciliation_pending")
+                        return {"status": "current", "processed": 0,
+                                "reason": "identity_reconciliation_pending"}
+                    seen = reconciled
             result = discover_published_release_evidence(store, seen_identities=seen)
-            # Discovery itself is capped before any inference call; remaining candidates
-            # are rediscovered on the next invocation from retained release identities.
             candidates = result["candidates"][:max_queue]
             if not candidates:
-                _status(status_path, "current", "no_new_qualifying_release")
-                return {"status": "current", "processed": 0,
+                status = "current" if inference_enabled else "disabled"
+                reason = "no_new_qualifying_release" if inference_enabled else "owner_activation_required"
+                _status(status_path, status, reason)
+                return {"status": status, "processed": 0,
                         "unsupported": result.get("unsupported", [])}
             candidate = candidates[0]
             bundle = candidate["evidence"]
             if bundle.get("evidence_kind") != "official_download":
                 _status(status_path, "stale", "fixture_evidence")
                 return {"status": "stale", "processed": 0, "reason": "fixture_evidence"}
+            evidence_id = candidate["evidence_identity"]
+            if not isinstance(evidence_id, str) or not re.fullmatch(r"[0-9a-f]{64}", evidence_id):
+                raise ValueError("Invalid release evidence identity")
+            release = bundle["release"]
+            version_path, version_relative = _version_location(output, release, evidence_id)
+            if version_path.exists():
+                # Recover a committed immutable stage without another admitted call.
+                staged = _read_version(version_path)
+                if (staged["evidence_identity"] != evidence_id
+                        or staged["release"] != release
+                        or validate_summary(staged["summary"], bundle) != staged["summary"]):
+                    raise ValueError("Staged summary does not match current release evidence")
+                _activate_version(manifest_path, output, staged, version_relative)
+                committed = True
+                try:
+                    _write_seen(seen_path, [*seen, evidence_id])
+                except OSError:
+                    _status(status_path, "current", "identity_reconciliation_pending")
+                    return {"status": "published", "processed": 1,
+                            "reason": "identity_reconciliation_pending"}
+                _status(status_path, "current")
+                return {"status": "published", "processed": 1, "version": str(version_path),
+                        "recovered": True}
+            if not inference_enabled:
+                _status(status_path, "disabled", "owner_activation_required")
+                return {"status": "disabled", "processed": 0}
             from uk_macro_crew.ai_safety import admitted_run
             with admitted_run(), _inference_deadline(timeout_seconds):
                 summary = validate_summary(infer(bundle), bundle)
-            evidence_id = candidate["evidence_identity"]
-            release = bundle["release"]
-            release_key = f"{release['source']}:{release['id']}"
-            filename = f"{release['published_date']}-{evidence_id}.json"
-            release_folder = __import__("hashlib").sha256(release_key.encode()).hexdigest()
-            version_dir = output / "summary-versions" / release_folder
+            version_dir = version_path.parent
             version_dir.mkdir(parents=True, exist_ok=True)
-            version_path = version_dir / filename
             generated_at = _now()
             version = {"schema_version": SCHEMA_VERSION, "release": release,
                        "generated_at": generated_at,
                        "evidence_identity": evidence_id, "summary": summary}
             encoded_version = encode(version)
-            if version_path.exists():
-                # A prior run may have written this immutable version but failed
-                # before replacing the manifest. Reuse identical bytes on retry.
-                if version_path.is_symlink() or version_path.read_bytes() != encoded_version:
-                    raise ValueError("Immutable summary version conflicts with existing content")
-            else:
-                atomic_write(version_path, encoded_version, 0o644)
-            manifest = {"schema_version": SCHEMA_VERSION, "updated_at": _now(), "summaries": {}}
-            if manifest_path.exists():
-                manifest = json.loads(manifest_path.read_text())
-                if (not isinstance(manifest, dict) or manifest.get("schema_version") != SCHEMA_VERSION
-                        or not isinstance(manifest.get("summaries"), dict)):
-                    raise ValueError("Invalid public summary manifest")
-            manifest["summaries"][release_key] = {
-                "published_date": release["published_date"], "period": summary["period"],
-                "generated_at": generated_at, "evidence_identity": evidence_id,
-                "version": str(version_path.relative_to(output)),
-            }
-            manifest["updated_at"] = generated_at
-            atomic_write(manifest_path, encode(manifest), 0o644)
-            seen.append(evidence_id)
-            atomic_write(seen_path, encode({"schema_version": SCHEMA_VERSION,
-                                            "identities": seen}), 0o600)
+            atomic_write(version_path, encoded_version, 0o644)
+            _activate_version(manifest_path, output, version, version_relative)
+            committed = True
+            # Manifest replacement is the commit point. A ledger failure is
+            # reconciled on the next invocation and must not report uncommitted data.
+            try:
+                _write_seen(seen_path, [*seen, evidence_id])
+            except OSError:
+                _status(status_path, "current", "identity_reconciliation_pending")
+                return {"status": "published", "processed": 1,
+                        "reason": "identity_reconciliation_pending"}
             _status(status_path, "current")
             return {"status": "published", "processed": 1, "version": str(version_path)}
     except Exception as exc:
-        # A failed correction never changes the prior public manifest/version.
+        # Before manifest replacement, failures preserve its prior bytes. If the
+        # replacement committed, identity reconciliation is handled separately.
+        if committed:
+            try:
+                _status(status_path, "current", "identity_reconciliation_pending")
+            except OSError:
+                pass
+            return {"status": "published", "processed": 1,
+                    "reason": "identity_reconciliation_pending"}
         reason = ("timeout" if isinstance(exc, TimeoutError) else
                   "admission_or_lock" if isinstance(exc, RuntimeError) else
                   "invalid_summary" if isinstance(exc, ValueError) else "inference_failed")
