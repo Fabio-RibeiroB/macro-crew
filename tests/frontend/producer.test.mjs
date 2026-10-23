@@ -4,6 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { filterChartRange } from "../../src/app/data/chartRange.mjs";
 import {
   loadVerified,
   parseManifest,
@@ -172,6 +173,19 @@ function fileFetcher(data, selectedManifest = manifest) {
         };
 }
 
+test("producer history gives 1Y, 5Y, 10Y and All distinct available periods", async () => {
+  const body = readFileSync(new URL("producer-fuel-v1.json", WIRE));
+  const manifest = JSON.parse(readFileSync(new URL("producer-fuel-v1.manifest.json", WIRE), "utf8"));
+  const producer = await loadVerified("/", fileFetcher(body, manifest));
+  const points = chartPoints(producer.metrics.cpih);
+  const ranges = ["1Y", "5Y", "10Y", "All"].map((range) => filterChartRange(points, range));
+  assert.equal(ranges[3].earliest, "1989-01");
+  for (let index = 1; index < ranges.length; index++) {
+    assert.ok(ranges[index].points.length > ranges[index - 1].points.length);
+    assert.equal(ranges[index].latest, producer.metrics.cpih.latest.period);
+  }
+});
+
 test("DESNZ petrol and diesel render as two weekly UK prices with direct history and source", async () => {
   const fuelBytes = readFileSync(new URL("producer-fuel-v1.json", WIRE));
   const fuelManifest = JSON.parse(readFileSync(new URL("producer-fuel-v1.manifest.json", WIRE), "utf8"));
@@ -318,7 +332,7 @@ test("BoE 5/10/20 nominal par producer export binds exact series and renders Gov
   assert.deepEqual(yields.map((metric) => metric.latest.value), ["5.3516", "4.9700", "5.6700"]);
   assert.equal(yields[0].collection_status, "degraded");
   assert.equal(yields[0].history.at(-1).period, "2026-10-20", "failed maturity retains its previous history while siblings advance");
-  assert.equal(yields[0].history[0].period, "2021-10-20", "public browser history stays in the existing five-year window");
+  assert.equal(yields[0].history[0].period, "2000-01-04", "public history retains the approved source history for All");
   for (const metric of yields) {
     assert.equal(metric.definition.unit, "percent");
     assert.equal(metric.definition.yield_type, "fitted_nominal_par");
