@@ -39,11 +39,46 @@ incomplete; do not revive the old AI-number pipeline as a fallback.
 ## Owner orchestration preferences
 
 * Oversight coordinates agents with concise, bounded briefs.
+* AGENTS.md is the shared instruction source. Do not introduce CLAUDE.md or use
+  Claude agents. Read the dated [recovery handoff](docs/recovery-handoff.md) when
+  resuming; verify its operational facts before acting.
 * Prefer economical, suitable DeepSeek Pro or Luna assignments; use Sol for
   oversight and complex integration.
 * Never use fast or priority speed settings; use standard only.
 * Select reasoning explicitly from each model's capabilities, and use only low,
   medium or max. If requested options are unsupported, report the mismatch.
+
+## Agreed spec and delivery workflow
+
+* Follow the Matt Pocock-inspired workflow agreed here: committed specification
+  → implementation issues and dependencies → short-lived, focused PRs → reviewed,
+  tested delivery. README defines the canonical spec and ADR conventions. Keep
+  approved plans on main; do not hold them in long-lived approval PRs or create
+  competing task lists. Issues track live progress.
+* Use numbered, append-only ADRs for consequential, non-obvious decisions with
+  context, decision and consequences; supersede with a new record. Routine copy
+  belongs in the spec. Do not invent an accepted decision from an unresolved issue.
+* Start each slice with one observable user outcome, affected files, a small set
+  of acceptance checks and explicit exclusions. Put new ideas in the backlog.
+* Preserve working user journeys during migration. Do not hide, disable or retire
+  an existing capability before its replacement works and the owner approves the
+  change. Restoring CrewAI summaries is distinct from using AI as numerical truth.
+* The product is official UK figures with useful, source-grounded explanations.
+  Preserve full reference windows, readable labels, gaps and honest unavailable
+  states. Controls must visibly work or explain why an option is unavailable.
+* Verify the actual interaction and rendered result. CI or SSR alone does not
+  prove browser behavior. If browser/access prerequisites are missing, report the
+  specific unverified behavior; do not claim completion or a successful deployment.
+* Default to one suitable agent. Parallelize only necessary independent work.
+  Delegation consumes the owner's allowance too. Bound briefs and context, agree
+  an effort ceiling, and report a material overrun before expanding the scope.
+* Use focused regressions and required CI. Repeat broad suites or review rounds
+  only for changed risks, failures or unresolved findings. Avoid speculative
+  hardening and duplicate checks; never skip a known correctness defect to save
+  tokens. Reassess scope when a slice repeatedly needs substantial corrections.
+* Report implemented, tested, merged, deployed and verified-live separately. A
+  merged PR is not a delivered feature. Honor existing session authorizations;
+  distinguish an access blocker from a missing approval.
 
 Keep shared guidance here. README remains the architecture and development-command
 source; FRONTEND remains the frontend lifecycle source. Avoid duplicating their
