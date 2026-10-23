@@ -34,7 +34,11 @@ def test_public_delivery_is_readable_official_and_contains_no_private_files(tmp_
     data = read_public(public)
     assert data['mode'] == 'official'
     assert data['metrics']['cpih']['latest']['value'] == '3.3'
-    assert len(data['metrics']['cpih']['history']) == 61
+    # The public feed must retain the accepted history needed by 10Y and All,
+    # rather than silently reducing every larger chart range to five years.
+    assert len(data['metrics']['cpih']['history']) == 452
+    assert data['metrics']['cpih']['history'][0]['period'] == '1989-01'
+    assert data['metrics']['cpih']['history_window'] == 'all_available'
     assert stat.S_IMODE((public / 'current.json').stat().st_mode) == 0o644
     assert not list(public.rglob('*.sqlite3'))
     assert not list(public.rglob('*.bin'))
@@ -384,6 +388,13 @@ def test_checked_in_producer_generation_regenerates_byte_identically(tmp_path):
         for field in ('retrieved_at', 'last_successful_check_at', 'last_attempt_at', 'source_receipt_id'):
             current_core.pop(field, None)
             previous_core.pop(field, None)
+        # Older integration artifacts deliberately retain their original five-year
+        # delivery. Its points must remain identical within the expanded history.
+        old_history = previous_core.pop('history')
+        current_history = current_core.pop('history')
+        assert current_history[-len(old_history):] == old_history
+        current_core.pop('history_window', None)
+        previous_core.pop('history_window', None)
         assert current_core == previous_core
 
 

@@ -26,8 +26,9 @@ and specific Budget/OBR measure coverage remain unfinished.
 metric, creates a consistent private generation, and then delivers a public one.
 Only whitelisted statistical fields are copied. SQLite, raw payloads, local paths
 and detailed errors never enter the public directory. Fixture data cannot be
-promoted to official figures. Five years of history are sent to the browser;
-complete histories and vintages remain private. Public files are 0644 and generated
+promoted to official figures. Accepted observation history is sent to the browser
+so its 1Y/5Y/10Y/All controls can select the available periods; the default view
+remains five years. Revision vintages and raw evidence remain private. Public files are 0644 and generated
 directories 0755 even under the service's private umask.
 
 The public generation is written before its manifest is atomically activated.

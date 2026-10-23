@@ -88,7 +88,7 @@ def deliver(state_dir, output_dir, event_failure_sink=None, event_unqualified_si
                 history = metric.get('history', [])
                 if any(point.get('reference', {}).get('period_status') != 'expired' for point in history):
                     raise ValueError('Unavailable Ofgem history contains a non-expired period')
-                member.update(latest=None, history=history, history_window='last_5_years')
+                member.update(latest=None, history=history, history_window='all_available')
             else:
                 member.update(latest=None, history=[])
         elif metric['validation_status'] == 'verified':
@@ -126,14 +126,12 @@ def deliver(state_dir, output_dir, event_failure_sink=None, event_unqualified_si
             observations = metric['history']
             if not observations or observations[-1] != metric['latest'] or metric['latest']['value'] is None:
                 raise ValueError('Card and history mismatch')
-            last = metric['latest']['period']
-            year = int(last[:4]) - 5
-            cutoff = str(year) + last[4:]
-            # Five-year browser window; all source observations/vintages stay in SQLite.
+            # Chart controls select the visible window. Keep accepted source history
+            # available so 10Y and All do not silently duplicate the five-year view.
             history = [{field: o[field] for field in ('period', 'value', 'status')}
                        | ({'reference': o['reference']} if o.get('reference') else {})
-                       for o in observations if o['period'] >= cutoff]
-            member.update(latest=history[-1], history=history, history_window='last_5_years')
+                       for o in observations]
+            member.update(latest=history[-1], history=history, history_window='all_available')
             verified += 1
         else:
             raise ValueError('Unrecognised validation status')
