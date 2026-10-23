@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from decimal import Decimal, InvalidOperation
 import fcntl
 from hashlib import sha256
 import json
@@ -23,9 +22,13 @@ from finstats.storage import Store, atomic_write, encode
 
 SCHEMA_VERSION = 1
 MAX_QUEUE = 8
+MAX_CLAIMS = 8
 MAX_SUMMARY_CHARS = 1200
 DEFAULT_INFERENCE_TIMEOUT_SECONDS = 60
-_NUMBER = re.compile(r"(?<![\w.])[+-]?(?:\d+(?:,\d{3})*|\d*)(?:\.\d+)?%?(?![\w.])")
+
+
+class OperatorReviewRequired(ValueError):
+    """Private processed identity no longer has a trustworthy immutable version."""
 
 
 def _now() -> str:
@@ -73,71 +76,109 @@ def _read_seen(path: Path) -> list[str]:
     return value["identities"]
 
 
-def _evidence_values(bundle: dict) -> tuple[set[Decimal], set[str], set[str]]:
-    numbers: set[Decimal] = set()
-    periods: set[str] = {bundle["release"]["published_date"]}
+def _reference_window(metric: dict, observation: dict) -> str:
+    return observation.get("reference") or metric.get("reference_window") or metric["definition"]["comparison"]
+
+
+def _available_claims(bundle: dict) -> tuple[set[tuple], set[str]]:
+    allowed: set[tuple] = set()
     citations: set[str] = set()
-    for metric in bundle["metrics"].values():
-        if metric.get("previous_published_date"):
-            periods.add(metric["previous_published_date"])
+    for metric_key, metric in bundle["metrics"].items():
+        unit = metric["definition"]["unit"]
+        for observation in metric.get("observations", []):
+            if observation.get("status", "observed") == "observed" and isinstance(observation.get("value"), str):
+                allowed.add((metric_key, unit, observation["period"],
+                             _reference_window(metric, observation), observation["value"], None,
+                             "current_observation"))
+        for observation in metric.get("previous_observations", []):
+            if observation.get("status", "observed") == "observed" and isinstance(observation.get("value"), str):
+                allowed.add((metric_key, unit, observation["period"],
+                             _reference_window(metric, observation), observation["value"], None,
+                             "previous_observation"))
+        current_by_period = {item["period"]: item for item in metric.get("observations", [])}
+        for revision in metric.get("revisions", []):
+            current = current_by_period.get(revision["period"], {})
+            reference = _reference_window(metric, current) if current else metric.get("reference_window")
+            if (isinstance(revision.get("previous"), str)
+                    and isinstance(revision.get("current"), str)
+                    and reference):
+                allowed.add((metric_key, unit, revision["period"], reference,
+                             revision["current"], revision["previous"], "revision"))
         for url in (metric.get("source_url"), (metric.get("previous_provenance") or {}).get("source_url")):
             if url:
                 citations.add(url)
-        for group in (metric.get("observations", []), metric.get("previous_observations", [])):
-            for observation in group:
-                periods.add(observation["period"])
-                if observation.get("value") is not None:
-                    try:
-                        numbers.add(Decimal(str(observation["value"])))
-                    except InvalidOperation:
-                        raise ValueError("Evidence contains an invalid numeric value")
-        for revision in metric.get("revisions", []):
-            periods.add(revision["period"])
-            for key in ("previous", "current"):
-                if revision.get(key) is not None:
-                    numbers.add(Decimal(str(revision[key])))
     if bundle["release"].get("source_url"):
         citations.add(bundle["release"]["source_url"])
     official_text = bundle.get("official_text")
     if isinstance(official_text, dict) and official_text.get("source_url"):
         citations.add(official_text["source_url"])
-    return numbers, periods, citations
+    return allowed, citations
+
+
+def _claim_tuple(claim: dict) -> tuple:
+    required = {"metric_key", "unit", "period", "reference_window", "value", "previous_value", "provenance"}
+    if (not isinstance(claim, dict) or set(claim) != required
+            or not all(isinstance(claim[key], str) and claim[key] for key in
+                       ("metric_key", "unit", "period", "reference_window", "value", "provenance"))
+            or (claim["previous_value"] is not None and not isinstance(claim["previous_value"], str))
+            or claim["provenance"] not in {"current_observation", "previous_observation", "revision"}):
+        raise ValueError("Summary claim has an invalid structure")
+    return (claim["metric_key"], claim["unit"], claim["period"], claim["reference_window"],
+            claim["value"], claim["previous_value"], claim["provenance"])
+
+
+def _render_claims(claims: list[dict]) -> str:
+    sentences = []
+    for claim in claims:
+        metric = claim["metric_key"].replace("_", " ").capitalize()
+        context = f"{metric} ({claim['period']}; {claim['reference_window']})"
+        unit = {"percent": "%", "GBP": "GBP", "GBP_per_month": "GBP/month",
+                "GBP_per_year": "GBP/year", "pence_per_litre": "pence/litre"}.get(
+                    claim["unit"], claim["unit"])
+        if claim["provenance"] == "revision":
+            sentences.append(f"{context} was revised from {claim['previous_value']} to {claim['value']} {unit}.")
+        elif claim["provenance"] == "previous_observation":
+            sentences.append(f"Previous {context}: {claim['value']} {unit}.")
+        else:
+            sentences.append(f"{context}: {claim['value']} {unit}.")
+    rendered = " ".join(sentences)
+    if not rendered or len(rendered) > MAX_SUMMARY_CHARS:
+        raise ValueError("Rendered summary is empty or exceeds the size limit")
+    return rendered
+
+
+def _claim_reference_periods(summary: dict) -> list[str]:
+    return list(dict.fromkeys(claim["period"] for claim in summary["claims"]))
 
 
 def validate_summary(raw: object, bundle: dict) -> dict:
-    """Accept only the exact small public schema and evidence-supported claims."""
+    """Validate exact evidence tuples, then render all numeric sentences locally."""
     if isinstance(raw, str):
         try:
             raw = json.loads(raw)
         except (ValueError, TypeError) as exc:
             raise ValueError("Summary is not valid JSON") from exc
-    if not isinstance(raw, dict) or set(raw) != {"summary", "period", "citations"}:
-        raise ValueError("Summary must contain exactly summary, period and citations")
-    summary, period, citations = raw["summary"], raw["period"], raw["citations"]
-    if (not isinstance(summary, str) or not summary.strip() or len(summary) > MAX_SUMMARY_CHARS
-            or "<" in summary or ">" in summary):
-        raise ValueError("Summary text is empty, oversized or contains markup")
-    if not isinstance(period, str):
-        raise ValueError("Summary period is invalid")
-    allowed_numbers, allowed_periods, allowed_citations = _evidence_values(bundle)
-    if period not in allowed_periods:
-        raise ValueError("Summary period is not present in the supplied evidence")
+    if not isinstance(raw, dict) or set(raw) != {"claims", "citations"}:
+        raise ValueError("Summary must contain exactly claims and citations")
+    claims, citations = raw["claims"], raw["citations"]
+    if not isinstance(claims, list) or not 1 <= len(claims) <= MAX_CLAIMS:
+        raise ValueError("Summary claims are missing or exceed the limit")
+    allowed_claims, allowed_citations = _available_claims(bundle)
+    seen_claims = set()
+    for claim in claims:
+        normalized = _claim_tuple(claim)
+        if normalized not in allowed_claims:
+            raise ValueError("Summary claim does not match a metric, unit, period, value and provenance")
+        if normalized in seen_claims:
+            raise ValueError("Summary claims contain duplicates")
+        seen_claims.add(normalized)
     if not isinstance(citations, list) or not citations or len(citations) > 8:
         raise ValueError("Summary citations are missing or exceed the limit")
     if any(not isinstance(url, str) or url not in allowed_citations for url in citations):
         raise ValueError("Summary cites a source outside the supplied evidence")
     if len(set(citations)) != len(citations):
         raise ValueError("Summary citations contain duplicates")
-    for token in _NUMBER.findall(summary):
-        if token in {"", "+", "-"}:
-            continue
-        try:
-            value = Decimal(token.replace(",", "").rstrip("%"))
-        except InvalidOperation as exc:
-            raise ValueError("Summary contains an invalid numeric claim") from exc
-        if value not in allowed_numbers:
-            raise ValueError("Summary contains a number absent from the supplied evidence")
-    return {"summary": summary.strip(), "period": period, "citations": citations}
+    return {"summary": _render_claims(claims), "claims": claims, "citations": citations}
 
 
 def _public_files(output: Path):
@@ -187,11 +228,14 @@ def _read_manifest(path: Path, output: Path) -> dict:
         raise ValueError("Invalid public summary manifest")
     for release_key, entry in value["summaries"].items():
         if (not isinstance(release_key, str) or not isinstance(entry, dict)
-                or set(entry) != {"published_date", "period", "generated_at", "evidence_identity", "version"}
+                or set(entry) != {"published_date", "reference_periods", "generated_at",
+                                  "evidence_identity", "version"}
                 or not isinstance(entry["evidence_identity"], str)
                 or not re.fullmatch(r"[0-9a-f]{64}", entry["evidence_identity"])
                 or not all(isinstance(entry[key], str) for key in
-                           ("published_date", "period", "generated_at", "version"))):
+                           ("published_date", "generated_at", "version"))
+                or not isinstance(entry["reference_periods"], list)
+                or any(not isinstance(period, str) for period in entry["reference_periods"])):
             raise ValueError("Invalid summary entry in public manifest")
         relative = Path(entry["version"])
         if relative.is_absolute() or ".." in relative.parts or not relative.parts:
@@ -212,7 +256,8 @@ def _read_manifest(path: Path, output: Path) -> dict:
                 or version["evidence_identity"] != entry["evidence_identity"]
                 or release["published_date"] != entry["published_date"]
                 or version["generated_at"] != entry["generated_at"]
-                or version["summary"]["period"] != entry["period"]):
+                or list(dict.fromkeys(claim["period"] for claim in version["summary"]["claims"]))
+                != entry["reference_periods"]):
             raise ValueError("Summary manifest and immutable version disagree")
     return value
 
@@ -229,12 +274,47 @@ def _read_version(path: Path) -> dict:
             or not isinstance(value["evidence_identity"], str)
             or not re.fullmatch(r"[0-9a-f]{64}", value["evidence_identity"])
             or not isinstance(value["summary"], dict)
-            or set(value["summary"]) != {"summary", "period", "citations"}
+            or set(value["summary"]) != {"summary", "claims", "citations"}
             or not isinstance(value["summary"]["summary"], str)
-            or not isinstance(value["summary"]["period"], str)
+            or not isinstance(value["summary"]["claims"], list)
             or not isinstance(value["summary"]["citations"], list)):
         raise ValueError("Invalid immutable summary version")
+    if (not 1 <= len(value["summary"]["claims"]) <= MAX_CLAIMS
+            or not 1 <= len(value["summary"]["citations"]) <= 8
+            or any(not isinstance(url, str) or not url for url in value["summary"]["citations"])
+            or len(set(value["summary"]["citations"])) != len(value["summary"]["citations"])):
+        raise ValueError("Invalid immutable summary claims or citations")
+    try:
+        for claim in value["summary"]["claims"]:
+            _claim_tuple(claim)
+        if _render_claims(value["summary"]["claims"]) != value["summary"]["summary"]:
+            raise ValueError("Summary prose does not match structured claims")
+    except (KeyError, TypeError) as exc:
+        raise ValueError("Invalid immutable summary claim") from exc
     return value
+
+
+def _validate_seen_versions(output: Path, identities: list[str]):
+    versions = output / "summary-versions"
+    if versions.is_symlink():
+        raise OperatorReviewRequired("Processed immutable versions directory is unsafe")
+    for identity in identities:
+        matches = []
+        if versions.exists():
+            for folder in versions.iterdir():
+                if folder.is_symlink() or not folder.is_dir():
+                    continue
+                matches.extend(folder.glob(f"*-{identity}.json"))
+        if len(matches) != 1:
+            raise OperatorReviewRequired("Processed identity has no unique immutable version")
+        try:
+            version = _read_version(matches[0])
+            expected, _ = _version_location(output, version["release"], identity)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise OperatorReviewRequired("Processed immutable version is missing or corrupt") from exc
+        if (version["evidence_identity"] != identity
+                or expected.resolve() != matches[0].resolve()):
+            raise OperatorReviewRequired("Processed immutable version is missing or corrupt")
 
 
 def _write_seen(path: Path, identities: list[str]):
@@ -256,7 +336,8 @@ def _activate_version(manifest_path: Path, output: Path, version: dict, version_
         "schema_version": SCHEMA_VERSION, "updated_at": version["generated_at"], "summaries": {}}
     manifest["summaries"][release_key] = {
         "published_date": release["published_date"],
-        "period": version["summary"]["period"],
+        "reference_periods": list(dict.fromkeys(
+            claim["period"] for claim in version["summary"]["claims"])),
         "generated_at": version["generated_at"],
         "evidence_identity": version["evidence_identity"],
         "version": version_relative,
@@ -284,6 +365,8 @@ def process_summaries(
         with _worker_lock(state):
             seen_path = state / "summary-identities.json"
             seen = _read_seen(seen_path)
+            _validate_seen_versions(output, seen)
+            activated = []
             # The manifest is the publication commit point. Reconcile it into the
             # private dedupe ledger before discovery or admission; a ledger write
             # failure must never make an already published identity call inference.
@@ -300,7 +383,10 @@ def process_summaries(
                         return {"status": "current", "processed": 0,
                                 "reason": "identity_reconciliation_pending"}
                     seen = reconciled
-            result = discover_published_release_evidence(store, seen_identities=seen)
+            # Discovery deduplicates only against identities currently activated
+            # publicly. The private ledger records paid work; it must not suppress
+            # a retained valid version after an operator rolls the manifest back.
+            result = discover_published_release_evidence(store, seen_identities=activated)
             candidates = result["candidates"][:max_queue]
             if not candidates:
                 status = "current" if inference_enabled else "disabled"
@@ -318,12 +404,16 @@ def process_summaries(
                 raise ValueError("Invalid release evidence identity")
             release = bundle["release"]
             version_path, version_relative = _version_location(output, release, evidence_id)
+            if evidence_id in seen and not version_path.exists():
+                raise OperatorReviewRequired("Processed identity has no matching immutable version")
             if version_path.exists():
                 # Recover a committed immutable stage without another admitted call.
                 staged = _read_version(version_path)
+                staged_response = {"claims": staged["summary"]["claims"],
+                                   "citations": staged["summary"]["citations"]}
                 if (staged["evidence_identity"] != evidence_id
                         or staged["release"] != release
-                        or validate_summary(staged["summary"], bundle) != staged["summary"]):
+                        or validate_summary(staged_response, bundle) != staged["summary"]):
                     raise ValueError("Staged summary does not match current release evidence")
                 _activate_version(manifest_path, output, staged, version_relative)
                 committed = True
@@ -373,6 +463,7 @@ def process_summaries(
             return {"status": "published", "processed": 1,
                     "reason": "identity_reconciliation_pending"}
         reason = ("timeout" if isinstance(exc, TimeoutError) else
+                  "operator_review_required" if isinstance(exc, OperatorReviewRequired) else
                   "admission_or_lock" if isinstance(exc, RuntimeError) else
                   "invalid_summary" if isinstance(exc, ValueError) else "inference_failed")
         _status(status_path, "stale", reason)
