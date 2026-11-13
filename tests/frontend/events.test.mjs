@@ -108,8 +108,10 @@ test("Ofgem events use the typical dual-fuel bill ID and exact announced-by dead
 });
 
 test("Government event links use the canonical net debt metric ID", () => {
+  // Always in the future: the route only lists upcoming dates, so a fixed date would expire.
+  const budgetDate = new Date(Date.now() + 60 * 864e5).toISOString().slice(0, 10);
   const fiscal = {
-    id: "hm-treasury:autumn-budget:2026-11-04", title: "Autumn Budget", date: "2026-11-04",
+    id: `hm-treasury:autumn-budget:${budgetDate}`, title: "Autumn Budget", date: budgetDate,
     time: null, time_precision: "date", status: "scheduled", source: "hm_treasury",
     source_url: "https://www.gov.uk/government/publications/chancellor-letter-to-the-treasury-select-committee-tsc-budget-2026-date",
     linked_indicators: ["uk.public_debt.net_debt_gdp"],
@@ -225,8 +227,10 @@ test("event list presents source status, explicit cancellation and date-only val
 });
 
 test("Government route renders a qualified fiscal date linked to the canonical debt metric", async () => {
+  // Always in the future: the route only lists upcoming dates, so a fixed date would expire.
+  const budgetDate = new Date(Date.now() + 60 * 864e5).toISOString().slice(0, 10);
   const fiscal = {
-    id: "hm-treasury:autumn-budget:2026-11-04", title: "Autumn Budget", date: "2026-11-04",
+    id: `hm-treasury:autumn-budget:${budgetDate}`, title: "Autumn Budget", date: budgetDate,
     time: null, time_precision: "date", status: "scheduled", source: "hm_treasury",
     source_url: "https://www.gov.uk/government/publications/chancellor-letter-to-the-treasury-select-committee-tsc-budget-2026-date",
     linked_indicators: ["uk.public_debt.net_debt_gdp"],
