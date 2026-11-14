@@ -56,3 +56,19 @@ def test_is_due_or_overdue_uses_enriched_dates():
 
     assert scheduler.is_due_or_overdue(info, "2026-03-18") is False
     assert scheduler.is_due_or_overdue(info, "2026-03-19") is True
+
+
+class _Result:
+    def __init__(self, returncode, stderr=""):
+        self.returncode = returncode
+        self.stderr = stderr
+
+
+def test_retry_only_after_schema_validation_failure():
+    rejected = _Result(1, "ERROR: Failed to save JSON report: schema validation failed: gdp.source must be from approved domains")
+    assert scheduler.should_retry_crew(rejected, attempt=1)
+    assert not scheduler.should_retry_crew(rejected, attempt=2)
+    assert not scheduler.should_retry_crew(_Result(0), attempt=1)
+    for other in ("insufficient_quota", "RateLimitError", "AuthenticationError 401",
+                  "Daily AI attempt limit reached", "AI jobs are disabled"):
+        assert not scheduler.should_retry_crew(_Result(1, other), attempt=1)
