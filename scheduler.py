@@ -33,8 +33,21 @@ LOG_FILE = Path("/home/finstats/logs/scheduler.log")
 UV_BIN = Path("/home/finstats/.local/bin/uv")
 CREW_CMD = [str(UV_BIN), "run", "run_crew"]
 CREW_TIMEOUT = 1800  # 30 minutes — LLM calls can be slow
+# One retry, only when the model's output was rejected by schema validation
+# (e.g. a source outside the approved domains). Never retry other failures such
+# as credit, spend-cap or authentication errors. The AI admission gate must also
+# allow two daily attempts (FINSTATS_AI_DAILY_ATTEMPTS=2) for the retry to run.
+MAX_CREW_ATTEMPTS = 2
+RETRYABLE_MARKER = "schema validation failed"
 WEEKLY_REBUILD_WEEKDAY = 6  # Sunday
 MAX_SNAPSHOT_AGE_DAYS = 7
+
+
+def should_retry_crew(result, attempt):
+    """Retry only a schema-validation rejection, and only within the attempt cap."""
+    if result.returncode == 0 or attempt >= MAX_CREW_ATTEMPTS:
+        return False
+    return RETRYABLE_MARKER in (result.stderr or "")
 
 
 def setup_logging():
@@ -276,26 +289,34 @@ def cmd_run(args):
 
     start = time.time()
 
-    try:
-        result = subprocess.run(
-            CREW_CMD,
-            cwd=PROJECT_DIR,
-            capture_output=True,
-            text=True,
-            timeout=CREW_TIMEOUT,
+    result = None
+    for attempt in range(1, MAX_CREW_ATTEMPTS + 1):
+        try:
+            result = subprocess.run(
+                CREW_CMD,
+                cwd=PROJECT_DIR,
+                capture_output=True,
+                text=True,
+                timeout=CREW_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired:
+            logging.error(f"FAILURE: Crew run timed out after {CREW_TIMEOUT}s")
+            sys.exit(1)
+        except FileNotFoundError:
+            logging.error(
+                f"FAILURE: Command not found: {CREW_CMD[0]}. "
+                "Is uv installed? Check UV_BIN in scheduler.py."
+            )
+            sys.exit(1)
+        except Exception as e:
+            logging.error(f"FAILURE: Error running crew: {e}")
+            sys.exit(1)
+        if not should_retry_crew(result, attempt):
+            break
+        logging.warning(
+            "Crew output failed schema validation; retrying once "
+            f"(attempt {attempt + 1} of {MAX_CREW_ATTEMPTS})."
         )
-    except subprocess.TimeoutExpired:
-        logging.error(f"FAILURE: Crew run timed out after {CREW_TIMEOUT}s")
-        sys.exit(1)
-    except FileNotFoundError:
-        logging.error(
-            f"FAILURE: Command not found: {CREW_CMD[0]}. "
-            "Is uv installed? Check UV_BIN in scheduler.py."
-        )
-        sys.exit(1)
-    except Exception as e:
-        logging.error(f"FAILURE: Error running crew: {e}")
-        sys.exit(1)
 
     elapsed = int(time.time() - start)
 
