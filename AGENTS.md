@@ -39,14 +39,15 @@ incomplete; do not revive the old AI-number pipeline as a fallback.
 ## Owner orchestration preferences
 
 * Oversight coordinates agents with concise, bounded briefs.
-* AGENTS.md is the shared instruction source. Do not introduce CLAUDE.md or use
-  Claude agents. Read the dated [recovery handoff](docs/recovery-handoff.md) when
-  resuming; verify its operational facts before acting.
-* Prefer economical, suitable DeepSeek Pro or Luna assignments; use Sol for
+* AGENTS.md is the shared instruction source. Do not introduce CLAUDE.md. Read
+  the dated [recovery handoff](docs/recovery-handoff.md) when resuming; verify its
+  operational facts before acting.
+* The owner currently has only a Claude subscription. Use Claude models only:
+  at least Claude Sonnet with high reasoning for delegated work; Opus for
   oversight and complex integration.
 * Never use fast or priority speed settings; use standard only.
-* Select reasoning explicitly from each model's capabilities, and use only low,
-  medium or max. If requested options are unsupported, report the mismatch.
+* Select reasoning explicitly from each model's capabilities. If requested
+  options are unsupported, report the mismatch.
 
 ## Agreed spec and delivery workflow
 
