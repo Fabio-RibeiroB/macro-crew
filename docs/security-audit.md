@@ -76,6 +76,16 @@ configuration. State defaults to `~/.local/state/finstats-ai` (0700, ledger 0600
 Disable immediately by setting it false. Do not delete/reset ledgers to retry a
 failed job routinely. Statistics publishing continues without AI or credits.
 
+### Re-enabled by owner decision, 13 November 2026
+
+The daily 17:00 `finstats` cron was re-enabled with `FINSTATS_AI_ENABLED=true`
+and `UV_NO_SYNC=1` (the existing 1.7.2 environment is used as installed; a newer
+`pyproject.toml` would otherwise trigger an unsafe re-resolve). The admission
+gate, its default one attempt per day and the private ledger are unchanged.
+The weaker isolation noted above (no systemd sandbox; same user as the site and
+credential) remains open. A narrow sudoers rule lets the owner account run
+commands as `finstats` only (`/etc/sudoers.d/finstats-agent`), not as root.
+
 ## Practical deployment checklist (not applied)
 
 1. Back up Apache config and run `apache2ctl configtest` before reload. Review the

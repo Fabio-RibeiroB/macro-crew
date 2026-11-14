@@ -44,3 +44,18 @@ or recreate it before use. The owner has not yet supplied its diagnostic output.
 Do not start a replacement implementation from this note. Inspect the existing
 runtime, preserve reports/private state and rollback, establish the failure, then
 make the smallest repair and prove the restored user journey.
+
+## Update — 14 November 2026
+
+Recovery is complete; continue under M8 in the specification.
+
+* CrewAI summaries restored: the cron was commented out after the security
+  review. Re-enabled 13 November (see the security audit). A manual run that day
+  succeeded and refreshed the public reports.
+* Chart ranges fixed (#78) and deployed; later deploys `deploy-2026-11-13.1` and
+  `deploy-2026-11-14.1` (main `44e42ad`, #79–#82). Releases and backups are under
+  `/home/finstats/releases` and `/home/finstats/backups/macro-crew`.
+* The production checkout is a detached `main` checkout; fast-forward with
+  `git checkout --detach origin/main` after an ancestry check. Generated report
+  changes are intentional.
+* T3 browser verification still needs host libraries installed by the owner.
