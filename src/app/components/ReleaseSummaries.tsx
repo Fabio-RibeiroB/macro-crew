@@ -7,6 +7,9 @@ const dateLabel = (value: string) => new Date(value).toLocaleDateString("en-GB",
 
 /** Render only validated producer claims belonging to this page's subject. */
 export function ReleaseSummaries({ subject, data, metrics, loading, error, refresh }: any) {
+  // The explanation feed is not published yet. Show nothing rather than a false
+  // "could not be refreshed" alert; once loaded, later failures keep prior data.
+  if (!data) return null;
   const claims = summariesForSubject(data, subject, metrics);
   const subjectLabels: Record<string, string> = {
     prices: "Prices", housing: "Housing", "jobs-pay": "Jobs and pay", economy: "The economy", government: "Government and the Budget",
