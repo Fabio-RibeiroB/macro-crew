@@ -14,6 +14,7 @@ import {
   DEFAULT_CHART_RANGE,
   filterChartRange,
   moveChartRange,
+  simplifyForChart,
 } from "../data/chartRange.mjs";
 import { formatPeriod } from "../data/verified.mjs";
 
@@ -114,6 +115,12 @@ export function HistoricalTrendCard({
     [data, selectedRange],
   );
   const visibleData = selection.points;
+  const chartData = useMemo(() => simplifyForChart(visibleData), [visibleData]);
+  // Long daily series (e.g. Bank Rate since 1975) would otherwise put thousands
+  // of rows in the DOM; build them only when the reader opens the table.
+  const [valuesOpen, setValuesOpen] = useState(false);
+  const renderRows = valuesOpen || visibleData.length <= 500;
+  const latestPoint = [...visibleData].reverse().find((p) => typeof p.value === "number");
 
   const values = visibleData
     .map((p) => p.value)
@@ -211,10 +218,14 @@ export function HistoricalTrendCard({
             </div>
           </div>
         ) : (
-          <div className="h-64">
+          <div
+            className="h-64"
+            role="img"
+            aria-label={`${title}: line chart of ${visibleData.length} readings${latestPoint ? `, latest ${exactValue(latestPoint.value, unit)} for ${formatPeriod(latestPoint.period ?? latestPoint.date ?? "")}` : ""}. Exact values are in the table below.`}
+          >
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
-                data={visibleData}
+                data={chartData}
                 margin={{ top: 4, right: 8, left: 8, bottom: 4 }}
               >
                 <defs>
@@ -284,9 +295,12 @@ export function HistoricalTrendCard({
           </div>
         )}
         {visibleData.length > 0 && (
-          <details className="fs-chart-values">
+          <details
+            className="fs-chart-values"
+            onToggle={(event) => setValuesOpen((event.currentTarget as HTMLDetailsElement).open)}
+          >
             <summary>Exact values ({visibleData.length})</summary>
-            <div className="fs-chart-values-scroll">
+            {renderRows && <div className="fs-chart-values-scroll">
               <table>
                 <caption>
                   {title}. Exact values in {unitDescription}.
@@ -315,7 +329,7 @@ export function HistoricalTrendCard({
                   })}
                 </tbody>
               </table>
-            </div>
+            </div>}
           </details>
         )}
       </div>

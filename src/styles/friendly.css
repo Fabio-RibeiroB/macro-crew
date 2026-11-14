@@ -453,6 +453,11 @@
   min-height: 36px;
   padding: 6px 10px;
 }
+@media (pointer: coarse) {
+  .fs-range button {
+    min-height: 44px;
+  }
+}
 .fs-range button:first-child {
   border-radius: 7px 0 0 7px;
 }
