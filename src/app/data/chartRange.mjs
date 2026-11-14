@@ -162,3 +162,29 @@ export function filterChartRange(points, range = DEFAULT_CHART_RANGE) {
       : null,
   };
 }
+
+/**
+ * Reduce long series for drawing only; the exact-values table keeps every point.
+ * Keeps first/last points, every gap (null) and its neighbours, and every point
+ * where the value changes, so step series such as Bank Rate lose nothing visible.
+ * If still above `limit`, evenly samples the remaining points.
+ */
+export function simplifyForChart(points, limit = 1500) {
+  if (!Array.isArray(points) || points.length <= limit) return points;
+  const isNum = (p) => typeof p?.value === "number";
+  const keep = new Uint8Array(points.length);
+  keep[0] = 1; keep[points.length - 1] = 1;
+  for (let i = 1; i < points.length - 1; i++) {
+    const prev = points[i - 1], cur = points[i], next = points[i + 1];
+    if (!isNum(cur) || !isNum(prev) || !isNum(next) || cur.value !== prev.value || cur.value !== next.value) keep[i] = 1;
+  }
+  let kept = points.filter((_, i) => keep[i]);
+  if (kept.length <= limit) return kept;
+  const must = (p, i) => i === 0 || i === kept.length - 1 || !isNum(p)
+    || !isNum(kept[i - 1]) || !isNum(kept[i + 1]);
+  const optional = kept.filter((p, i) => !must(p, i)).length;
+  const budget = Math.max(1, limit - (kept.length - optional));
+  const stride = Math.ceil(optional / budget);
+  let n = 0;
+  return kept.filter((p, i) => must(p, i) || (n++ % stride === 0));
+}

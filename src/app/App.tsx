@@ -939,7 +939,7 @@ function GrowthGuide() {
           employment, wage, rent or house-price figures.
         </p>
         <a className="fs-link" href="/prices">
-          See what prices mean for purchasing power <ArrowRight size={16} />
+          See what prices mean for purchasing power <ArrowRight size={16} aria-hidden="true" />
         </a>
       </aside>
     </section>
@@ -1126,7 +1126,7 @@ function Publications({ reports, reportTime }: any) {
           Financial Stability Reports
         </OfficialLink>
         <a className="fs-link" href="/government-budget">
-          Government Budgets & OBR forecasts <ArrowRight size={16} />
+          Government Budgets & OBR forecasts <ArrowRight size={16} aria-hidden="true" />
         </a>
         <OfficialLink href="https://obr.uk/">
           OBR forecasts & analysis
@@ -1504,7 +1504,7 @@ export default function App({
             onClick={() => setDark(!dark)}
             aria-label={dark ? "Use light theme" : "Use dark theme"}
           >
-            {dark ? <Sun size={19} /> : <Moon size={19} />}
+            {dark ? <Sun size={19} aria-hidden="true" /> : <Moon size={19} aria-hidden="true" />}
           </button>
         </div>
       </header>
@@ -1612,7 +1612,7 @@ export default function App({
             </PageHeading>
             <section className="fs-container fs-section">
               <a className="fs-button" href="/">
-                Go to the overview <ArrowRight size={16} />
+                Go to the overview <ArrowRight size={16} aria-hidden="true" />
               </a>
             </section>
           </>
