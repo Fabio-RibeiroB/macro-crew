@@ -1072,6 +1072,40 @@ function GiltYields({ data, loading, error, refresh }: any) {
   </Statistics>;
 }
 
+function AiSummary({ reports, reportTime }: any) {
+  return (
+    <section className="fs-container fs-section" id="ai-summary" aria-labelledby="ai-summary-heading">
+      <div className="fs-section-heading">
+        <div>
+          <h2 id="ai-summary-heading">AI summary</h2>
+          <p className="fs-alert">
+            AI commentary on the latest Bank of England publications
+            {reportTime ? `, generated ${checkedAt(reportTime)}` : ""}. It is
+            not checked against the official figures on this site. Use the
+            original publication to confirm facts, dates and forecasts.
+          </p>
+        </div>
+      </div>
+      <div className="fs-archive-body">
+        {reports.map((report: any) => (
+          <article key={report.key}>
+            <p className="fs-eyebrow">{formatPeriod(report.report_date)}</p>
+            <h3>{reportLabel(report)}</h3>
+            <p>{report.summary}</p>
+            <OfficialLink href={report.source}>Original publication</OfficialLink>
+          </article>
+        ))}
+        {!reports.length && (
+          <p>
+            The AI summary could not be loaded. Official figures and links
+            remain available.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function Publications({ reports, reportTime }: any) {
   return (
     <section className="fs-container fs-section" id="publications">
@@ -1080,7 +1114,7 @@ function Publications({ reports, reportTime }: any) {
           <p className="fs-eyebrow">Read a little deeper</p>
           <h2>The Bank’s outlook & financial stability</h2>
           <p>
-            Official publications and clearly labelled earlier AI commentary.
+            Official Bank of England and OBR publications.
           </p>
         </div>
       </div>
@@ -1098,43 +1132,6 @@ function Publications({ reports, reportTime }: any) {
           OBR forecasts & analysis
         </OfficialLink>
       </div>
-      <details className="fs-archive">
-        <summary>
-          Earlier AI report summaries{" "}
-          <span>
-            {reports.length
-              ? `${reports.length} saved summaries`
-              : "Currently unavailable"}
-          </span>
-          <ChevronDown size={18} />
-        </summary>
-        <div className="fs-archive-body">
-          <p className="fs-alert">
-            Archived AI commentary
-            {reportTime ? `, generated ${checkedAt(reportTime)}` : ""}. These
-            summaries have not been checked against the verified figures above.
-            Use the original publication to confirm facts, dates and forecasts.
-          </p>
-          {reports.map((report: any) => (
-            <article key={report.key}>
-              <p className="fs-eyebrow">
-                Earlier AI summary · {formatPeriod(report.report_date)}
-              </p>
-              <h3>{reportLabel(report)}</h3>
-              <p>{report.summary}</p>
-              <OfficialLink href={report.source}>
-                Original publication
-              </OfficialLink>
-            </article>
-          ))}
-          {!reports.length && (
-            <p>
-              Earlier summaries could not be loaded. Verified figures and
-              official links remain available.
-            </p>
-          )}
-        </div>
-      </details>
     </section>
   );
 }
@@ -1155,8 +1152,8 @@ function About() {
           Wages and unemployment are published from verified official series.
           UK private-rent growth and average monthly rent are also published.
           UK average house prices are published from the HM Land Registry UK HPI.
-          Energy and other measures stay off the site until their feeds are
-          ready. If a statistic covers a smaller area than the UK,
+          Household energy bills and road fuel prices are published from
+          official Ofgem and government feeds. If a statistic covers a smaller area than the UK,
           such as Great Britain, that geography is named with the figure.
         </p>
         <h2>Official figures and AI summaries</h2>
@@ -1166,6 +1163,9 @@ function About() {
           commentary. They are separate from the verified figures, they are not
           official statistics, and they are not forecasts produced by this
           site.
+        </p>
+        <p>
+          <a className="fs-link" href="/economy#ai-summary">Read the AI summary</a>
         </p>
         <p>
           <a className="fs-link" href="/sources">
@@ -1518,6 +1518,11 @@ export default function App({
               overview
             />
             <EventList {...eventProps} limit={5} compact />
+            <section className="fs-container fs-section">
+              <a className="fs-link" href="/economy#ai-summary">
+                Read the AI summary of the latest Bank of England reports <ArrowRight size={16} aria-hidden="true" />
+              </a>
+            </section>
           </>
         )}
         {page.id === "calendar" && <><PageHeading eyebrow="Official dates" title={page.title}>Known release and meeting dates from official sources.</PageHeading><EventList {...eventProps} /></>}
@@ -1542,6 +1547,7 @@ export default function App({
               activity.
             </PageHeading>
             <Statistics {...stats} kinds={["bank_rate", "gdp"]} />
+            <AiSummary reports={reports} reportTime={reportTime} />
             <EventList {...eventProps} indicatorIds={["uk.bank_rate.daily", "uk.gdp.monthly_growth"]} compact />
             <ReleaseSummaries subject="economy" {...summaryProps} />
             <InterestGuide />
