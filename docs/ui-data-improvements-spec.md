@@ -640,6 +640,38 @@ to newer numbers and no AI failure interrupts numerical/calendar publication.
 Finish the shared milestone gate with mocked AI and reviewed example outputs;
 production paid execution remains an explicitly controlled activation step.
 
+### M8 — Clear layout and a visible AI summary (approved 14 November 2026)
+
+**Demonstration:** each subject page reads in one consistent order and the CrewAI
+summary is easy to find wherever it is relevant, without changing any figures.
+
+Context: after recovery on 13–14 November 2026 the owner found the layout confusing
+across the board and the AI summary hidden. PRs #81–#82 made the summary visible
+on Economy and kept long chart histories responsive. M8 continues from there.
+
+Implementation slices (one issue and one focused PR each, in order):
+
+0. Housekeeping: browser prerequisites on the host so UI work is verified in a
+   real browser; one bounded retry for the daily CrewAI job after a source-domain
+   validation failure; record the 13 November cron re-enable and deployments in
+   the security audit and recovery handoff.
+1. Design direction: two or three mocked directions (type, spacing, colour, card
+   and density) for owner choice, recorded as an ADR. No production change.
+2. Page structure, one page per PR (overview, Economy, Prices, Jobs & Pay,
+   Housing, Government): key figure → what it means → chart → AI summary →
+   sources, using the chosen direction. Preserve every working journey, anchor,
+   direct URL and unavailable state.
+3. AI summary placement: one consistent "AI summary" section on each relevant
+   page, labelled as AI commentary not checked against the official figures.
+4. Chart details: "last updated" per chart and a visible gap indicator.
+5. One explanations entry point covering the CrewAI summary now and the M7
+   release explanations later.
+
+**Acceptance:** each slice is verified in a real browser on desktop and mobile
+(or the unverified behaviour is reported), keeps all tests green and changes no
+statistical value. M7's release explanations remain separate; the CrewAI summary
+stays until M7 works and the owner approves any replacement.
+
 ## 12. Release acceptance
 
 - All nine headline cards and supporting Government feeds work against reviewed
@@ -671,7 +703,8 @@ production paid execution remains an explicitly controlled activation step.
 
 Regional maps/filters, local searches, personalised advice, accounts, alerts,
 visitor-triggered AI, live intraday trading feeds, AI-generated forecasts,
-additional homepage indicators and a wholesale visual redesign.
+additional homepage indicators. (A visual redesign was deferred until 14 November
+2026, when the owner approved it as M8.)
 
 ## 14. Owner decisions in this revision
 
@@ -691,6 +724,10 @@ Release-driven explanations and milestone gates are incorporated as requested.
 Exact fuel material-movement policies and any future source-definition changes
 remain specific review gates during qualification, not guesses delegated to an
 implementation model. Other milestones can progress independently.
+
+On 14 November 2026 the owner approved M8: a layout and design overhaul with a
+visible AI summary, ordered before further M7 work. Design direction is chosen by
+the owner from mocked options; page PRs are delegated one at a time.
 
 ## 15. Official references recorded during specification
 
