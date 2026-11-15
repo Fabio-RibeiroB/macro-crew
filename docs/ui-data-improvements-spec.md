@@ -84,22 +84,24 @@ Approved headline order, preserving Inflation then Bank Rate:
 9. GDP
 
 Each card contains a direct name, current value, reference period/date, meaningful
-comparison and a small information control providing a brief definition. Wages
+comparison and a brief definition. Under ADR 0001 the overview is a dense ledger
+and the definition is shown inline on each row instead of behind an information
+control. Wages
 also shows its agreed after-inflation measure as secondary context. Petrol &
 Diesel shows two separately labelled pence-per-litre values and comparisons,
 never a blended fuel price. Both values count toward fold/readability acceptance.
 Public Debt and yields do not appear as extra homepage cards. Cards do not
 contain trend lines, long explanations or repeated official-data badges.
 
-The main card link goes directly to its relevant page section. The information
-control works independently: opening a definition must not navigate. Use valid
+The main card link goes directly to its relevant page section. Where an information
+control remains, it works independently: opening a definition must not navigate. Use valid
 markup with no button nested inside an anchor. Definitions must work by keyboard,
 touch and pointer, not hover alone; dismissal returns focus appropriately.
 
 ### Responsive acceptance
 
 - At 1366×768 and 1440×900, all nine primary values and their names are visible
-  without scrolling at normal zoom. Proposed layout: three columns, three rows.
+  without scrolling at normal zoom. Layout: the dense ledger in ADR 0001.
 - At 390×844, figures begin in the initial viewport. All nine may continue below
   the fold in their agreed order. Proposed layout: two columns, falling back to
   one where text would otherwise become cramped.
@@ -657,6 +659,7 @@ Implementation slices (one issue and one focused PR each, in order):
    the security audit and recovery handoff.
 1. Design direction: two or three mocked directions (type, spacing, colour, card
    and density) for owner choice, recorded as an ADR. No production change.
+   Decided 15 November 2026: dense ledger (ADR 0001).
 2. Page structure, one page per PR (overview, Economy, Prices, Jobs & Pay,
    Housing, Government): key figure → what it means → chart → AI summary →
    sources, using the chosen direction. Preserve every working journey, anchor,
