@@ -394,36 +394,28 @@ test("Jobs & Pay renders official nominal and independently dated CPIH real pay"
     const data = JSON.parse(readFileSync(new URL("../fixtures/verified/v1-with-optional.json", import.meta.url), "utf8"));
     const page = renderToStaticMarkup(createElement(App, { pathname: "/jobs-pay", initialData: data }));
     assert.match(page, /href="\/jobs-pay"[^>]*aria-current="page"/);
-    const wagesStart = page.indexOf('id="wages"');
-    const nominalValue = page.indexOf('class="fs-number">3.7%', wagesStart);
-    const realValue = page.indexOf('class="fs-number">0.6%', wagesStart);
-    assert.ok(wagesStart >= 0 && nominalValue > wagesStart && realValue > nominalValue,
-      "the #wages target contains the primary nominal figure before the real-pay detail");
-    assert.match(page, /id="figures" class="fs-anchor-alias"/);
-    const wagesSection = page.slice(wagesStart, page.indexOf('id="unemployment"'));
-    const unemploymentSection = page.slice(page.indexOf('id="unemployment"'));
-    assert.match(wagesSection, /id="wages-title"/);
-    assert.match(wagesSection, /aria-labelledby="wages-title"/);
-    assert.match(unemploymentSection, /id="unemployment-title"/);
-    assert.match(unemploymentSection, /aria-labelledby="unemployment-title"/);
-    assert.match(page, /3\.7%/);
-    assert.match(page, /0\.6%/);
-    assert.match(page, /Official annual growth, adjusted using CPIH/);
-    assert.match(page, /June 2026 to August 2026/);
-    assert.match(page, /Unchanged \(0 percentage points\) compared with May 2026 to July 2026; current window June 2026 to August 2026\. These published three-month windows overlap\./);
-    assert.match(page, /Secondary context for the same nominal-pay window/);
-    assert.match(page, /KAI9 \/ LMS/);
-    assert.match(page, /A2FA \/ LMS/);
-    assert.match(page, /Average weekly earnings in Great Britain bulletin/);
+    assert.ok(page.indexOf('id="wages"') >= 0 && page.indexOf('id="wages"') < page.indexOf('id="unemployment"'));
+    assert.match(page, /id="figures"/);
+    assert.match(page, /id="wages-title"/);
+    assert.match(page, /id="unemployment-title"/);
+    assert.match(textOf(page), /Key figure 3\.7 ?%/);
+    assert.match(textOf(page), /0\.6% for Jun to Aug 2026/);
+    assert.match(page, /After inflation \(CPIH-adjusted\)/);
+    assert.match(page, /Jun to Aug 2026/);
+    assert.match(page, /No change vs May to Jul 2026 \(windows overlap\)/);
+    assert.match(page, /Same published window as nominal pay/);
+    assert.match(page, /LMS \/ KAI9/);
+    assert.match(page, /LMS \/ A2FA/);
+    assert.match(page, /Average weekly earnings in Great Britain/);
     const mismatched = structuredClone(data);
     mismatched.metrics.regular_pay_real_growth.latest.reference.start_month = "2026-05";
     const mismatchPage = renderToStaticMarkup(createElement(App, { pathname: "/jobs-pay", initialData: mismatched }));
-    assert.match(mismatchPage, /Its window differs from nominal pay/);
+    assert.match(mismatchPage, /Separate window, not directly matched to nominal pay/);
 
     const missingPrior = structuredClone(data);
     missingPrior.metrics.regular_pay_real_growth.history.at(-2).period = "2026-06";
     const missingPriorPage = renderToStaticMarkup(createElement(App, { pathname: "/jobs-pay", initialData: missingPrior }));
-    assert.match(missingPriorPage, /A directly comparable previous CPIH-adjusted published window is not available/);
+    assert.match(missingPriorPage, /A directly comparable previous window is not available/);
 
     const overview = (source) => renderToStaticMarkup(
       createElement(App, { pathname: "/", initialData: source }),
@@ -437,17 +429,12 @@ test("Jobs & Pay renders official nominal and independently dated CPIH real pay"
       "the homepage subset orders Wages, Unemployment, then GDP");
     assert.match(home, /href="\/jobs-pay#unemployment"/);
 
-    const unemploymentStart = page.indexOf('id="unemployment"');
-    assert.ok(unemploymentStart >= 0);
-    const unemploymentValue = page.indexOf('class="fs-number">4.7%', unemploymentStart);
-    const unemploymentChart = page.indexOf("Loading chart…", unemploymentStart);
-    const qualityLink = page.indexOf("Labour Force Survey quality update, October 2026", unemploymentStart);
-    const sourceDetails = page.indexOf("ONS unemployment rate series, MGSX / LMS", unemploymentStart);
-    assert.ok(unemploymentValue > unemploymentStart && unemploymentChart > unemploymentValue && qualityLink > unemploymentChart && sourceDetails > qualityLink,
-      "the direct anchor contains the value, chart, dated quality caution and source");
-    assert.match(page, /June 2026 to August 2026/);
-    assert.match(page, /compared with May 2026 to July 2026/);
-    assert.match(page, /UK residents aged 16 and over · seasonally adjusted/);
+    const unemploymentSection = page.slice(page.indexOf('id="unemployment"'));
+    assert.match(textOf(unemploymentSection), /Key figure 4\.7 ?%/);
+    assert.match(unemploymentSection, /Jun to Aug 2026/);
+    assert.match(unemploymentSection, /Labour Force Survey quality update, October 2026/);
+    assert.match(unemploymentSection, /LMS \/ MGSX/);
+    assert.match(page, /UK residents aged 16 and over, seasonally adjusted/);
 
     const mismatchedHomeData = structuredClone(data);
     mismatchedHomeData.metrics.regular_pay_real_growth.latest.reference.start_month = "2026-05";

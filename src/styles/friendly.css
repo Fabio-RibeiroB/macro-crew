@@ -1545,3 +1545,27 @@
     gap: 0;
   }
 }
+
+/* Jobs & Pay page: the after-inflation pay figure sits under the nominal key figure. */
+.fs-jp-real {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--fs-line);
+  max-width: 64ch;
+  font-size: 14.5px;
+}
+.fs-jp-real h4 {
+  font: 700 14px var(--font-body);
+  margin-bottom: 2px;
+}
+.fs-jp-real-v {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+.fs-jp-chart-2 {
+  margin-top: 16px;
+}
+.fs-jp-src-title {
+  font: 700 14px var(--font-body);
+  margin: 14px 0 6px;
+}
