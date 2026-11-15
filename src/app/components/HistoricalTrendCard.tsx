@@ -89,7 +89,7 @@ function CustomTooltip({ active, payload, label, unit }: CustomTooltipProps) {
         className="font-bold"
         style={{
           color: "var(--dash-text-1)",
-          fontFamily: "'JetBrains Mono', monospace",
+          fontVariantNumeric: "tabular-nums",
         }}
       >
         {exactValue(payload[0].value, unit)}
@@ -252,7 +252,7 @@ export function HistoricalTrendCard({
                   fontSize={10}
                   tick={{
                     fill: "var(--dash-text-4)",
-                    fontFamily: "'JetBrains Mono', monospace",
+                    fontVariantNumeric: "tabular-nums",
                   }}
                   axisLine={false}
                   tickLine={false}

@@ -50,6 +50,8 @@ import {
   menuFocusAction,
 } from "./data/interactions.mjs";
 import { loadEvents } from "./data/events.mjs";
+import { IndicatorTable } from "./components/IndicatorTable";
+import { comparableEnergyPrevious, decimalDifference } from "./data/overview.mjs";
 import { EventList } from "./components/EventList";
 import { ReleaseSummaries } from "./components/ReleaseSummaries";
 import { createSummaryRefreshController, loadSummaries } from "./data/summaries.mjs";
@@ -180,22 +182,14 @@ const metricValue = (metric: any) => ["GBP_per_month", "GBP", "GBP_per_year"].in
   : percent(metric?.latest?.value);
 function energyComparison(metric: any) {
   const latest = metric?.latest;
-  const current = latest?.reference;
-  if (!latest || !current) return "A verified previous comparable cap period is not available.";
-  if (current.comparison_status === "not_comparable_tax_change")
+  if (!latest?.reference) return "A verified previous comparable cap period is not available.";
+  const comparison = comparableEnergyPrevious(metric);
+  if (comparison.kind === "tax_change")
     return "No direct comparison: Ofgem says the tax treatment changed.";
-  const basis = (r: any) => [r.geography, r.payment_method, r.tariff, r.electricity_kwh_per_year,
-    r.gas_kwh_per_year, r.consumption_basis, r.tax_treatment].join("|");
-  const previous = [...(metric.history ?? [])].reverse().find((point: any) =>
-    point.period < latest.period && point.reference && basis(point.reference) === basis(current));
-  if (!previous) return "A previous cap period on the same consumption and tax basis is not available.";
+  if (comparison.kind !== "comparable" || !comparison.previous) return "A previous cap period on the same consumption and tax basis is not available.";
+  const { previous } = comparison;
   const change = Number(latest.value) - Number(previous.value);
   return `${change > 0 ? "+" : change < 0 ? "−" : ""}£${Math.abs(change).toLocaleString("en-GB")}/year compared with ${formatPeriod(previous.reference.effective_start)} to ${formatPeriod(previous.reference.effective_end)} on the same basis.`;
-}
-// CPI headlines the inflation card once a verified reading exists; CPIH stays
-// the labelled fallback and the supporting measure on the Prices page.
-function inflationKind(data: any) {
-  return data?.metrics?.cpi?.latest?.value != null ? "cpi" : "cpih";
 }
 function priceKinds(data: any) {
   return data?.metrics?.cpi?.latest?.value != null
@@ -236,36 +230,20 @@ function OfficialLink({
     </a>
   );
 }
-function decimalDifference(current: string, previous: string) {
-  const digits = Math.max((current.split(".")[1] ?? "").length, (previous.split(".")[1] ?? "").length);
-  const scale = 10n ** BigInt(digits);
-  const integer = (value: string) => {
-    const [whole, fraction = ""] = value.split(".");
-    return BigInt(whole) * scale + BigInt((fraction + "0".repeat(digits)).slice(0, digits) || "0");
-  };
-  const difference = integer(current) - integer(previous);
-  const negative = difference < 0n;
-  const absolute = negative ? -difference : difference;
-  const whole = absolute / scale;
-  const fraction = digits ? (absolute % scale).toString().padStart(digits, "0").replace(/0+$/, "") : "";
-  return `${negative ? "−" : difference > 0n ? "+" : ""}${whole}${fraction ? `.${fraction}` : ""}`;
-}
 function MetricCard({
   metric,
   kind,
-  compact = false,
   secondaryMetric,
 }: {
   metric: any;
   kind: keyof typeof topics;
-  compact?: boolean;
   secondaryMetric?: any;
 }) {
   const topic = topics[kind];
-  const Tag = compact ? "h2" : "h3";
+  const Tag = "h3";
   if (!metric && kind !== "petrol_price") {
     return (
-      <article className={`fs-stat ${compact ? "fs-stat-compact" : ""}`}>
+      <article className="fs-stat">
         <div className="fs-stat-top">
           <Tag>{topic.short}</Tag>
           <topic.Icon size={18} aria-hidden="true" />
@@ -273,7 +251,6 @@ function MetricCard({
         <p className="fs-number">Not available</p>
         <p className="fs-measure">{topic.measurement}</p>
         <p className="fs-period">A verified reading is not available yet.</p>
-        {kind === "house_price_level" && compact && secondaryMetric?.latest?.value != null && <p className="fs-comparison">Annual change: {percent(secondaryMetric.latest.value)} for {formatPeriod(secondaryMetric.latest.period)}{secondaryMetric.collection_status === "degraded" ? " · update delayed; last verified figure shown" : ""}</p>}
     <a className="fs-stat-link" href={topic.detailHref}>
         See {topic.short.toLowerCase()} details <ArrowRight size={15} aria-hidden="true" />
         </a>
@@ -300,7 +277,7 @@ function MetricCard({
         </p>
       </div>;
     };
-    return <article className={`fs-stat ${compact ? "fs-stat-compact" : ""}`}>
+    return <article className="fs-stat">
       <div className="fs-stat-top"><Tag>{topic.short}</Tag><topic.Icon size={18} aria-hidden="true" /></div>
       {fuel("Unleaded petrol", metric)}
       {fuel("Diesel", diesel)}
@@ -324,7 +301,7 @@ function MetricCard({
     : null;
   return (
     <article
-      className={`fs-stat ${compact ? "fs-stat-compact" : ""}`}
+      className="fs-stat"
       style={{ "--topic": topic.color } as React.CSSProperties}
     >
       <div className="fs-stat-top">
@@ -349,7 +326,6 @@ function MetricCard({
           "A verified reading is not available yet."
         )}
       </p>
-      {compact && kind === "house_price_level" && <p className="fs-comparison">Annual change: {secondaryMetric?.latest?.value == null ? "not available" : `${percent(secondaryMetric.latest.value)} for ${formatPeriod(secondaryMetric.latest.period)}`}{secondaryMetric?.collection_status === "degraded" ? " · update delayed; last verified figure shown" : ""}</p>}
       {isPay && (
         <p className="fs-comparison">
           {secondaryMetric?.latest?.value != null ? (
@@ -398,17 +374,16 @@ function MetricCard({
         )}
       </div>}
       {kind === "household_energy" && <p className="fs-comparison">{energyComparison(metric)}</p>}
-      {!compact && <p className="fs-stat-meaning">{topic.meaning}</p>}
-      {(!compact || status.kind !== "ok") && <div className={`fs-fresh fs-fresh-${status.kind}`}>
+      <p className="fs-stat-meaning">{topic.meaning}</p>
+      <div className={`fs-fresh fs-fresh-${status.kind}`}>
         <ShieldCheck size={14} aria-hidden="true" />
         {status.label}
-      </div>}
+      </div>
       <details className="fs-details fs-info">
         <summary>
           About {topic.short}{" "}
           <ChevronDown size={15} aria-hidden="true" />
         </summary>
-        {compact && <p className="fs-stat-meaning">{topic.meaning}</p>}
         <p>{topic.caution}</p>
         <dl>
           <div>
@@ -678,7 +653,9 @@ function BrandLink() {
   return (
     <a className="fs-brand" href="/" aria-label="finstats UK home">
       <UkFlag />
-      finstats UK
+      <span>
+        FinStats <b>UK</b>
+      </span>
     </a>
   );
 }
@@ -689,8 +666,6 @@ function Statistics({
   loading,
   error,
   refresh,
-  compact = false,
-  overview = false,
   sectionId,
   title,
   eyebrow,
@@ -700,22 +675,16 @@ function Statistics({
   const headingId = sectionId ? `${sectionId}-title` : "figures-title";
   return (
     <section
-      className={`fs-container fs-section ${overview ? "fs-overview" : ""}`}
-      id={sectionId ?? (overview ? "overview" : "figures")}
+      className="fs-container fs-section"
+      id={sectionId ?? "figures"}
       aria-labelledby={headingId}
     >
-      {(overview || alias) && <span id={alias ?? "figures"} className="fs-anchor-alias" />}
+      {alias && <span id={alias} className="fs-anchor-alias" />}
       <div className="fs-section-heading">
         <div>
-          {!overview && <p className="fs-eyebrow">{eyebrow ?? "The latest verified figures"}</p>}
-          {overview ? (
-            <h1 id={headingId}>{title ?? "Latest verified figures"}</h1>
-          ) : (
-            <h2 id={headingId}>{title ?? "Latest verified figures"}</h2>
-          )}
-          {!overview && (
-            <p>Each figure has its own reference period and official source.</p>
-          )}
+          <p className="fs-eyebrow">{eyebrow ?? "The latest verified figures"}</p>
+          <h2 id={headingId}>{title ?? "Latest verified figures"}</h2>
+          <p>Each figure has its own reference period and official source.</p>
         </div>
         <button
           className="fs-text-button"
@@ -743,7 +712,6 @@ function Statistics({
                 kind={kind}
                 metric={data.metrics[kind]}
                 secondaryMetric={kind === "regular_pay_nominal_growth" ? data.metrics.regular_pay_real_growth : kind === "private_rent_growth" ? data.metrics.private_rent_level : kind === "house_price_level" ? data.metrics.house_price_growth : kind === "petrol_price" ? data.metrics.diesel_price : undefined}
-                compact={compact}
               />
             ))}
           </div>
@@ -760,6 +728,51 @@ function Statistics({
         )
       )}
       {children}
+    </section>
+  );
+}
+
+function Overview({ data, loading, error, refresh }: any) {
+  return (
+    <section className="fs-container fs-section fs-overview" id="overview" aria-labelledby="overview-title">
+      <span id="figures" className="fs-anchor-alias" />
+      <div className="fs-pagehead">
+        <h1 id="overview-title">Latest figures</h1>
+        <p className="fs-lede">
+          Official releases from the ONS, Bank of England, Ofgem, DESNZ and HM Land Registry.
+        </p>
+        <button className="fs-text-button" disabled={loading} onClick={() => void refresh()}>
+          <RefreshCw size={15} className={loading ? "fs-spin" : ""} aria-hidden="true" />
+          {loading ? "Checking figures…" : "Check for updates"}
+        </button>
+      </div>
+      {error && (
+        <div className="fs-alert" role="status">
+          {error}{" "}
+          {data
+            ? "The last successfully loaded figures remain below."
+            : "Verified figures are unavailable. You can still read the guides and visit the official sources."}
+        </div>
+      )}
+      {data ? (
+        <>
+          <IndicatorTable
+            data={data}
+            hrefs={Object.fromEntries(Object.entries(topics).map(([kind, topic]) => [kind, topic.detailHref]))}
+          />
+          <p className="fs-ledger-note" id="change-note">
+            * Change is the latest value minus the previous one, calculated by FinStats from the official
+            series. pp means percentage points. Figures last updated {checkedAt(data.published_at)} and can
+            be revised. <a href="/sources">How we check the data</a>
+          </p>
+        </>
+      ) : (
+        !error && (
+          <p className="fs-loading" role="status">
+            Checking the official-data export…
+          </p>
+        )
+      )}
     </section>
   );
 }
@@ -1511,12 +1524,7 @@ export default function App({
       <main id="main-content" tabIndex={-1}>
         {page.id === "overview" && (
           <>
-            <Statistics
-              {...stats}
-              kinds={[inflationKind(data), "bank_rate", "regular_pay_nominal_growth", "unemployment", "private_rent_growth", "house_price_level", "household_energy", "petrol_price", "gdp"]}
-              compact
-              overview
-            />
+            <Overview {...stats} />
             <EventList {...eventProps} limit={5} compact />
             <section className="fs-container fs-section">
               <a className="fs-link" href="/economy#ai-summary">
@@ -1623,7 +1631,7 @@ export default function App({
       </p>
       <footer className="fs-footer fs-container">
         <BrandLink />
-        <p>Official UK statistics with plain-English context.</p>
+        <p>Official statistics with plain-English context.</p>
         <nav className="fs-footer-nav" aria-label="Footer">
           {FOOTER_PAGES.map((item) => (
             <a
