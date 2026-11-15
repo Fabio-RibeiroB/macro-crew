@@ -282,14 +282,13 @@ test("ONS HF6X producer data renders only on Government with adjacent-month pp c
     const government = renderToStaticMarkup(createElement(App, { pathname: "/government-budget", initialData: producer }));
     assert.match(government, /id="public-debt"/);
     assert.ok(government.indexOf('id="public-debt"') < government.indexOf("Three things to keep separate"), "debt figures precede Government guide prose");
-    assert.match(government, /class="fs-number">94%/);
-    assert.match(government, /<span>\+0\.4 percentage points<\/span> compared with August 2026/);
-    assert.match(government, /end of September 2026/);
+    assert.match(government, /class="fs-fig-v">94\.0<span class="fs-fig-u">%<\/span>/);
+    assert.match(textOf(government), /Previous 93\.6% Aug 2026 Change\* ↑ Up \+0\.4 pp End of Sep 2026/);
     assert.match(government, /HF6X/);
-    assert.match(government, /deficit or net borrowing is the amount borrowed over a period/);
+    assert.match(government, /deficit, or net borrowing, is the amount borrowed over a period/);
     assert.match(government, /Public sector net financial liabilities \(PSNFL\) is a wider balance-sheet measure/);
-    assert.match(government, /ONS HF6X public debt series/);
-    assert.match(government, /source publication:|ONS release:/i);
+    assert.match(government, /View the official series/);
+    assert.match(government, /Official release/);
     const { HistoricalTrendCard } = await server.ssrLoadModule("/src/app/components/HistoricalTrendCard.tsx");
     const chart = renderToStaticMarkup(createElement(HistoricalTrendCard, {
       title: "Public sector net debt as a share of GDP", label: "Debt · % of GDP",
@@ -312,7 +311,7 @@ test("ONS HF6X producer data renders only on Government with adjacent-month pp c
     }));
     assert.match(unavailable, /A verified reading is not available yet/);
     const debtSection = unavailable.slice(unavailable.indexOf('id="public-debt"'), unavailable.indexOf('id="gilt-yields"'));
-    assert.doesNotMatch(debtSection, /class="fs-chart-grid fs-chart-count-1"/);
+    assert.match(debtSection, /A verified history is not available yet/);
     assert.match(unavailable, /id="gilt-yields"/);
   } finally { await server.close(); }
 });
@@ -354,13 +353,13 @@ test("BoE 5/10/20 nominal par producer export binds exact series and renders Gov
     assert.match(government, /id="gilt-yields"/);
     assert.ok(government.indexOf('id="public-debt"') < government.indexOf('id="gilt-yields"'));
     assert.ok(government.indexOf('id="gilt-yields"') < government.indexOf("Three things to keep separate"));
-    assert.match(government, /10-year gilt yield/);
-    assert.match(government, /5-year gilt yield/);
-    assert.match(government, /20-year gilt yield/);
+    assert.match(government, /headline figure is the 10-year yield/);
+    assert.match(government, /<th scope="row">5-year<\/th>/);
+    assert.match(government, /<th scope="row">20-year<\/th>/);
     assert.match(government, /−2\.24 basis points/);
     assert.match(government, /4 January 2000/);
     assert.match(government, /market financing conditions/);
-    assert.match(government, /average cost of all government debt already issued/);
+    assert.match(government, /not the average cost of the government’s outstanding debt/);
     assert.match(government, /IUDSNPY, IUDMNPY and IUDLNPY/);
   } finally { await server.close(); }
 
