@@ -13,6 +13,7 @@ import {
   freshness,
   previousReading,
   percent,
+  formatPeriod,
 } from "../../src/app/data/verified.mjs";
 import {
   parseManifest as parseM1Manifest,
@@ -224,7 +225,7 @@ test("DESNZ petrol and diesel render as two weekly UK prices with direct history
     assert.match(textOf(overviewRowsOf(delayed).fuel), /Update delayed · showing last verified figure/);
     const prices = renderToStaticMarkup(createElement(App, { pathname: "/prices", initialData: producer }));
     assert.match(prices, /id="petrol-diesel"/);
-    assert.ok(prices.indexOf("<h3>CPI inflation</h3>") < prices.indexOf('id="petrol-diesel"'),
+    assert.ok(prices.indexOf('id="inflation"') < prices.indexOf('id="petrol-diesel"'),
       "CPI remains the Prices headline before fuel figures");
     assert.match(prices, /DESNZ Weekly road fuel prices CSV/);
     assert.match(prices, /Monday morning, or the next working morning on a bank holiday/);
@@ -249,7 +250,11 @@ test("DESNZ petrol and diesel render as two weekly UK prices with direct history
         pathname: "/prices", initialData: { ...producer, metrics },
       }));
       for (const [label, present, metric] of [["Unleaded petrol", petrolPresent, petrol], ["Diesel", dieselPresent, diesel]]) {
-        assert.ok(partialPrices.includes(`${label}: source release date: ${present ? metric.source_published_date : "not supplied"}; last successful check:`));
+        const start = partialPrices.indexOf(`<div class="fs-src-set"><h4 class="fs-fig-name">${label}</h4>`);
+        assert.ok(start >= 0, `${label} sources block`);
+        const block = textOf(partialPrices.slice(start, start + 900));
+        if (present) assert.match(block, new RegExp(`Official release ${formatPeriod(metric.source_published_date)}`));
+        else assert.match(block, /Source details appear when a verified reading is available/);
       }
     }
     const { HistoricalTrendCard } = await server.ssrLoadModule("/src/app/components/HistoricalTrendCard.tsx");

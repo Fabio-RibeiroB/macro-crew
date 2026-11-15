@@ -1545,3 +1545,65 @@
     gap: 0;
   }
 }
+
+/* Prices page: a labelled sub-figure inside a block row, and petrol and diesel side
+   by side as two separate figures (never blended). */
+.fs-fig-name {
+  font: 700 14.5px/1.3 var(--font-body);
+  margin: 0 0 6px;
+}
+.fs-fig-name + .fs-fig-measure {
+  margin: -4px 0 8px;
+  font-size: 13px;
+  color: var(--fs-muted);
+}
+.fs-fig-set + .fs-fig-set,
+.fs-src-set + .fs-src-set {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--fs-line);
+}
+.fs-fuel-pair {
+  display: grid;
+  gap: 20px;
+}
+.fs-fuel-fig {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+.fs-fuel-fig .fs-kv {
+  grid-template-columns: repeat(3, max-content);
+}
+.fs-fuel-fig + .fs-fuel-fig {
+  border-top: 1px solid var(--fs-line);
+  padding-top: 16px;
+}
+.fs-prices .fs-chart-grid {
+  margin-top: 0;
+}
+@media (max-width: 760px) {
+  .fs-fuel-fig .fs-kv {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.fs-prices .fs-energy-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.fs-prices .fs-energy-history li {
+  padding: 8px 0;
+  border-top: 1px solid var(--fs-line);
+}
+.fs-prices .fs-energy-history li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.fs-prices .fs-energy-history strong,
+.fs-prices .fs-energy-history span {
+  display: block;
+}
+.fs-prices .fs-energy-history span {
+  font-size: 13.5px;
+  color: var(--fs-muted);
+}

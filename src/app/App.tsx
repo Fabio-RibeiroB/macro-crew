@@ -51,8 +51,8 @@ import { loadEvents } from "./data/events.mjs";
 import { IndicatorTable } from "./components/IndicatorTable";
 import { OfficialLink } from "./components/OfficialLink";
 import { EconomyPage } from "./components/EconomyPage";
+import { PricesPage } from "./components/PricesPage";
 import { checkedAt } from "./data/format.mjs";
-import { comparableEnergyPrevious, decimalDifference } from "./data/overview.mjs";
 import { EventList } from "./components/EventList";
 import { ReleaseSummaries } from "./components/ReleaseSummaries";
 import { createSummaryRefreshController, loadSummaries } from "./data/summaries.mjs";
@@ -181,27 +181,6 @@ const metricValue = (metric: any) => ["GBP_per_month", "GBP", "GBP_per_year"].in
   : metric?.definition?.unit === "pence_per_litre"
     ? (metric.latest?.value == null ? "Not available" : `${metric.latest.value}p`)
   : percent(metric?.latest?.value);
-function energyComparison(metric: any) {
-  const latest = metric?.latest;
-  if (!latest?.reference) return "A verified previous comparable cap period is not available.";
-  const comparison = comparableEnergyPrevious(metric);
-  if (comparison.kind === "tax_change")
-    return "No direct comparison: Ofgem says the tax treatment changed.";
-  if (comparison.kind !== "comparable" || !comparison.previous) return "A previous cap period on the same consumption and tax basis is not available.";
-  const { previous } = comparison;
-  const change = Number(latest.value) - Number(previous.value);
-  return `${change > 0 ? "+" : change < 0 ? "−" : ""}£${Math.abs(change).toLocaleString("en-GB")}/year compared with ${formatPeriod(previous.reference.effective_start)} to ${formatPeriod(previous.reference.effective_end)} on the same basis.`;
-}
-function priceKinds(data: any) {
-  return data?.metrics?.cpi?.latest?.value != null
-    ? (["cpi", "cpih"] as const)
-    : (["cpih"] as const);
-}
-function priceTrendKinds(data: any) {
-  return ["cpi", "cpih"].filter(
-    (kind) => (data?.metrics?.[kind]?.history?.length ?? 0) > 0,
-  );
-}
 function MetricCard({
   metric,
   kind,
@@ -213,7 +192,7 @@ function MetricCard({
 }) {
   const topic = topics[kind];
   const Tag = "h3";
-  if (!metric && kind !== "petrol_price") {
+  if (!metric) {
     return (
       <article className="fs-stat">
         <div className="fs-stat-top">
@@ -228,34 +207,6 @@ function MetricCard({
         </a>
       </article>
     );
-  }
-  if (kind === "petrol_price") {
-    const diesel = secondaryMetric;
-    const fuel = (label: string, item: any) => {
-      const previous = item?.latest ? previousReading(item) : null;
-      const fullComparison = previous && item.latest.value != null
-        ? `Change ${decimalDifference(item.latest.value, previous.value)} pence per litre compared with ${formatPeriod(previous.period)}`
-        : "A directly comparable previous week is not available.";
-      const comparison = previous && item.latest.value != null
-        ? `${decimalDifference(item.latest.value, previous.value)}p/litre vs ${new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${previous.period}T00:00:00Z`))}`
-        : fullComparison;
-      return <div className="fs-fuel-value" key={label}>
-        <h4>{label}</h4>
-        <p className="fs-number">{metricValue(item)}</p>
-        <p className="fs-measure">pence per litre · {item?.latest ? formatPeriod(item.latest.period) : "dated reading unavailable"}</p>
-        <p className="fs-comparison" aria-label={fullComparison}>{comparison}</p>
-        <p className={`fs-fresh fs-fresh-${item?.latest ? freshness(item).kind : "warning"}`}>
-          {item?.latest ? freshness(item).label : "Unavailable"}
-        </p>
-      </div>;
-    };
-    return <article className="fs-stat">
-      <div className="fs-stat-top"><Tag>{topic.short}</Tag><topic.Icon size={18} aria-hidden="true" /></div>
-      {fuel("Unleaded petrol", metric)}
-      {fuel("Diesel", diesel)}
-      <p className="fs-caption">UK sales-weighted sample average; local forecourt prices vary.</p>
-      <a className="fs-stat-link" href={topic.detailHref}>See petrol and diesel history <ArrowRight size={15} aria-hidden="true" /></a>
-    </article>;
   }
   const status = freshness(metric);
   const previous = previousReading(metric);
@@ -289,9 +240,7 @@ function MetricCard({
             <strong>
               {currentWindow
                 ? `${formatPeriod(currentWindow.start_month)} to ${formatPeriod(currentWindow.end_month)}`
-                : kind === "household_energy"
-                  ? `${formatPeriod(metric.latest.reference?.effective_start)} to ${formatPeriod(metric.latest.reference?.effective_end)}`
-                  : formatPeriod(metric.latest.period)}
+                : formatPeriod(metric.latest.period)}
             </strong>
           </>
         ) : (
@@ -319,7 +268,7 @@ function MetricCard({
         </p>
       )}
       {kind === "private_rent_growth" && <p className="fs-comparison">Average monthly rent: {secondaryMetric?.latest?.value == null ? "not available" : `£${Number(secondaryMetric.latest.value).toLocaleString("en-GB")}`} {secondaryMetric?.latest?.period ? `in ${formatPeriod(secondaryMetric.latest.period)}` : ""}{secondaryMetric?.collection_status === "degraded" ? " · update delayed, showing the last verified rent" : ""}</p>}
-      {kind !== "house_price_level" && kind !== "household_energy" && <div className="fs-comparison">
+      {kind !== "house_price_level" && <div className="fs-comparison">
         {kind === "bank_rate" ? rateChange ? (
           <>
             Latest evidenced change: {rateChange.difference > 0 ? "+" : "−"}
@@ -345,7 +294,6 @@ function MetricCard({
           "A directly comparable previous reading is not available."
         )}
       </div>}
-      {kind === "household_energy" && <p className="fs-comparison">{energyComparison(metric)}</p>}
       <p className="fs-stat-meaning">{topic.meaning}</p>
       <div className={`fs-fresh fs-fresh-${status.kind}`}>
         <ShieldCheck size={14} aria-hidden="true" />
@@ -536,59 +484,6 @@ function Housing({ data, loading, error, refresh }: any) {
   </>;
 }
 
-function FuelPrices({ data, loading, error, refresh }: any) {
-  const petrol = data?.metrics?.petrol_price;
-  const diesel = data?.metrics?.diesel_price;
-  return <Statistics data={data} kinds={["petrol_price"]} loading={loading} error={error}
-    refresh={refresh} sectionId="petrol-diesel" title="Petrol and diesel prices"
-    eyebrow="Weekly road fuel prices · DESNZ">
-    <Suspense fallback={<p role="status">Loading fuel price history…</p>}>
-      <div className="fs-chart-grid fs-chart-count-2">
-        {[petrol, diesel].filter((metric) => metric?.history?.length).map((metric) =>
-          <HistoricalTrendCard key={metric.definition.metric_id}
-            title={metric.definition.title}
-            label={metric.definition.series === "ULSP pump price" ? "Unleaded petrol · pence per litre" : "Diesel · pence per litre"}
-            unit="p" color={metric.definition.series === "ULSP pump price" ? "#547b8a" : "#9b6b32"}
-            data={chartPoints(metric)} />)}
-      </div>
-    </Suspense>
-    <p className="fs-caption">The week is referenced to Monday. DESNZ samples on Monday morning, or the next working morning on a bank holiday; this does not assert that the actual sample was taken on Monday. The shared sample is weighted by company sales and is a UK average, not a local forecourt quote.</p>
-    <details className="fs-details fs-info"><summary>Source and method <ChevronDown size={15} aria-hidden="true" /></summary>
-      <p>DESNZ Weekly road fuel prices CSV, 2018 onward. Petrol and diesel are independent pump-price series in pence per litre. Duty and VAT columns are retained in the private source evidence; the published pump prices already include the source's tax treatment and are not recalculated.</p>
-      <p>The accompanying workbook describes a sales-weighted UK average from six companies, covering around 60% of market volume using 2022 sales. It specifies Monday morning sampling, or the next working morning on bank holidays. The observation date remains the Monday reference date.</p>
-      {[["Unleaded petrol", petrol], ["Diesel", diesel]].map(([label, metric]) => <p key={label}>{label}: source release date: {metric?.source_published_date ?? "not supplied"}; last successful check: {checkedAt(metric?.last_successful_check_at ?? null)}.</p>)}
-      <OfficialLink href={petrol?.definition.source_url ?? "https://www.gov.uk/government/statistics/weekly-road-fuel-prices"}>DESNZ weekly road fuel prices and current downloads</OfficialLink>
-    </details>
-  </Statistics>;
-}
-
-function HouseholdEnergy({ data, loading, error, refresh }: any) {
-  const metric = data?.metrics?.household_energy;
-  const r = metric?.latest?.reference;
-  const upcoming = metric?.upcoming_period;
-  return <Statistics data={data} kinds={["household_energy"]} loading={loading} error={error}
-    refresh={refresh} sectionId="household-energy" title="Household energy"
-    eyebrow="Ofgem energy price cap · Great Britain">
-    <div className="fs-context-card">
-      <h3>Past cap periods</h3>
-      {metric?.history?.length ? <ol className="fs-energy-history">{[...metric.history].reverse().map((point: any) => <li key={point.period}>
-        <strong>{point.reference.period_status === "expired" ? "Ended" : "Current"} · {formatPeriod(point.reference.effective_start)} to {formatPeriod(point.reference.effective_end)} · £{Number(point.value).toLocaleString("en-GB")}/year</strong>
-        <span>{point.reference.electricity_kwh_per_year.toLocaleString("en-GB")} kWh electricity and {point.reference.gas_kwh_per_year.toLocaleString("en-GB")} kWh gas · {point.reference.tax_treatment}</span>
-      </li>)}</ol> : <p>A verified cap period is not available yet.</p>}
-      {metric?.validation_status === "unavailable" && metric?.history?.length > 0 && <p>No effective cap is currently verified; the periods above have ended.</p>}
-      <h3>What this bill assumes</h3>
-      <p>Ofgem's illustrative annual dual-fuel bill uses a default variable tariff and Direct Debit. The benchmark is medium typical consumption: {r?.electricity_kwh_per_year?.toLocaleString("en-GB") ?? "2,500"} kWh of single-rate electricity and {r?.gas_kwh_per_year?.toLocaleString("en-GB") ?? "9,500"} kWh of gas per year. It is the Ofgem average for England, Scotland and Wales, not a quote for a particular region.</p>
-      {r && <><p>Effective {formatPeriod(r.effective_start)} to {formatPeriod(r.effective_end)}. Electricity: {r.electricity.unit_rate_p_per_kwh}p/kWh and {r.electricity.standing_charge_p_per_day}p/day. Gas: {r.gas.unit_rate_p_per_kwh}p/kWh and {r.gas.standing_charge_p_per_day}p/day.</p>
-      <p>Tax: {r.tax_treatment}. The annual figure is Ofgem's published amount, not recalculated from rounded rates. {energyComparison(metric)}</p></>}
-      {upcoming && <p>Announced upcoming cap: £{Number(upcoming.value).toLocaleString("en-GB")}/year for {formatPeriod(upcoming.reference.effective_start)} to {formatPeriod(upcoming.reference.effective_end)}. It will become current only when that effective period begins. Announcement date: {upcoming.reference.announcement_date ?? "not supplied"}.</p>}
-      <p>The cap limits unit rates and standing charges, not total bills. Actual costs depend on use and region. It does not cover Northern Ireland, fixed tariffs or heating oil.</p>
-      <p>Cap announcement date: {r?.announcement_date ?? "not supplied on this rates page"}. Source page publication date: {metric?.source_published_date ?? "not supplied"}. Last successful check: {checkedAt(metric?.last_successful_check_at ?? null)}.{!upcoming && " No next cap announcement is currently published on this source page."}</p>
-      <OfficialLink href={metric?.definition.source_url ?? "https://www.ofgem.gov.uk/your-energy-supply/your-energy-bill/energy-price-cap-unit-rates-and-standing-charges"}>Ofgem energy cap rates and standing charges</OfficialLink>
-      <OfficialLink href={metric?.definition.consumption_source_url}>Ofgem final decision on typical consumption values (2026)</OfficialLink>
-    </div>
-  </Statistics>;
-}
-
 function PageHeading({
   eyebrow,
   title,
@@ -683,7 +578,7 @@ function Statistics({
                 key={kind}
                 kind={kind}
                 metric={data.metrics[kind]}
-                secondaryMetric={kind === "regular_pay_nominal_growth" ? data.metrics.regular_pay_real_growth : kind === "private_rent_growth" ? data.metrics.private_rent_level : kind === "house_price_level" ? data.metrics.house_price_growth : kind === "petrol_price" ? data.metrics.diesel_price : undefined}
+                secondaryMetric={kind === "regular_pay_nominal_growth" ? data.metrics.regular_pay_real_growth : kind === "private_rent_growth" ? data.metrics.private_rent_level : kind === "house_price_level" ? data.metrics.house_price_growth : undefined}
               />
             ))}
           </div>
@@ -745,95 +640,6 @@ function Overview({ data, loading, error, refresh }: any) {
           </p>
         )
       )}
-    </section>
-  );
-}
-
-function Trends({ data, kinds }: any) {
-  return (
-    <section className="fs-container fs-section" id="trends">
-      <div className="fs-section-heading">
-        <div>
-          <p className="fs-eyebrow">A little perspective</p>
-          <h2>Look at the trend</h2>
-          <p>One reading is only part of the story.</p>
-        </div>
-      </div>
-      {data ? (
-        <Suspense fallback={<p role="status">Loading charts…</p>}>
-          <div className={`fs-chart-grid fs-chart-count-${kinds.length}`}>
-            {kinds.map((kind: keyof typeof topics) => (
-              <HistoricalTrendCard
-                key={kind}
-                title={topics[kind].measurement}
-                label={topics[kind].short}
-                color={topics[kind].color}
-                data={chartPoints(data.metrics[kind])}
-                curve={kind === "bank_rate" ? "stepAfter" : "linear"}
-              />
-            ))}
-          </div>
-        </Suspense>
-      ) : (
-        <p>Charts will appear when verified figures are available.</p>
-      )}
-      <p className="fs-caption">
-        Latest revised values. Cards and charts share the same official
-        snapshot; gaps stay visible.
-      </p>
-    </section>
-  );
-}
-
-function PriceGuide({ data }: any) {
-  const cpi = data?.metrics?.cpi?.latest;
-  const cpih = data?.metrics?.cpih?.latest;
-  const headline = cpi ?? cpih;
-  const headlineLabel = cpi ? "CPI" : "CPIH";
-  return (
-    <section className="fs-everyday">
-      <div className="fs-container fs-reading-grid">
-        <article>
-          <p className="fs-eyebrow">What it means for you</p>
-          <h2>What inflation means for your shopping bill</h2>
-          <p>
-            {headline
-              ? `Annual ${headlineLabel} inflation was ${percent(headline.value)} in ${formatPeriod(headline.period)}. ${Number(headline.value) > 0 ? "Average prices were higher than a year earlier." : Number(headline.value) < 0 ? "Average prices were lower than a year earlier." : "Average prices were unchanged from a year earlier."}`
-              : "Inflation measures how average prices change over time."}{" "}
-            Your own experience depends on what you buy.
-          </p>
-          <p>
-            When inflation falls but stays above zero, prices are still rising,
-            just more slowly. Falling inflation does not usually mean your
-            shopping bill falls.
-          </p>
-          <p>
-            Pay and benefits matter too: if your income rises more slowly than
-            the prices you face, it buys less.
-          </p>
-          <OfficialLink href="https://www.ons.gov.uk/economy/inflationandpriceindices">
-            Read the official inflation releases
-          </OfficialLink>
-        </article>
-        <aside className="fs-context-card">
-          <h3>CPI and CPIH</h3>
-          <p>
-            The Consumer Prices Index (CPI) covers everyday goods and services,
-            and the Bank of England’s 2% target applies to it. The CPI figure
-            above shows its annual change when a verified reading is available.
-          </p>
-          <p>
-            CPIH also includes owner occupiers’ housing costs, so its readings
-            differ from CPI and should not be compared directly with the 2%
-            target.
-          </p>
-          <p className="fs-caption">
-            Food-price breakdowns are not yet part of our verified dataset.
-            The Ofgem cap is an illustrative typical bill, not your own energy
-            charges.
-          </p>
-        </aside>
-      </div>
     </section>
   );
 }
@@ -1384,13 +1190,9 @@ export default function App({
             <PageHeading eyebrow="Prices & everyday costs" title={page.title}>
               The pace of price rises matters. So does what your income can buy.
             </PageHeading>
-            <Statistics {...stats} kinds={priceKinds(data)} />
+            <PricesPage {...stats} topics={topics} HistoricalTrendCard={HistoricalTrendCard} />
             <EventList {...eventProps} indicatorIds={["uk.cpi.annual_rate", "uk.cpih.annual_rate", "uk.road_fuel.unleaded_petrol_price", "uk.road_fuel.diesel_price", "uk.energy_price_cap.typical_dual_fuel_bill"]} compact />
             <ReleaseSummaries subject="prices" {...summaryProps} />
-            <PriceGuide data={data} />
-            <Trends data={data} kinds={priceTrendKinds(data)} />
-            <HouseholdEnergy {...stats} />
-            <FuelPrices {...stats} />
           </>
         )}
         {page.id === "economy" && (

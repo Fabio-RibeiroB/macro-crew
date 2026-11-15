@@ -295,15 +295,15 @@ test("CPI headlines inflation while CPIH stays labelled supporting data", async 
     const prices = renderToStaticMarkup(
       createElement(App, { pathname: "/prices", initialData: withBoth }),
     );
-    assert.match(prices, /<h3>CPI inflation<\/h3>/);
-    assert.match(prices, /<h3>Inflation \(CPIH\)<\/h3>/);
+    assert.match(prices, /<h4 class="fs-fig-name">CPI inflation<\/h4>/);
+    assert.match(prices, /<h4 class="fs-fig-name">Inflation \(CPIH\) · secondary measure<\/h4>/);
     assert.match(prices, /CPI · change over 12 months/);
     assert.match(prices, /CPIH · change over 12 months/);
-    assert.match(prices, /\+0\.4 percentage points/);
-    assert.match(prices, /compared with August 2026/);
+    assert.match(prices, /\+0\.4 pp/);
+    assert.match(prices, /3\.1%[\s\S]{0,200}Aug 2026/);
     assert.match(prices, /MM23 \/ D7G7/);
     assert.match(prices, /MM23 \/ L55O/);
-    assert.match(prices, /<h3>CPI and CPIH<\/h3>/);
+    assert.match(prices, /CPIH also includes owner occupiers/);
     assert.match(prices, /Annual CPI inflation was 3\.5% in September 2026/);
     assert.doesNotMatch(prices, /Annual CPIH inflation/);
     const overviewData = {
@@ -361,8 +361,8 @@ test("CPI headlines inflation while CPIH stays labelled supporting data", async 
     const fallback = renderToStaticMarkup(
       createElement(App, { pathname: "/prices", initialData: cpihOnly }),
     );
-    assert.doesNotMatch(fallback, /<h3>CPI inflation<\/h3>/);
-    assert.match(fallback, /<h3>Inflation \(CPIH\)<\/h3>/);
+    assert.doesNotMatch(fallback, /<h4 class="fs-fig-name">CPI inflation<\/h4>/);
+    assert.match(fallback, /<h4 class="fs-fig-name">Inflation \(CPIH\)<\/h4>/);
     assert.match(fallback, /Annual CPIH inflation was 3\.3% in August 2026/);
     const degraded = {
       published_at: "2026-10-21T12:00:00Z",
@@ -377,7 +377,7 @@ test("CPI headlines inflation while CPIH stays labelled supporting data", async 
     const degradedPrices = renderToStaticMarkup(
       createElement(App, { pathname: "/prices", initialData: degraded }),
     );
-    assert.match(degradedPrices, /<h3>CPI inflation<\/h3>/);
+    assert.match(degradedPrices, /<h4 class="fs-fig-name">CPI inflation<\/h4>/);
     assert.match(degradedPrices, /Update delayed · showing last verified figure/);
   } finally {
     await server.close();
