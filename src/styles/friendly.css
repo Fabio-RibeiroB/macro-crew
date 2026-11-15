@@ -1545,3 +1545,12 @@
     gap: 0;
   }
 }
+
+/* Housing page: the two charts of a measure stack in one Chart row. */
+.fs-housing-charts {
+  display: grid;
+  gap: 24px;
+}
+.fs-housing-second {
+  margin-top: 12px;
+}
