@@ -188,3 +188,18 @@ export function simplifyForChart(points, limit = 1500) {
   let n = 0;
   return kept.filter((p, i) => must(p, i) || (n++ % stride === 0));
 }
+
+/**
+ * Y-axis bounds with 20% headroom. Padding never pushes a series that is all
+ * zero or above below zero, so a rate that was never negative is not drawn
+ * on an axis that suggests it could have been.
+ */
+export function chartYDomain(values) {
+  const minVal = values.length ? Math.min(...values) : 0;
+  const maxVal = values.length ? Math.max(...values) : 1;
+  const padding = (maxVal - minVal) * 0.2 || 0.5;
+  let yMin = Math.floor((minVal - padding) * 10) / 10;
+  if (minVal >= 0 && yMin < 0) yMin = 0;
+  const yMax = Math.ceil((maxVal + padding) * 10) / 10;
+  return [yMin, yMax];
+}
