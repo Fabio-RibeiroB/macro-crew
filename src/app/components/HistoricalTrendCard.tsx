@@ -33,6 +33,7 @@ interface HistoricalTrendCardProps {
   label: string;
   unit?: string;
   unitDescription?: string;
+  /** Ignored: every chart uses the single accent colour (ADR 0001). Kept so existing callers compile. */
   color?: string;
   data: TrendPoint[];
   referenceLine?: { value: number; label: string };
@@ -103,7 +104,6 @@ export function HistoricalTrendCard({
   label,
   unit = "%",
   unitDescription = unit === "£" ? "pounds per month" : unit === "%" ? "percent" : unit,
-  color = "#60a5fa",
   data,
   referenceLine,
   curve = "linear",
@@ -131,7 +131,7 @@ export function HistoricalTrendCard({
   const yMin = Math.floor((minVal - padding) * 10) / 10;
   const yMax = Math.ceil((maxVal + padding) * 10) / 10;
 
-  const gradId = `grad-${color.replace("#", "")}`;
+  const gradId = `grad-${useId().replace(/:/g, "")}`;
 
   function onRangeKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     const next = moveChartRange(selectedRange, event.key);
@@ -145,24 +145,10 @@ export function HistoricalTrendCard({
   }
 
   return (
-    <div
-      className="rounded-xl border overflow-hidden transition-colors duration-200"
-      style={{
-        background: "var(--dash-card)",
-        borderColor: "var(--dash-border)",
-      }}
-    >
-      <div
-        className="px-5 pt-5 pb-3 border-b"
-        style={{ borderColor: "var(--dash-border)" }}
-      >
-        <div className="fs-chart-toolbar mb-1.5">
-          <span
-            className="text-xs font-medium"
-            style={{ color: "var(--dash-text-4)" }}
-          >
-            {label}
-          </span>
+    <div className="fs-chart">
+      <div className="fs-chart-head">
+        <div className="fs-chart-toolbar">
+          <p className="fs-chart-title">{title}</p>
           <div
             className="fs-range"
             role="radiogroup"
@@ -189,15 +175,17 @@ export function HistoricalTrendCard({
             })}
           </div>
         </div>
-        <p
-          className="text-sm font-medium leading-snug"
-          style={{ color: "var(--dash-text-2)" }}
-        >
-          {title}
+        <p className="fs-chart-readout">
+          {label}
+          {latestPoint
+            ? `. Latest: ${exactValue(latestPoint.value, unit)}, ${latestPoint.reference
+                ? `${formatPeriod(latestPoint.reference.start_month)} to ${formatPeriod(latestPoint.reference.end_month)}`
+                : formatPeriod(latestPoint.period ?? latestPoint.date ?? "")}`
+            : ""}
         </p>
       </div>
 
-      <div className="px-3 py-4">
+      <div className="fs-chart-body">
         {selection.notice && (
           <p className="fs-chart-range-note" id={noteId} role="status">
             {selection.notice}
@@ -230,8 +218,8 @@ export function HistoricalTrendCard({
               >
                 <defs>
                   <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={color} stopOpacity={0.3} />
-                    <stop offset="95%" stopColor={color} stopOpacity={0.02} />
+                    <stop offset="5%" stopColor="var(--fs-accent)" stopOpacity={0.22} />
+                    <stop offset="95%" stopColor="var(--fs-accent)" stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid
@@ -282,11 +270,11 @@ export function HistoricalTrendCard({
                   type={curve}
                   connectNulls={false}
                   dataKey="value"
-                  stroke={color}
-                  strokeWidth={2}
+                  stroke="var(--fs-accent)"
+                  strokeWidth={2.5}
                   fill={`url(#${gradId})`}
                   dot={false}
-                  activeDot={{ r: 4, fill: color, strokeWidth: 0 }}
+                  activeDot={{ r: 4, fill: "var(--fs-accent)", strokeWidth: 0 }}
                   isAnimationActive={false}
                   animationDuration={600}
                 />

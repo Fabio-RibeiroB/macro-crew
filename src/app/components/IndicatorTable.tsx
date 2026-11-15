@@ -2,7 +2,7 @@ import { overviewRows } from "../data/overview.mjs";
 
 const ARROWS: Record<string, [string, string]> = { up: ["↑", "Up "], down: ["↓", "Down "] };
 
-function Lines({ lines }: { lines: any[] }) {
+export function Lines({ lines }: { lines: any[] }) {
   return (
     <>
       {lines.map((line, index) => {
