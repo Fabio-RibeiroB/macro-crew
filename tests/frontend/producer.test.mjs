@@ -488,16 +488,17 @@ test("Housing renders a national house-price card and separate pounds and percen
     const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
     const producer = await loadVerified("/", fileFetcher(bytes));
     const html = renderToStaticMarkup(createElement(App, { pathname: "/housing", initialData: producer }));
-    assert.match(html, /id="house-prices"/);
-    assert.match(html, /House prices/);
-    assert.match(html, /£273,037/);
-    assert.match(html, /Annual change in average house prices/);
-    assert.match(html, /class="fs-number">0\.9%/);
-    assert.match(html, /Source release date: 2026-10-21/);
-    assert.equal((html.match(/class="fs-number">£273,037/g) || []).length, 1);
-    assert.doesNotMatch(html, /Annual change: 0\.9%/);
-    assert.doesNotMatch(html, /percentage points compared with July 2026/);
-    assert.match(html, /Recent observations are provisional and subject to revision/);
+    const housePrices = (markup) => {
+      const start = markup.indexOf('<section class="fs-block" id="house-prices"');
+      assert.ok(start >= 0);
+      return textOf(markup.slice(start, markup.indexOf("</section>", start)));
+    };
+    const houseText = housePrices(html);
+    assert.match(houseText, /Key figure £273,037/);
+    assert.match(houseText, /0\.9% on a year earlier/);
+    assert.match(houseText, /Official release 21 October 2026/);
+    assert.equal((html.match(/class="fs-fig-v">£273,037/g) || []).length, 1);
+    assert.match(houseText, /The latest estimates are provisional and may be revised/);
     const home = renderToStaticMarkup(createElement(App, { pathname: "/", initialData: producer }));
     const homeRows = overviewRowsOf(home);
     const houseCard = textOf(homeRows["house-prices"]);
@@ -538,11 +539,10 @@ test("Housing renders a national house-price card and separate pounds and percen
       pathname: "/housing",
       initialData: { ...producer, metrics: { ...producer.metrics, house_price_level: levelUnavailable, house_price_growth: growthDelayed } },
     }));
-    assert.match(partial, /House prices/);
-    assert.match(partial, /class="fs-number">Not available/);
-    assert.match(partial, /class="fs-number">0\.9%/);
-    assert.match(partial, /Source release date: 2026-10-21/);
-    assert.match(partial, /delayed/i);
+    const partialText = housePrices(partial);
+    assert.match(partialText, /Key figure Not available/);
+    assert.match(partialText, /0\.9% on a year earlier \(Aug 2026\) · update delayed/);
+    assert.doesNotMatch(partialText, /Key figure £0\b/);
   } finally { await server.close(); }
 });
 
@@ -559,13 +559,15 @@ test("Housing renders real producer rent values and keeps growth visible through
       initialData: { ...producer, metrics },
     }));
 
-    const current = html(producer.metrics);
-    assert.match(current, /id="rent"/);
-    assert.match(current, /UK private rent · annual growth/);
-    assert.match(current, /class="fs-number">3\.8%/);
-    assert.match(current, /<span>Unchanged<\/span> compared with August 2026/);
-    assert.match(current, /Average monthly private rent/);
-    assert.match(current, /class="fs-number">£1,406/);
+    const rentText = (markup) => {
+      const start = markup.indexOf('<section class="fs-block" id="rent"');
+      assert.ok(start >= 0);
+      return textOf(markup.slice(start, markup.indexOf("</section>", start)));
+    };
+    const current = rentText(html(producer.metrics));
+    assert.match(current, /Key figure 3\.8 ?%/);
+    assert.match(current, /No change/);
+    assert.match(current, /Average £1,406\/month/);
 
     const { HistoricalTrendCard } = await server.ssrLoadModule(
       "/src/app/components/HistoricalTrendCard.tsx",
@@ -584,10 +586,9 @@ test("Housing renders real producer rent values and keeps growth visible through
         collection_status: "degraded",
       },
     });
-    assert.match(delayed, /id="rent"/);
-    assert.match(delayed, /class="fs-number">3\.8%/);
-    assert.match(delayed, /class="fs-number">£1,406/);
-    assert.match(delayed, /Update delayed/);
+    const delayedText = rentText(delayed);
+    assert.match(delayedText, /Key figure 3\.8 ?%/);
+    assert.match(delayedText, /Average £1,406\/month · update delayed/);
 
     const absent = html({
       ...producer.metrics,
@@ -599,9 +600,10 @@ test("Housing renders real producer rent values and keeps growth visible through
         collection_status: "unavailable",
       },
     });
-    assert.match(absent, /id="rent"/);
-    assert.match(absent, /class="fs-number">3\.8%/);
-    assert.match(absent, /class="fs-number">Not available/);
+    const absentText = rentText(absent);
+    assert.match(absentText, /Key figure 3\.8 ?%/);
+    assert.match(absentText, /Average rent: Not available/);
+    assert.doesNotMatch(absentText, /£0\b/);
   } finally {
     await server.close();
   }
