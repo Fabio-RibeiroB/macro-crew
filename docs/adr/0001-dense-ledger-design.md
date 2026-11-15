@@ -45,3 +45,15 @@ Adopt direction B, the dense ledger:
   column carry that job. Revisit with a new ADR if browser review shows people
   get lost.
 - Page restructure PRs (#87) follow this direction one page at a time.
+
+## Owner review of the refined mock (15 November 2026)
+
+Approved the indicator-table mock with these settings:
+
+- Every value shows its unit with the number: `%` for rates, `£` for money,
+  `p` for pence per litre, and the unit name where neither applies.
+- No sparklines on the overview (spec unchanged).
+- Change arrows are neutral; up/down is not coloured as good or bad.
+- The change column is FinStats' own calculation and is footnoted as such.
+- "GDP" stays as the headline name; the official series title is shown under
+  Sources. The typeface's slashed zero is accepted.
