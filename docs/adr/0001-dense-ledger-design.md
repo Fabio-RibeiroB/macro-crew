@@ -8,15 +8,22 @@ After recovery in November 2026 the owner found the layout confusing across the
 board. M8 slice 1 produced three mocked directions: A "Steady" (current look,
 larger figures), B "Statement" (dense ledger) and C "Topic colour" (one colour per
 subject). The owner prefers dense pages with just the information and little
-decoration, so more is visible at once.
+decoration, so more is visible at once — a modern, better-looking take on the
+indicator tables used by economic-data sites such as Trading Economics. That is a
+style reference only; FinStats keeps its own name, look and content.
 
 ## Decision
 
 Adopt direction B, the dense ledger:
 
-- Overview: a ledger listing all nine headline measures in their agreed order,
-  each row with name, official value, reference period, comparison and a one-line
-  definition shown inline. No card grid, no decorative bands or illustrations.
+- Overview: a compact indicator table listing all nine headline measures in their
+  agreed order, with aligned columns — name, latest official value, previous value,
+  reference period, unit and comparison — and a one-line definition shown inline.
+  Tabular figures, right-aligned numbers, subtle row dividers and hover states.
+  No card grid, no decorative bands or illustrations.
+- Polish comes from typography, alignment and spacing rather than ornament:
+  crisp hierarchy, restrained colour (green/red only for direction of change,
+  always paired with text or a sign), and a clean light and dark theme.
 - Subject pages: a fixed label column marks the agreed order — Key figure, What it
   means, Chart, AI summary, Sources — so every page reads the same way.
 - One typeface (Atkinson Hyperlegible Next), white/neutral surfaces, one accent
