@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   ChevronDown,
-  ExternalLink,
   Fuel,
   Landmark,
   Moon,
@@ -24,7 +23,6 @@ import {
   freshness,
   legacyReports,
   lastRateChange,
-  reportLabel,
   loadVerified,
   percent,
   previousReading,
@@ -51,6 +49,9 @@ import {
 } from "./data/interactions.mjs";
 import { loadEvents } from "./data/events.mjs";
 import { IndicatorTable } from "./components/IndicatorTable";
+import { OfficialLink } from "./components/OfficialLink";
+import { EconomyPage } from "./components/EconomyPage";
+import { checkedAt } from "./data/format.mjs";
 import { comparableEnergyPrevious, decimalDifference } from "./data/overview.mjs";
 import { EventList } from "./components/EventList";
 import { ReleaseSummaries } from "./components/ReleaseSummaries";
@@ -199,35 +200,6 @@ function priceKinds(data: any) {
 function priceTrendKinds(data: any) {
   return ["cpi", "cpih"].filter(
     (kind) => (data?.metrics?.[kind]?.history?.length ?? 0) > 0,
-  );
-}
-function checkedAt(value: string | null) {
-  return value
-    ? new Date(value).toLocaleString("en-GB", {
-        day: "numeric",
-        month: "short",
-        hour: "2-digit",
-        minute: "2-digit",
-        timeZone: "Europe/London",
-      }) + " UK time"
-    : "Not yet checked";
-}
-function OfficialLink({
-  href,
-  children,
-}: {
-  href: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <a
-      className="fs-link"
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-    >
-      {children} <ExternalLink size={13} aria-hidden="true" />
-    </a>
   );
 }
 function MetricCard({
@@ -866,99 +838,6 @@ function PriceGuide({ data }: any) {
   );
 }
 
-function InterestGuide() {
-  return (
-    <section className="fs-decisions" id="interest-rates">
-      <div className="fs-container fs-reading-grid">
-        <article>
-          <p className="fs-eyebrow">
-            The decisions behind borrowing and saving
-          </p>
-          <h2>Who sets interest rates?</h2>
-          <p>
-            The Bank of England’s Monetary Policy Committee, or MPC, sets Bank
-            Rate to help keep inflation low and stable. That rate influences
-            mortgages, loans and savings, but your deal can have a different
-            rate.
-          </p>
-          <p>
-            A change can reach variable-rate borrowers sooner. Fixed mortgage
-            payments usually stay the same during the fixed period, but the cost
-            can change when the deal ends. Savings providers do not all pass on
-            changes in the same way.
-          </p>
-          <OfficialLink href="https://www.bankofengland.co.uk/monetary-policy/the-interest-rate-bank-rate">
-            Read the latest official rate decision
-          </OfficialLink>
-        </article>
-        <aside className="fs-context-card">
-          <h3>How to read a rate decision</h3>
-          <ul>
-            <li>
-              <strong>The decision:</strong> did the rate change?
-            </li>
-            <li>
-              <strong>The votes:</strong> did members agree, and why?
-            </li>
-            <li>
-              <strong>The outlook:</strong> what evidence could change the next
-              decision?
-            </li>
-          </ul>
-          <p>
-            A forecast or a voting split is not a promise about the next
-            meeting. Effects on spending and inflation take time.
-          </p>
-          <p className="fs-caption">
-            This is a general guide. The daily Bank Rate observation above is
-            not a new policy announcement.
-          </p>
-        </aside>
-      </div>
-    </section>
-  );
-}
-
-function GrowthGuide() {
-  return (
-    <section
-      className="fs-container fs-section fs-reading-grid"
-      id="work-and-businesses"
-    >
-      <article id="gdp">
-        <p className="fs-eyebrow">Growth and everyday life</p>
-        <h2>A growing economy does not lift every household equally</h2>
-        <p>
-          Gross domestic product, or GDP, measures economic output. Growth can
-          support hiring, investment and pay, but total GDP does not tell us how
-          an individual worker or household is doing.
-        </p>
-        <p>
-          One month can be volatile. Look at the broader trend and remember that
-          early estimates can be revised as more information arrives.
-        </p>
-        <OfficialLink href="https://www.ons.gov.uk/economy/grossdomesticproductgdp">
-          Explore the GDP releases
-        </OfficialLink>
-      </article>
-      <aside className="fs-context-card">
-        <h3>What about jobs, pay and housing?</h3>
-        <p>
-          They matter to the bigger picture. We are building verified coverage
-          before adding dedicated pages for those subjects.
-        </p>
-        <p>
-          For now, growth and Bank Rate provide context, not a substitute for
-          employment, wage, rent or house-price figures.
-        </p>
-        <a className="fs-link" href="/prices">
-          See what prices mean for purchasing power <ArrowRight size={16} aria-hidden="true" />
-        </a>
-      </aside>
-    </section>
-  );
-}
-
 function GovernmentGuide() {
   return (
     <>
@@ -1083,40 +962,6 @@ function GiltYields({ data, loading, error, refresh }: any) {
       <OfficialLink href={primary?.definition.source_url ?? "https://www.bankofengland.co.uk/boeapps/database/"}>Bank of England Database nominal par yields (IUDSNPY, IUDMNPY and IUDLNPY)</OfficialLink>
     </details>
   </Statistics>;
-}
-
-function AiSummary({ reports, reportTime }: any) {
-  return (
-    <section className="fs-container fs-section" id="ai-summary" aria-labelledby="ai-summary-heading">
-      <div className="fs-section-heading">
-        <div>
-          <h2 id="ai-summary-heading">AI summary</h2>
-          <p className="fs-alert">
-            AI commentary on the latest Bank of England publications
-            {reportTime ? `, generated ${checkedAt(reportTime)}` : ""}. It is
-            not checked against the official figures on this site. Use the
-            original publication to confirm facts, dates and forecasts.
-          </p>
-        </div>
-      </div>
-      <div className="fs-archive-body">
-        {reports.map((report: any) => (
-          <article key={report.key}>
-            <p className="fs-eyebrow">{formatPeriod(report.report_date)}</p>
-            <h3>{reportLabel(report)}</h3>
-            <p>{report.summary}</p>
-            <OfficialLink href={report.source}>Original publication</OfficialLink>
-          </article>
-        ))}
-        {!reports.length && (
-          <p>
-            The AI summary could not be loaded. Official figures and links
-            remain available.
-          </p>
-        )}
-      </div>
-    </section>
-  );
 }
 
 function Publications({ reports, reportTime }: any) {
@@ -1554,13 +1399,15 @@ export default function App({
               Understand the figures behind borrowing, saving and economic
               activity.
             </PageHeading>
-            <Statistics {...stats} kinds={["bank_rate", "gdp"]} />
-            <AiSummary reports={reports} reportTime={reportTime} />
+            <EconomyPage
+              {...stats}
+              topics={topics}
+              reports={reports}
+              reportTime={reportTime}
+              HistoricalTrendCard={HistoricalTrendCard}
+            />
             <EventList {...eventProps} indicatorIds={["uk.bank_rate.daily", "uk.gdp.monthly_growth"]} compact />
             <ReleaseSummaries subject="economy" {...summaryProps} />
-            <InterestGuide />
-            <GrowthGuide />
-            <Trends data={data} kinds={["bank_rate", "gdp"]} />
             <Publications reports={reports} reportTime={reportTime} />
           </>
         )}

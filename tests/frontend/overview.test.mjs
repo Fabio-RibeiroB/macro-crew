@@ -4,19 +4,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { decimalDifference, overviewRows } from "../../src/app/data/overview.mjs";
-import { overviewRowsOf, textOf } from "./overview-helpers.mjs";
+import { fullFixture, overviewRowsOf, textOf } from "./overview-helpers.mjs";
 
-const FIXTURES = new URL("../fixtures/verified/", import.meta.url);
-const load = (name) => JSON.parse(readFileSync(new URL(name, FIXTURES), "utf8"));
-const full = () => {
-  // Merge reviewed producer generations so all nine measures carry real values.
-  const data = load("producer-pay-v1.json");
-  data.metrics.household_energy = load("producer-energy-v1.json").metrics.household_energy;
-  const fuel = load("producer-fuel-v1.json");
-  data.metrics.petrol_price = fuel.metrics.petrol_price;
-  data.metrics.diesel_price = fuel.metrics.diesel_price;
-  return data;
-};
+const full = fullFixture;
 
 async function renderOverview(initialData) {
   const { createServer } = await import("vite");

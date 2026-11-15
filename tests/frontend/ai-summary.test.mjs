@@ -11,7 +11,7 @@ test("AI summary is visible on Economy, linked from the overview, and the unpubl
     const render = (pathname) => renderToStaticMarkup(createElement(App, { pathname }));
     const economy = render("/economy");
     assert.match(economy, /id="ai-summary"/);
-    assert.match(economy, /<h2 id="ai-summary-heading">AI summary<\/h2>/);
+    assert.match(economy, /<h3 class="fs-row-label" id="ai-summary-heading">AI summary<\/h3>/);
     assert.doesNotMatch(economy, /Earlier AI report summaries|<details class="fs-archive"/);
     assert.ok(economy.indexOf('id="ai-summary"') < economy.indexOf("The Bank’s outlook"));
     assert.match(render("/"), /href="\/economy#ai-summary"/);
