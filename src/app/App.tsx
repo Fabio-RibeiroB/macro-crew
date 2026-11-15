@@ -51,6 +51,7 @@ import { loadEvents } from "./data/events.mjs";
 import { IndicatorTable } from "./components/IndicatorTable";
 import { OfficialLink } from "./components/OfficialLink";
 import { EconomyPage } from "./components/EconomyPage";
+import { GovernmentPage } from "./components/GovernmentPage";
 import { checkedAt } from "./data/format.mjs";
 import { comparableEnergyPrevious, decimalDifference } from "./data/overview.mjs";
 import { EventList } from "./components/EventList";
@@ -838,132 +839,6 @@ function PriceGuide({ data }: any) {
   );
 }
 
-function GovernmentGuide() {
-  return (
-    <>
-      <section className="fs-container fs-section fs-reading-grid">
-        <article>
-          <p className="fs-eyebrow">What to look for</p>
-          <h2>Start with who is affected — and when</h2>
-          <p>
-            The Chancellor’s Budget sets out tax and spending plans. Parliament
-            scrutinises the measures. A headline announcement may apply months
-            or years later, and some plans need legislation.
-          </p>
-          <p>
-            Ask which tax, benefit or service changes; which people or
-            businesses it covers; and the date it takes effect. A tax-rate
-            change and a frozen tax threshold can affect take-home pay in
-            different ways.
-          </p>
-          <OfficialLink href="https://www.parliament.uk/about/how/role/check-and-approve-government-spending-and-taxation/the-budget-and-parliament/">
-            How the Budget becomes policy
-          </OfficialLink>
-        </article>
-        <aside className="fs-context-card">
-          <h3>Three things to keep separate</h3>
-          <ul>
-            <li>
-              <strong>An announcement:</strong> what the government says it
-              plans to do.
-            </li>
-            <li>
-              <strong>A measure in force:</strong> the rules that actually
-              apply, and from when.
-            </li>
-            <li>
-              <strong>A forecast:</strong> what might happen under stated
-              assumptions.
-            </li>
-          </ul>
-          <p>
-            Political claims are not independent evidence of an economic
-            outcome.
-          </p>
-        </aside>
-      </section>
-      <section className="fs-decisions">
-        <div className="fs-container fs-reading-grid">
-          <article>
-            <p className="fs-eyebrow">Checking the wider picture</p>
-            <h2>What do the independent forecasts say?</h2>
-            <p>
-              The Office for Budget Responsibility, or OBR, assesses the
-              economic and public-finance outlook. Its forecasts help put
-              government plans in context, but depend on assumptions about
-              growth, inflation, interest rates and policy.
-            </p>
-            <p>
-              Forecasts can change. Compare the assumptions and uncertainty, as
-              well as the headline borrowing or debt numbers.
-            </p>
-            <OfficialLink href="https://obr.uk/efo/">
-              Read the Economic and Fiscal Outlook
-            </OfficialLink>
-          </article>
-          <aside className="fs-context-card">
-            <h3>Latest Budget coverage</h3>
-            <p>
-              Source-checked summaries of individual Budget measures and OBR
-              forecasts are not available here yet.
-            </p>
-            <p>
-              This page explains how to read those announcements. It does not
-              claim that a particular tax or benefit has just changed.
-            </p>
-            <OfficialLink href="https://www.gov.uk/government/organisations/hm-treasury">
-              Visit HM Treasury
-            </OfficialLink>
-          </aside>
-        </div>
-      </section>
-    </>
-  );
-}
-
-function PublicDebt({ data, loading, error, refresh }: any) {
-  const metric = data?.metrics?.public_debt;
-  return <Statistics data={data} kinds={["public_debt"]} loading={loading} error={error} refresh={refresh}
-    sectionId="public-debt" title="Public sector net debt" eyebrow="ONS monthly estimate">
-    <p className="fs-caption">{metric?.latest ? <>The latest value is for the end of {formatPeriod(metric.latest.period)}. The month-on-month comparison is in percentage points (pp), not percent growth.</> : "Monthly UK estimate; source publication and reference month will appear when a verified reading is available."}</p>
-    <Suspense fallback={<p role="status">Loading chart…</p>}>
-      {metric?.history?.length ? <div className="fs-chart-grid fs-chart-count-1"><HistoricalTrendCard title="Public sector net debt excluding public sector banks, as a share of GDP" label="Debt · % of GDP" color="#69748b" data={chartPoints(metric)} /></div> : null}
-    </Suspense>
-    <details className="fs-details fs-info" open={!metric?.latest}>
-      <summary>Definition and source <ChevronDown size={15} aria-hidden="true" /></summary>
-      <p>ONS series HF6X measures public sector net debt excluding public sector banks as a percentage of GDP. Debt is the outstanding balance; the deficit or net borrowing is the amount borrowed over a period. Public sector net financial liabilities (PSNFL) is a wider balance-sheet measure that includes more financial assets and liabilities.</p>
-      <p>UK, monthly, not seasonally adjusted. ONS can revise the history, including when GDP estimates change. We retain each accepted source response and its revision history privately.</p>
-      <p>ONS release: {metric?.source_published_date ?? "not yet available"}. Last checked: {checkedAt(metric?.last_successful_check_at ?? null)}.</p>
-      <OfficialLink href={metric?.definition.source_url ?? "https://www.ons.gov.uk/economy/governmentpublicsectorandtaxes/publicsectorfinance/timeseries/hf6x/pusf"}>ONS HF6X public debt series</OfficialLink>
-    </details>
-  </Statistics>;
-}
-
-function GiltYields({ data, loading, error, refresh }: any) {
-  const primary = data?.metrics?.gilt_10y;
-  const metrics = [
-    ["10-year nominal par yield", "gilt_10y", "10-year yield · percent"],
-    ["5-year nominal par yield", "gilt_5y", "5-year yield · percent"],
-    ["20-year nominal par yield", "gilt_20y", "20-year yield · percent"],
-  ] as const;
-  return <Statistics data={data} kinds={["gilt_10y", "gilt_5y", "gilt_20y"]} loading={loading} error={error} refresh={refresh}
-    sectionId="gilt-yields" title="Gilt yields" eyebrow="BoE daily fitted nominal par yields">
-    <p className="fs-caption">{primary?.latest ? <>Latest 10-year observation: {formatPeriod(primary.latest.period)}. Comparison uses the previous available trading observation; non-trading dates have no fabricated values.</> : "Daily UK fitted nominal par yields; observation dates and comparisons appear when verified readings are available."} One percentage point equals 100 basis points.</p>
-    <Suspense fallback={<p role="status">Loading chart…</p>}>
-      {metrics.some(([, key]) => data?.metrics?.[key]?.history?.length) && <div className="fs-chart-grid fs-chart-count-1">
-        {metrics.map(([title, key, label]) => data?.metrics?.[key]?.history?.length ? <HistoricalTrendCard key={key} title={title} label={label} data={chartPoints(data.metrics[key])} color={topics[key].color} /> : null)}
-      </div>}
-    </Suspense>
-    <details className="fs-details fs-info" open={!primary?.latest}>
-      <summary>Definition and source <ChevronDown size={15} aria-hidden="true" /></summary>
-      <p>The Bank of England daily nominal par-yield family is fitted from its Variable Roughness Penalty (VRP) term-structure model at fixed 5-, 10- and 20-year maturities. The 10-year maturity is primary. Each yield describes market financing conditions at that maturity; it is not a benchmark gilt's redemption yield or the average cost of all government debt already issued.</p>
-      <p>The comparable family begins 4 January 2000. Daily observations are shown only on source dates, so weekends and other non-trading dates are not zero-filled. Changes compare with the previous available observation and are expressed in basis points (100 basis points = 1 percentage point). Source revisions are retained as private evidence and history.</p>
-      <p>Last successful checks: 5-year {checkedAt(data?.metrics?.gilt_5y?.last_successful_check_at ?? null)}; 10-year {checkedAt(primary?.last_successful_check_at ?? null)}; 20-year {checkedAt(data?.metrics?.gilt_20y?.last_successful_check_at ?? null)}.</p>
-      <OfficialLink href={primary?.definition.source_url ?? "https://www.bankofengland.co.uk/boeapps/database/"}>Bank of England Database nominal par yields (IUDSNPY, IUDMNPY and IUDLNPY)</OfficialLink>
-    </details>
-  </Statistics>;
-}
-
 function Publications({ reports, reportTime }: any) {
   return (
     <section className="fs-container fs-section" id="publications">
@@ -1429,9 +1304,7 @@ export default function App({
               What to look for in announcements about taxes, public services and
               the wider outlook.
             </PageHeading>
-            <PublicDebt {...stats} />
-            <GiltYields {...stats} />
-            <GovernmentGuide />
+            <GovernmentPage {...stats} topics={topics} HistoricalTrendCard={HistoricalTrendCard} />
             <ReleaseSummaries subject="government" {...summaryProps} />
             <EventList {...eventProps} indicatorIds={["uk.public_debt.net_debt_gdp"]} compact />
           </>
