@@ -57,3 +57,16 @@ Approved the indicator-table mock with these settings:
 - The change column is FinStats' own calculation and is footnoted as such.
 - "GDP" stays as the headline name; the official series title is shown under
   Sources. The typeface's slashed zero is accepted.
+
+## Owner changes during implementation (issue #87, 15 November 2026)
+
+- The Unit column is removed. The unit sits next to every number instead: `4.00%`,
+  `£273,037`, `£1,723/year`, `£1,406/month`, `174.57p`, and changes as `+0.25 pp`,
+  `+£891`, `−0.71p`. This applies to the latest, previous and change columns, key
+  figures, chart readouts and tables. `pp` is explained in the change footnote.
+- The brand already says FinStats UK, so headings and labels do not repeat it. The
+  overview heading is "Latest figures". Official series and source titles keep their
+  full names, including "UK" where that is the official title.
+- The neutral arrows decided above replace the Decision bullet that allowed green and
+  red for direction of change. The Latest column keeps a faint tint, and the
+  typeface is self-hosted (SIL Open Font License, files in `src/assets/fonts`).

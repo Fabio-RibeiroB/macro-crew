@@ -12,6 +12,7 @@ import {
   canonicalDestination,
 } from "../../src/app/data/pages.mjs";
 import { NAV_COLLAPSE_QUERY } from "../../src/app/data/interactions.mjs";
+import { overviewRowsOf, textOf } from "./overview-helpers.mjs";
 
 test("plain-English pages have stable direct URLs and unique navigation identities", () => {
   assert.equal(new Set(PAGES.map((p) => p.path)).size, PAGES.length);
@@ -100,7 +101,7 @@ test("every page renders its own heading, navigation and missing-data content", 
       assert.ok(
         html.includes(
           page.id === "overview"
-            ? "Latest verified figures"
+            ? "Latest figures"
             : page.title.replaceAll("&", "&amp;"),
         ),
       );
@@ -138,7 +139,7 @@ test("every page renders its own heading, navigation and missing-data content", 
         }
       if (page.id === "overview") {
         assert.doesNotMatch(html, /Big economic news|The quick read|Your everyday economy/);
-        assert.match(html, /<h1[^>]*>Latest verified figures<\/h1>/);
+        assert.match(html, /<h1[^>]*>Latest figures<\/h1>/);
         assert.doesNotMatch(html, /id="trends"/);
         assert.doesNotMatch(html, /Earlier AI report summaries/);
       }
@@ -225,14 +226,13 @@ test("every page renders its own heading, navigation and missing-data content", 
     const overview = renderToStaticMarkup(
       createElement(App, { pathname: "/", initialData: overviewData }),
     );
-    const visibleOverviewCards = [...overview.matchAll(/<article class="fs-stat fs-stat-compact\b[\s\S]*?<\/article>/g)]
-      .map(([card]) => card.replace(/<details\b[^>]*>[\s\S]*?<\/details>/g, ""))
-      .join("\n");
-    assert.match(overview, /class="fs-number">3\.5%/);
-    assert.match(overview, /class="fs-number">4\.5%/);
-    assert.match(visibleOverviewCards, /Latest evidenced change: \+1\.1 percentage points at the 20 October 2026 observation/);
-    assert.match(overview, /About Inflation \(CPIH\)/);
-    assert.match(overview, /See Inflation \(CPIH\) details/);
+    const overviewRows = overviewRowsOf(overview);
+    assert.deepEqual(Object.keys(overviewRows), ["inflation", "bank-rate", "wages", "unemployment", "rent", "house-prices", "energy", "fuel", "gdp"]);
+    assert.match(textOf(overviewRows.inflation), /^Inflation \(CPIH\) .*\b3\.5%/);
+    assert.match(textOf(overviewRows["bank-rate"]), /4\.50%/);
+    assert.match(textOf(overviewRows["bank-rate"]), /3\.40% Before 20 Oct 2026/);
+    assert.match(textOf(overviewRows["bank-rate"]), /\+1\.1 pp/);
+    assert.match(overview, /Inflation \(CPIH\)/);
     assert.match(overview, /href="\/economy#interest-rates"/);
     assert.match(overview, /href="\/economy#gdp"/);
     assert.match(overview, /href="\/prices#figures"/);
@@ -343,9 +343,7 @@ test("CPI headlines inflation while CPIH stays labelled supporting data", async 
     const overview = renderToStaticMarkup(
       createElement(App, { pathname: "/", initialData: overviewData }),
     );
-    assert.match(overview, /<h2>CPI inflation<\/h2>/);
-    assert.match(overview, /About CPI inflation/);
-    assert.match(overview, /See CPI inflation details/);
+    assert.match(overviewRowsOf(overview).inflation, /<a class="fs-ledger-link" href="\/prices#figures">Inflation<\/a>/);
     assert.doesNotMatch(overview, /Inflation \(CPIH\)/);
     const cpihOnly = {
       published_at: "2026-10-21T12:00:00Z",
@@ -431,19 +429,11 @@ test("Jobs & Pay renders official nominal and independently dated CPIH real pay"
       createElement(App, { pathname: "/", initialData: source }),
     );
     const home = overview(data);
-    const homeVisibleCards = [...home.matchAll(/<article class="fs-stat fs-stat-compact\b[\s\S]*?<\/article>/g)]
-      .map(([card]) => card.replace(/<details\b[^>]*>[\s\S]*?<\/details>/g, ""));
-    const homeVisible = homeVisibleCards.join("\n");
-    const payCardAt = homeVisible.indexOf("<h2>Regular pay growth</h2>");
-    const realContextAt = homeVisible.indexOf("Official CPIH-adjusted regular pay: 0.6%", payCardAt);
-    assert.ok(realContextAt > payCardAt);
-    assert.match(homeVisible.slice(realContextAt, realContextAt + 260), /Great Britain|same published window/);
-    assert.match(homeVisible, /The last rate change cannot be established from the available history/);
-    assert.ok(home.indexOf("Regular pay growth") < home.indexOf(">GDP</h2>"),
-      "the Wages card precedes GDP in the homepage subset");
-    const unemploymentAt = home.indexOf(">Unemployment</h2>");
-    const gdpAt = home.indexOf(">GDP</h2>");
-    assert.ok(unemploymentAt > payCardAt && gdpAt > unemploymentAt,
+    const homeRows = overviewRowsOf(home);
+    assert.match(textOf(homeRows.wages), /0\.6% after inflation/);
+    assert.doesNotMatch(homeRows.wages, /separate window/);
+    assert.match(textOf(homeRows["bank-rate"]), /Not available/);
+    assert.deepEqual(Object.keys(homeRows).slice(2, 4).concat(Object.keys(homeRows).at(-1)), ["wages", "unemployment", "gdp"],
       "the homepage subset orders Wages, Unemployment, then GDP");
     assert.match(home, /href="\/jobs-pay#unemployment"/);
 
@@ -462,11 +452,11 @@ test("Jobs & Pay renders official nominal and independently dated CPIH real pay"
     const mismatchedHomeData = structuredClone(data);
     mismatchedHomeData.metrics.regular_pay_real_growth.latest.reference.start_month = "2026-05";
     const mismatchedHome = overview(mismatchedHomeData);
-    assert.match(mismatchedHome, /Official CPIH-adjusted regular pay: 0\.6%[\s\S]{0,200}separate window, not directly matched/);
+    assert.match(textOf(overviewRowsOf(mismatchedHome).wages), /0\.6% after inflation \(CPIH-adjusted, [A-Za-z]+ to [A-Za-z]+ 2026; separate window, not directly matched to nominal pay\)/);
 
     const absentRealData = structuredClone(data);
     absentRealData.metrics.regular_pay_real_growth.latest = null;
-    assert.match(overview(absentRealData), /Official CPIH-adjusted regular pay is currently unavailable/);
+    assert.match(textOf(overviewRowsOf(overview(absentRealData)).wages), /After inflation: Not available/);
   } finally {
     await server.close();
   }

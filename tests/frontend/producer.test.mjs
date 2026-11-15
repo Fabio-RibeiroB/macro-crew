@@ -4,6 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { overviewRowsOf, textOf } from "./overview-helpers.mjs";
 import { filterChartRange } from "../../src/app/data/chartRange.mjs";
 import {
   loadVerified,
@@ -41,9 +42,11 @@ test("Ofgem live smoke producer output passes the strict reader and renders assu
   try {
     const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
     const home = renderToStaticMarkup(createElement(App, { pathname: "/", initialData: data }));
-    assert.match(home, /<h2>Household energy<\/h2>/);
-    assert.match(home, /£1,723/);
-    assert.match(home, /No direct comparison: Ofgem says the tax treatment changed/);
+    const energyRow = textOf(overviewRowsOf(home).energy);
+    assert.match(energyRow, /^Household energy\b/);
+    assert.match(energyRow, /£1,723\/year/);
+    assert.match(energyRow, /Not comparable Tax treatment changed/);
+    assert.match(energyRow, /Oct to Dec 2026/);
     const prices = renderToStaticMarkup(createElement(App, { pathname: "/prices", initialData: data }));
     assert.match(prices, /id="household-energy"/);
     assert.match(prices, /2,500 kWh of single-rate electricity and 9,500 kWh of gas/);
@@ -204,26 +207,21 @@ test("DESNZ petrol and diesel render as two weekly UK prices with direct history
   try {
     const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
     const home = renderToStaticMarkup(createElement(App, { pathname: "/", initialData: producer }));
-    const card = [...home.matchAll(/<article class="fs-stat fs-stat-compact\b[\s\S]*?<\/article>/g)]
-      .map(([markup]) => markup).find((markup) => markup.includes("<h2>Petrol &amp; Diesel</h2>"));
-    assert.ok(card);
-    assert.match(card, /Unleaded petrol/);
-    assert.match(card, /174\.57p/);
-    assert.match(card, /−0\.71p\/litre vs 12 Oct 2026/);
-    assert.match(card, /aria-label="Change −0\.71 pence per litre compared with 12 October 2026"/);
-    assert.match(card, /Diesel/);
-    assert.match(card, /199\.33p/);
-    assert.match(card, /−0\.71p\/litre vs 12 Oct 2026/);
-    assert.match(card, /href="\/prices#petrol-diesel"/);
+    const fuel = overviewRowsOf(home).fuel;
+    const card = textOf(fuel);
+    assert.match(card, /174\.57p petrol/);
+    assert.match(card, /199\.33p diesel/);
+    assert.match(card, /−0\.71p petrol/);
+    assert.match(card, /−0\.71p diesel/);
+    assert.match(card, /Previous: 12 Oct 2026/);
+    assert.match(fuel, /href="\/prices#petrol-diesel"/);
     const delayed = renderToStaticMarkup(createElement(App, {
       pathname: "/", initialData: { ...producer, metrics: {
         ...producer.metrics,
         petrol_price: { ...petrol, collection_status: "degraded" },
       } },
     }));
-    const delayedCard = [...delayed.matchAll(/<article class="fs-stat fs-stat-compact\b[\s\S]*?<\/article>/g)]
-      .map(([markup]) => markup).find((markup) => markup.includes("<h2>Petrol &amp; Diesel</h2>"));
-    assert.match(delayedCard, /Update delayed · showing last verified figure/);
+    assert.match(textOf(overviewRowsOf(delayed).fuel), /Update delayed · showing last verified figure/);
     const prices = renderToStaticMarkup(createElement(App, { pathname: "/prices", initialData: producer }));
     assert.match(prices, /id="petrol-diesel"/);
     assert.ok(prices.indexOf("<h3>CPI inflation</h3>") < prices.indexOf('id="petrol-diesel"'),
@@ -238,16 +236,15 @@ test("DESNZ petrol and diesel render as two weekly UK prices with direct history
       const partial = renderToStaticMarkup(createElement(App, {
         pathname: "/", initialData: { ...producer, metrics },
       }));
-      const partialCard = [...partial.matchAll(/<article class="fs-stat fs-stat-compact\b[\s\S]*?<\/article>/g)]
-        .map(([markup]) => markup).find((markup) => markup.includes("<h2>Petrol &amp; Diesel</h2>"));
-      assert.ok(partialCard);
-      assert.match(partialCard, /Unleaded petrol/);
-      assert.match(partialCard, /Diesel/);
+      const partialCard = textOf(overviewRowsOf(partial).fuel);
+      assert.match(partialCard, /petrol/);
+      assert.match(partialCard, /diesel/);
       if (petrolPresent) assert.match(partialCard, /174\.57p/);
       else assert.doesNotMatch(partialCard, /174\.57p/);
       if (dieselPresent) assert.match(partialCard, /199\.33p/);
       else assert.doesNotMatch(partialCard, /199\.33p/);
       assert.match(partialCard, /Not available/);
+      assert.doesNotMatch(partialCard, /(^|\s)0(\.0+)?p\b/);
       const partialPrices = renderToStaticMarkup(createElement(App, {
         pathname: "/prices", initialData: { ...producer, metrics },
       }));
@@ -502,25 +499,23 @@ test("Housing renders a national house-price card and separate pounds and percen
     assert.doesNotMatch(html, /percentage points compared with July 2026/);
     assert.match(html, /Recent observations are provisional and subject to revision/);
     const home = renderToStaticMarkup(createElement(App, { pathname: "/", initialData: producer }));
-    const visibleCards = [...home.matchAll(/<article class="fs-stat fs-stat-compact\b[\s\S]*?<\/article>/g)]
-      .map(([card]) => card.replace(/<details\b[^>]*>[\s\S]*?<\/details>/g, ""));
-    const houseCard = visibleCards.find((card) => card.includes("<h2>House prices</h2>"));
-    assert.ok(houseCard, "the house-price homepage card is present");
-    assert.match(houseCard, /Annual change: 0\.9% for August 2026/);
-    assert.doesNotMatch(houseCard, /<details/);
-    const rentCard = visibleCards.find((card) => card.includes("<h2>Rent</h2>"));
-    assert.match(rentCard, /Average monthly rent: £1,406 in September 2026/);
-    assert.match(rentCard, /<span>Unchanged<\/span> compared with August 2026/);
+    const homeRows = overviewRowsOf(home);
+    const houseCard = textOf(homeRows["house-prices"]);
+    assert.match(houseCard, /^House prices\b/);
+    assert.match(houseCard, /£273,037/);
+    assert.match(houseCard, /0\.9% on a year earlier/);
+    const rentCard = textOf(homeRows.rent);
+    assert.match(rentCard, /Average £1,406\/month/);
+    assert.match(rentCard, /No change/);
     const delayedGrowth = { ...producer.metrics.house_price_growth, collection_status: "degraded" };
     const missingLevelHome = renderToStaticMarkup(createElement(App, {
       pathname: "/",
       initialData: { ...producer, metrics: { ...producer.metrics, house_price_level: null, house_price_growth: delayedGrowth } },
     }));
-    const missingLevelCard = [...missingLevelHome.matchAll(/<article class="fs-stat fs-stat-compact\b[\s\S]*?<\/article>/g)]
-      .map(([card]) => card.replace(/<details\b[^>]*>[\s\S]*?<\/details>/g, ""))
-      .find((card) => card.includes("<h2>House prices</h2>"));
+    const missingLevelCard = textOf(overviewRowsOf(missingLevelHome)["house-prices"]);
     assert.match(missingLevelCard, /Not available/);
-    assert.match(missingLevelCard, /Annual change: 0\.9% for August 2026 · update delayed; last verified figure shown/);
+    assert.doesNotMatch(missingLevelCard, /£0\b/);
+    assert.match(missingLevelCard, /0\.9% on a year earlier \(Aug 2026\) · update delayed/);
     const { HistoricalTrendCard } = await server.ssrLoadModule("/src/app/components/HistoricalTrendCard.tsx");
     const pounds = renderToStaticMarkup(createElement(HistoricalTrendCard, {
       title: "Average house price", label: "Average house price", unit: "£",
