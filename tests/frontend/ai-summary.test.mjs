@@ -19,6 +19,8 @@ test("AI summary is visible on Economy, linked from the overview, and the unpubl
     for (const path of ["/prices", "/economy", "/jobs-pay", "/housing", "/government-budget"]) {
       const html = render(path);
       assert.doesNotMatch(html, /AI explanations of official data|could not be refreshed/, path);
+      // The unpublished feed leaves no empty "AI summary" heading on pages with no AI commentary.
+      if (path !== "/economy") assert.doesNotMatch(html, /id="ai-summary-title"|id="ai-summary"/, path);
     }
   } finally { await server.close(); }
 });

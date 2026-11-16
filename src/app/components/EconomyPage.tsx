@@ -9,10 +9,11 @@ import { AiCommentary, KeyFigure, Row, Sources } from "./SubjectBlock";
 
 /**
  * Economy: each measure reads in one fixed order, Key figure, What it means, Chart,
- * AI summary, Sources. Anchors from the earlier layout (#interest-rates, #gdp,
+ * AI summary, Sources. The AI summary row is the one entry point for the CrewAI
+ * commentary and the release explanations (hidden while that feed is unpublished). Anchors from the earlier layout (#interest-rates, #gdp,
  * #ai-summary, #trends, #figures) still resolve.
  */
-export function EconomyPage({ data, loading, error, refresh, topics, reports, reportTime, HistoricalTrendCard }: any) {
+export function EconomyPage({ data, loading, error, refresh, topics, reports, reportTime, releaseExplanations, HistoricalTrendCard }: any) {
   const rows = data ? Object.fromEntries(overviewRows(data).map((row: any) => [row.id, row])) : {};
   const bank = data?.metrics?.bank_rate;
   const gdp = data?.metrics?.gdp;
@@ -81,6 +82,7 @@ export function EconomyPage({ data, loading, error, refresh, topics, reports, re
         </Row>
         <Row label="AI summary" id="ai-summary" labelId="ai-summary-heading">
           <AiCommentary reports={reports} reportTime={reportTime} />
+          {releaseExplanations}
         </Row>
         <Row label="Sources" labelId="bank-sources-label"><Sources metric={bank} /></Row>
       </section>

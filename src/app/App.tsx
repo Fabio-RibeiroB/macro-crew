@@ -943,10 +943,10 @@ export default function App({
               topics={topics}
               reports={reports}
               reportTime={reportTime}
+              releaseExplanations={<ReleaseSummaries embedded subject="economy" {...summaryProps} />}
               HistoricalTrendCard={HistoricalTrendCard}
             />
             <EventList {...eventProps} indicatorIds={["uk.bank_rate.daily", "uk.gdp.monthly_growth"]} compact />
-            <ReleaseSummaries subject="economy" {...summaryProps} />
             <Publications reports={reports} reportTime={reportTime} />
           </>
         )}
