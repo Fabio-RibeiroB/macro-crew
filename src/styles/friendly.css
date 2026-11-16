@@ -1540,6 +1540,27 @@
   font: 700 14.5px var(--font-body);
   margin-bottom: 2px;
 }
+/* Release explanations hosted inside the Economy AI summary row, below the commentary box. */
+.fs-ai-release {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--fs-line);
+}
+.fs-ai-release .fs-stat-top {
+  margin-bottom: 8px;
+}
+.fs-ai-release .fs-stat-top h4 {
+  font: 700 14.5px/1.4 var(--font-body);
+  margin: 0;
+}
+/* Other pages: a page-level "AI summary" section, headed like a subject block. */
+.fs-root .fs-ai-section > h2 {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  padding: 12px 0 8px;
+}
 .fs-ai-art p.fs-ai-meta {
   font-size: 13.5px;
   color: var(--fs-muted);

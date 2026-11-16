@@ -5,8 +5,13 @@ const dateLabel = (value: string) => new Date(value).toLocaleDateString("en-GB",
   day: "numeric", month: "long", year: "numeric", timeZone: "UTC",
 });
 
-/** Render only validated producer claims belonging to this page's subject. */
-export function ReleaseSummaries({ subject, data, metrics, loading, error, refresh }: any) {
+/**
+ * Render only validated producer claims belonging to this page's subject. This is the
+ * release-explanations half of the single "AI summary" entry point (issue #90). On its
+ * own it renders the page's "AI summary" section; with `embedded` it renders just the
+ * panel, to sit inside a section that already hosts other AI commentary (Economy).
+ */
+export function ReleaseSummaries({ subject, data, metrics, loading, error, refresh, embedded = false }: any) {
   // Hidden while the feed is unpublished (first load, or "not published yet").
   // A failed first load of a published feed shows a calm status instead; a failure
   // after a successful load keeps prior data with a warning (below).
@@ -17,10 +22,10 @@ export function ReleaseSummaries({ subject, data, metrics, loading, error, refre
   };
   const title = subjectLabels[subject] ?? "this subject";
   const status = data?.status?.status;
-  return <section className="fs-container fs-section" aria-labelledby={`release-explanations-${subject}`}>
-    <div className="fs-context-card">
+  const Heading = embedded ? "h4" : "h3";
+  const panel = <div className={embedded ? "fs-ai-release" : "fs-context-card"} role="group" aria-labelledby={`release-explanations-${subject}`}>
       <div className="fs-stat-top">
-        <h2 id={`release-explanations-${subject}`}>AI explanations of official data · {title}</h2>
+        <Heading id={`release-explanations-${subject}`}>AI explanations of official data · {title}</Heading>
         <button type="button" className="fs-icon-button" onClick={refresh} aria-label={`Refresh ${title.toLowerCase()} explanations`} disabled={loading}>
           <RefreshCw size={17} aria-hidden="true" />
         </button>
@@ -45,6 +50,10 @@ export function ReleaseSummaries({ subject, data, metrics, loading, error, refre
       {subject === "economy" && <p className="fs-caption">MPC meeting dates are published, but MPC policy decisions are not covered by the currently qualified release-summary feed.</p>}
       {subject === "government" && <p className="fs-caption">Budget announcements and OBR forecasts are not covered by the currently qualified release-summary feed.</p>}
       <p className="fs-caption">These explanations are independent of verified figures. They do not provide forecasts or individual household advice.</p>
-    </div>
+    </div>;
+  if (embedded) return panel;
+  return <section className="fs-container fs-section fs-ai-section" id="ai-summary" aria-labelledby="ai-summary-title">
+    <h2 id="ai-summary-title">AI summary</h2>
+    {panel}
   </section>;
 }

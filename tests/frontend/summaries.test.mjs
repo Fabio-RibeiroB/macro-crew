@@ -99,6 +99,26 @@ test("mocked worker output validates, matches current tuples and stays on its ow
       ["/government-budget", "release-explanations-government"],
     ];
     for (const [path, heading] of subjects) assert.match(render(path), new RegExp(heading));
+    // One entry point (#90): Economy hosts the release explanations inside its single
+    // AI summary row, after the CrewAI commentary and before Sources.
+    const economy = render("/economy");
+    const aiRowStart = economy.indexOf('<div class="fs-row" id="ai-summary">');
+    assert.ok(aiRowStart >= 0);
+    const aiRow = economy.slice(aiRowStart, economy.indexOf('id="bank-sources-label"', aiRowStart));
+    assert.ok(aiRow.indexOf("fs-ai-box") >= 0 && aiRow.indexOf("fs-ai-box") < aiRow.indexOf("release-explanations-economy"));
+    assert.match(aiRow, /<h4 id="release-explanations-economy">AI explanations of official data/);
+    assert.equal(economy.match(/id="ai-summary"/g).length, 1);
+    assert.equal(economy.match(/id="release-explanations-economy"/g).length, 1);
+    // Every other page gets one "AI summary" section that hosts the same panel.
+    for (const [path, heading] of subjects.filter(([p]) => p !== "/economy")) {
+      const html = render(path);
+      assert.equal(html.match(/id="ai-summary"/g).length, 1, path);
+      const start = html.indexOf('<section class="fs-container fs-section fs-ai-section" id="ai-summary"');
+      assert.ok(start >= 0, path);
+      const hosted = html.slice(start, html.indexOf("</section>", start));
+      assert.match(hosted, /<h2 id="ai-summary-title">AI summary<\/h2>/, path);
+      assert.match(hosted, new RegExp(`<h3 id="${heading}">AI explanations of official data`), path);
+    }
     assert.match(render("/economy"), /MPC meeting dates are published, but MPC policy decisions are not covered/);
     assert.match(render("/government-budget"), /Budget announcements and OBR forecasts are not covered/);
   } finally {
