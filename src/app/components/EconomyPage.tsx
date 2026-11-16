@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { RefreshCw } from "lucide-react";
+import { chartUpdated } from "../data/chartMeta.mjs";
 import { chartPoints } from "../data/verified.mjs";
 import { overviewRows } from "../data/overview.mjs";
 import { checkedAt } from "../data/format.mjs";
@@ -20,7 +21,7 @@ export function EconomyPage({ data, loading, error, refresh, topics, reports, re
       <p>Charts will appear when verified figures are available.</p>
     ) : metric?.history?.length ? (
       <Suspense fallback={<p role="status">Loading chart…</p>}>
-        <HistoricalTrendCard {...props} data={chartPoints(metric)} />
+        <HistoricalTrendCard {...props} data={chartPoints(metric)} updated={chartUpdated(metric)} />
       </Suspense>
     ) : (
       <p>A verified history is not available yet.</p>
