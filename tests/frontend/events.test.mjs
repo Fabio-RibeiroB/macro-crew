@@ -212,7 +212,7 @@ test("event list presents source status, explicit cancellation and date-only val
   const { createServer } = await import("vite");
   const { createElement } = await import("react");
   const { renderToStaticMarkup } = await import("react-dom/server");
-  const server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: "custom" });
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, appType: "custom" });
   try {
     const { EventList } = await server.ssrLoadModule("/src/app/components/EventList.tsx");
     const html = renderToStaticMarkup(createElement(EventList, { payload: fixture, loading: false, error: null, now: new Date("2026-03-28T12:00:00Z") }));
@@ -244,7 +244,7 @@ test("Government route renders a qualified fiscal date linked to the canonical d
   const { createServer } = await import("vite");
   const { createElement } = await import("react");
   const { renderToStaticMarkup } = await import("react-dom/server");
-  const server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: "custom" });
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, appType: "custom" });
   try {
     const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
     const html = renderToStaticMarkup(createElement(App, { pathname: "/government-budget", initialEvents: official }));

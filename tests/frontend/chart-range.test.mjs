@@ -210,7 +210,7 @@ test("the chart control labels the default range and keeps gaps out of the value
   const { createElement } = await import("react");
   const { renderToStaticMarkup } = await import("react-dom/server");
   const server = await createServer({
-    server: { middlewareMode: true, watch: null, hmr: false },
+    server: { middlewareMode: true, watch: null, hmr: false, ws: false },
     appType: "custom",
     optimizeDeps: { noDiscovery: true, entries: [] },
   });
