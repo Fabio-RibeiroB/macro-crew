@@ -202,17 +202,44 @@ export function simplifyForChart(points, limit = 1500) {
   return kept.filter((_, i) => pick[i]);
 }
 
+const NICE_MULTIPLIERS = [1, 2, 2.5, 5];
+const MAX_TICKS = 6;
+
+const clean = (n) => Number.parseFloat(n.toPrecision(12));
+
+function niceAxis(lo, hi, forceZeroMin) {
+  const range = hi - lo;
+  let exponent = Math.floor(Math.log10(range / 10));
+  for (let guard = 0; guard < 40; guard++, exponent++) {
+    for (const mult of NICE_MULTIPLIERS) {
+      const step = clean(mult * 10 ** exponent);
+      const first = forceZeroMin ? 0 : Math.floor(lo / step + 1e-9);
+      const last = Math.ceil(hi / step - 1e-9);
+      if (last - first + 1 > MAX_TICKS) continue;
+      const ticks = [];
+      for (let k = first; k <= last; k++) ticks.push(clean(k * step));
+      return { domain: [ticks[0], ticks[ticks.length - 1]], ticks };
+    }
+  }
+  return { domain: [lo, hi], ticks: [lo, hi] };
+}
+
 /**
- * Y-axis bounds with 20% headroom. Padding never pushes a series that is all
- * zero or above below zero, so a rate that was never negative is not drawn
- * on an axis that suggests it could have been.
+ * Y-axis domain and tick values on readable steps (1, 2, 2.5 or 5 x 10^n), with
+ * about 20% headroom and at most six ticks. Padding never pushes a series that
+ * is all zero or above below zero, so a rate that was never negative is not
+ * drawn on an axis that suggests it could have been.
  */
-export function chartYDomain(values) {
+export function chartYAxis(values) {
   const minVal = values.length ? Math.min(...values) : 0;
   const maxVal = values.length ? Math.max(...values) : 1;
   const padding = (maxVal - minVal) * 0.2 || 0.5;
-  let yMin = Math.floor((minVal - padding) * 10) / 10;
-  if (minVal >= 0 && yMin < 0) yMin = 0;
-  const yMax = Math.ceil((maxVal + padding) * 10) / 10;
-  return [yMin, yMax];
+  let lo = minVal - padding;
+  const forceZeroMin = minVal >= 0 && lo < 0;
+  if (forceZeroMin) lo = 0;
+  return niceAxis(lo, maxVal + padding, forceZeroMin);
+}
+
+export function chartYDomain(values) {
+  return chartYAxis(values).domain;
 }
