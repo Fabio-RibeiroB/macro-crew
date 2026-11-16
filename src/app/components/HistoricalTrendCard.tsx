@@ -15,7 +15,7 @@ import {
   filterChartRange,
   moveChartRange,
   simplifyForChart,
-  chartYDomain,
+  chartYAxis,
 } from "../data/chartRange.mjs";
 import { formatPeriod } from "../data/verified.mjs";
 
@@ -126,7 +126,7 @@ export function HistoricalTrendCard({
   const values = visibleData
     .map((p) => p.value)
     .filter((v): v is number => typeof v === "number");
-  const [yMin, yMax] = chartYDomain(values);
+  const { domain: [yMin, yMax], ticks: yTicks } = chartYAxis(values);
 
   const gradId = `grad-${useId().replace(/:/g, "")}`;
 
@@ -234,6 +234,7 @@ export function HistoricalTrendCard({
                 />
                 <YAxis
                   domain={[yMin, yMax]}
+                  ticks={yTicks}
                   fontSize={10}
                   tick={{
                     fill: "var(--dash-text-4)",
