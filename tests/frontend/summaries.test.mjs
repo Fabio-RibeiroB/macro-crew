@@ -73,7 +73,7 @@ test("mocked worker output validates, matches current tuples and stays on its ow
   const { createServer } = await import("vite");
   const { createElement } = await import("react");
   const { renderToStaticMarkup } = await import("react-dom/server");
-  const server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: "custom" });
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, appType: "custom" });
   try {
     const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
     const render = (pathname) => renderToStaticMarkup(createElement(App, { pathname, initialData: pageData, initialSummaries: data }));

@@ -32,7 +32,7 @@ test("a long exact-values table is only built when opened; the chart has an acce
   const { createServer } = await import("vite");
   const { createElement } = await import("react");
   const { renderToStaticMarkup } = await import("react-dom/server");
-  const server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: "custom" });
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, appType: "custom" });
   try {
     const { HistoricalTrendCard } = await server.ssrLoadModule("/src/app/components/HistoricalTrendCard.tsx");
     const today = new Date();
