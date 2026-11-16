@@ -1,5 +1,5 @@
 import { formatPeriod } from "./verified.mjs";
-import { createRefreshController } from "./refresh.mjs";
+import { createRefreshController, refreshMessage } from "./refresh.mjs";
 
 const LIMITS = { manifest: 65_536, status: 4_096, version: 65_536, entries: 100, claims: 8, citations: 8 };
 const SOURCES = new Set(["ons", "boe", "boe_mpc", "obr", "hm_treasury", "desnz", "desnz_fuel", "ofgem"]);
@@ -100,24 +100,44 @@ function validateStatus(value) {
   if (!(exactKeys(value, ["schema_version", "status", "updated_at"]) || exactKeys(value, ["schema_version", "status", "updated_at", "reason"])) || value.schema_version !== 1 || !["disabled", "current", "stale"].includes(value.status) || !instant(value.updated_at) || (value.reason != null && (typeof value.reason !== "string" || !/^[a-z_]{1,80}$/.test(value.reason)))) fail("Invalid summary status");
   return value;
 }
-async function readJson(fetcher, url, signal, maxBytes) {
-  const response = await fetcher(url, { cache: "no-store", signal });
-  if (!response.ok) fail("Release explanations are unavailable");
+function kinded(kind, message) { return Object.assign(new Error(message), { kind }); }
+/**
+ * Fetch one JSON file. `optionalFeed` marks the manifest: a 404, or the SPA
+ * fallback's HTML page, means the feed is not published yet (kind "missing", which
+ * the panel hides). The same responses on any later file mean a broken published feed.
+ */
+async function readJson(fetcher, url, signal, maxBytes, optionalFeed = false) {
+  let response;
+  try { response = await fetcher(url, { cache: "no-store", signal }); }
+  catch (error) { throw error?.name === "AbortError" ? error : kinded("network", "Release explanations could not be reached"); }
+  if (response.status === 404) throw kinded(optionalFeed ? "missing" : "unavailable", "Release explanations are not published");
+  if (!response.ok) throw kinded("unavailable", "Release explanations are unavailable");
+  if (/text\/html/i.test(response.headers?.get?.("content-type") ?? "")) throw kinded(optionalFeed ? "missing" : "invalid", "Release explanations returned a web page, not data");
   const bytes = await response.arrayBuffer();
-  if (bytes.byteLength > maxBytes) fail("Release explanation file exceeds its limit");
-  return JSON.parse(new TextDecoder().decode(bytes));
+  if (bytes.byteLength > maxBytes) throw kinded("invalid", "Release explanation file exceeds its limit");
+  const text = new TextDecoder().decode(bytes);
+  if (optionalFeed && /^\s*</.test(text)) throw kinded("missing", "Release explanations returned a web page, not data");
+  try { return JSON.parse(text); } catch { throw kinded("invalid", "Release explanation file is not valid JSON"); }
+}
+/** True when a refresh error only means the feed has not been published yet. */
+export function summariesNotPublished(error) { return error === refreshMessage({ kind: "missing" }); }
+/** Validation failures on a published feed are "invalid", never "not published". */
+function validated(check, ...args) {
+  try { return check(...args); } catch (error) { throw error?.kind ? error : kinded("invalid", error?.message ?? "Invalid release explanations"); }
 }
 export async function loadSummaries(base = "/", fetcher = fetch, signal) {
   if (typeof base !== "string" || !base.startsWith("/") || base.startsWith("//") || base.includes("..") || /[?#]/.test(base)) fail("Invalid public data base");
   const root = `${base.endsWith("/") ? base : `${base}/`}data/`;
-  const [rawManifest, rawStatus] = await Promise.all([
-    readJson(fetcher, `${root}summary-manifest.json`, signal, LIMITS.manifest),
+  const [manifestResult, statusResult] = await Promise.allSettled([
+    readJson(fetcher, `${root}summary-manifest.json`, signal, LIMITS.manifest, true),
     readJson(fetcher, `${root}summary-status.json`, signal, LIMITS.status),
   ]);
-  const manifest = validateManifest(rawManifest); const status = validateStatus(rawStatus);
+  // An unpublished manifest decides the outcome even if the status file also failed.
+  for (const result of [manifestResult, statusResult]) if (result.status === "rejected") throw result.reason;
+  const manifest = validated(validateManifest, manifestResult.value); const status = validated(validateStatus, statusResult.value);
   const summaries = await Promise.all(Object.entries(manifest.summaries).map(async ([key, entry]) => {
-    const version = validateVersion(await readJson(fetcher, `${root}${entry.version}`, signal, LIMITS.version), key, entry);
-    if (entry.version !== `summary-versions/${await sha256Text(key)}/${version.release.published_date}-${version.evidence_identity}.json`) fail("Summary version path does not match its release");
+    const version = validated(validateVersion, await readJson(fetcher, `${root}${entry.version}`, signal, LIMITS.version), key, entry);
+    if (entry.version !== `summary-versions/${await sha256Text(key)}/${version.release.published_date}-${version.evidence_identity}.json`) throw kinded("invalid", "Summary version path does not match its release");
     return { key, entry, version };
   }));
   return { manifest, status, summaries };

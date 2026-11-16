@@ -77,7 +77,7 @@ test("every page renders its own heading, navigation and missing-data content", 
   const { createElement } = await import("react");
   const { renderToStaticMarkup } = await import("react-dom/server");
   const server = await createServer({
-    server: { middlewareMode: true },
+    server: { middlewareMode: true, hmr: false, ws: false },
     appType: "custom",
   });
   try {
@@ -253,7 +253,7 @@ test("CPI headlines inflation while CPIH stays labelled supporting data", async 
   const { createElement } = await import("react");
   const { renderToStaticMarkup } = await import("react-dom/server");
   const server = await createServer({
-    server: { middlewareMode: true },
+    server: { middlewareMode: true, hmr: false, ws: false },
     appType: "custom",
   });
   try {
@@ -388,7 +388,7 @@ test("Jobs & Pay renders official nominal and independently dated CPIH real pay"
   const { createServer } = await import("vite");
   const { createElement } = await import("react");
   const { renderToStaticMarkup } = await import("react-dom/server");
-  const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, appType: "custom" });
   try {
     const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
     const data = JSON.parse(readFileSync(new URL("../fixtures/verified/v1-with-optional.json", import.meta.url), "utf8"));

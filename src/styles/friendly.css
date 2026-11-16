@@ -455,6 +455,29 @@
 .fs-chart-body {
   padding: 4px 0 0;
 }
+.fs-chart-updated {
+  margin-top: 2px;
+  color: var(--fs-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.fs-chart-gap-note {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 6px 8px 0;
+  color: var(--fs-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+/* Same dashed edge and light fill as the band drawn over each gap in the chart. */
+.fs-chart-gap-key {
+  flex: none;
+  width: 14px;
+  height: 10px;
+  border: 1px dashed var(--fs-muted);
+  background: color-mix(in srgb, var(--fs-muted) 14%, transparent);
+}
 .fs-range {
   display: flex;
   flex-shrink: 0;
