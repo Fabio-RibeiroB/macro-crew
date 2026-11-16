@@ -2,6 +2,7 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
+  ReferenceArea,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -17,6 +18,7 @@ import {
   simplifyForChart,
   chartYAxis,
 } from "../data/chartRange.mjs";
+import { describeGaps, gapSpans } from "../data/chartMeta.mjs";
 import { formatPeriod } from "../data/verified.mjs";
 
 interface TrendPoint {
@@ -39,6 +41,8 @@ interface HistoricalTrendCardProps {
   data: TrendPoint[];
   referenceLine?: { value: number; label: string };
   curve?: "linear" | "stepAfter";
+  /** Snapshot date label from chartUpdated(); omitted when the snapshot has no usable date. */
+  updated?: { kind: string; date: string; label: string } | null;
 }
 
 function formatAxisDate(dateStr: string) {
@@ -108,6 +112,7 @@ export function HistoricalTrendCard({
   data,
   referenceLine,
   curve = "linear",
+  updated,
 }: HistoricalTrendCardProps) {
   const [selectedRange, setSelectedRange] = useState(DEFAULT_CHART_RANGE);
   const noteId = useId();
@@ -121,6 +126,8 @@ export function HistoricalTrendCard({
   // of rows in the DOM; build them only when the reader opens the table.
   const [valuesOpen, setValuesOpen] = useState(false);
   const renderRows = valuesOpen || visibleData.length <= 500;
+  const gaps = useMemo(() => gapSpans(visibleData), [visibleData]);
+  const gapText = gaps.length ? describeGaps(gaps) : "";
   const latestPoint = [...visibleData].reverse().find((p) => typeof p.value === "number");
 
   const values = visibleData
@@ -180,6 +187,11 @@ export function HistoricalTrendCard({
                 : formatPeriod(latestPoint.period ?? latestPoint.date ?? "")}`
             : ""}
         </p>
+        {updated?.label && (
+          <p className="fs-chart-updated">
+            <time dateTime={updated.date}>{updated.label}</time>
+          </p>
+        )}
       </div>
 
       <div className="fs-chart-body">
@@ -206,7 +218,7 @@ export function HistoricalTrendCard({
           <div
             className="h-64"
             role="img"
-            aria-label={`${title}: line chart of ${visibleData.length} readings${latestPoint ? `, latest ${exactValue(latestPoint.value, unit)} for ${formatPeriod(latestPoint.period ?? latestPoint.date ?? "")}` : ""}. Exact values are in the table below.`}
+            aria-label={`${title}: line chart of ${visibleData.length} readings${latestPoint ? `, latest ${exactValue(latestPoint.value, unit)} for ${formatPeriod(latestPoint.period ?? latestPoint.date ?? "")}` : ""}. ${gaps.length ? `Periods with no official figure: ${gapText}. ` : ""}Exact values are in the table below.`}
           >
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
@@ -249,6 +261,19 @@ export function HistoricalTrendCard({
                   content={<CustomTooltip unit={unit} />}
                   cursor={{ stroke: "var(--dash-border)", strokeWidth: 1 }}
                 />
+                {gaps.map((gap) => (
+                  <ReferenceArea
+                    key={gap.start}
+                    x1={gap.before ?? gap.start}
+                    x2={gap.after ?? gap.end}
+                    fill="var(--fs-muted)"
+                    fillOpacity={0.14}
+                    stroke="var(--fs-muted)"
+                    strokeOpacity={0.55}
+                    strokeDasharray="3 3"
+                    ifOverflow="visible"
+                  />
+                ))}
                 {referenceLine && (
                   <ReferenceLine
                     y={referenceLine.value}
@@ -279,6 +304,12 @@ export function HistoricalTrendCard({
               </AreaChart>
             </ResponsiveContainer>
           </div>
+        )}
+        {gaps.length > 0 && (
+          <p className="fs-chart-gap-note">
+            <span className="fs-chart-gap-key" aria-hidden="true" />
+            Gaps in the line are periods with no official figure: {gapText}. Nothing is estimated or shown as zero.
+          </p>
         )}
         {visibleData.length > 0 && (
           <details
