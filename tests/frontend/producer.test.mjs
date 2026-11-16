@@ -39,7 +39,7 @@ test("Ofgem live smoke producer output passes the strict reader and renders assu
   const { createServer } = await import("vite");
   const { createElement } = await import("react");
   const { renderToStaticMarkup } = await import("react-dom/server");
-  const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, appType: "custom" });
   try {
     const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
     const home = renderToStaticMarkup(createElement(App, { pathname: "/", initialData: data }));
@@ -204,7 +204,7 @@ test("DESNZ petrol and diesel render as two weekly UK prices with direct history
   const { createServer } = await import("vite");
   const { createElement } = await import("react");
   const { renderToStaticMarkup } = await import("react-dom/server");
-  const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, appType: "custom" });
   try {
     const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
     const home = renderToStaticMarkup(createElement(App, { pathname: "/", initialData: producer }));
@@ -281,7 +281,7 @@ test("ONS HF6X producer data renders only on Government with adjacent-month pp c
   const { createServer } = await import("vite");
   const { createElement } = await import("react");
   const { renderToStaticMarkup } = await import("react-dom/server");
-  const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, appType: "custom" });
   try {
     const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
     const government = renderToStaticMarkup(createElement(App, { pathname: "/government-budget", initialData: producer }));
@@ -350,7 +350,7 @@ test("BoE 5/10/20 nominal par producer export binds exact series and renders Gov
   const { createServer } = await import("vite");
   const { createElement } = await import("react");
   const { renderToStaticMarkup } = await import("react-dom/server");
-  const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, appType: "custom" });
   try {
     const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
     const government = renderToStaticMarkup(createElement(App, { pathname: "/government-budget", initialData: producer }));
@@ -487,7 +487,7 @@ test("Housing renders a national house-price card and separate pounds and percen
   const { createServer } = await import("vite");
   const { createElement } = await import("react");
   const { renderToStaticMarkup } = await import("react-dom/server");
-  const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, appType: "custom" });
   try {
     const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
     const producer = await loadVerified("/", fileFetcher(bytes));
@@ -554,7 +554,7 @@ test("Housing renders real producer rent values and keeps growth visible through
   const { createServer } = await import("vite");
   const { createElement } = await import("react");
   const { renderToStaticMarkup } = await import("react-dom/server");
-  const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, appType: "custom" });
   try {
     const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
     const producer = await loadVerified("/", fileFetcher(bytes));
