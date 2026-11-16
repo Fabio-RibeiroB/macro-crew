@@ -167,7 +167,8 @@ export function filterChartRange(points, range = DEFAULT_CHART_RANGE) {
  * Reduce long series for drawing only; the exact-values table keeps every point.
  * Keeps first/last points, every gap (null) and its neighbours, and every point
  * where the value changes, so step series such as Bank Rate lose nothing visible.
- * If still above `limit`, evenly samples the remaining points.
+ * If still above `limit`, splits the remaining points into buckets and keeps each
+ * bucket's minimum and maximum, so short peaks and troughs stay in the drawn line.
  */
 export function simplifyForChart(points, limit = 1500) {
   if (!Array.isArray(points) || points.length <= limit) return points;
@@ -182,11 +183,23 @@ export function simplifyForChart(points, limit = 1500) {
   if (kept.length <= limit) return kept;
   const must = (p, i) => i === 0 || i === kept.length - 1 || !isNum(p)
     || !isNum(kept[i - 1]) || !isNum(kept[i + 1]);
-  const optional = kept.filter((p, i) => !must(p, i)).length;
-  const budget = Math.max(1, limit - (kept.length - optional));
-  const stride = Math.ceil(optional / budget);
-  let n = 0;
-  return kept.filter((p, i) => must(p, i) || (n++ % stride === 0));
+  const optionalIdx = [];
+  kept.forEach((p, i) => { if (!must(p, i)) optionalIdx.push(i); });
+  const budget = Math.max(2, limit - (kept.length - optionalIdx.length));
+  const buckets = Math.max(1, Math.floor(budget / 2));
+  const size = Math.ceil(optionalIdx.length / buckets);
+  const pick = new Uint8Array(kept.length);
+  kept.forEach((p, i) => { if (must(p, i)) pick[i] = 1; });
+  // Each bucket keeps its lowest and highest point, so a one-point spike or dip survives.
+  for (let start = 0; start < optionalIdx.length; start += size) {
+    let lo = optionalIdx[start], hi = lo;
+    for (const i of optionalIdx.slice(start, start + size)) {
+      if (kept[i].value < kept[lo].value) lo = i;
+      if (kept[i].value > kept[hi].value) hi = i;
+    }
+    pick[lo] = 1; pick[hi] = 1;
+  }
+  return kept.filter((_, i) => pick[i]);
 }
 
 /**

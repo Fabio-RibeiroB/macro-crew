@@ -46,3 +46,16 @@ test("a long exact-values table is only built when opened; the chart has an acce
     assert.match(html, /role="img" aria-label="Bank Rate: line chart of \d+ readings, latest 4/);
   } finally { await server.close(); }
 });
+
+test("a long noisy series keeps a one-point spike and a one-point dip", () => {
+  const pts = Array.from({ length: 6800 }, (_, i) => ({ date: day(i), value: 10 + Math.sin(i / 7) }));
+  pts[2345] = { date: day(2345), value: 40 };
+  pts[5111] = { date: day(5111), value: -25 };
+  const out = simplifyForChart(pts);
+  assert.ok(out.length <= 1600, `${out.length} points`);
+  assert.ok(out.includes(pts[2345]), "spike kept");
+  assert.ok(out.includes(pts[5111]), "dip kept");
+  assert.equal(out[0], pts[0]);
+  assert.equal(out.at(-1), pts.at(-1));
+  assert.ok(out.every((p, i) => i === 0 || out[i - 1].date < p.date), "stays in date order");
+});
