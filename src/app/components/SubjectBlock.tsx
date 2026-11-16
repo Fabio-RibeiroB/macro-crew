@@ -73,21 +73,32 @@ export function Sources({ metric, extra }: any) {
   );
 }
 
+/**
+ * The AI summary section body (ADR 0001): the one visually distinct block. It is
+ * AI-written commentary on Bank of England publications, never FinStats data. Any
+ * inflation measure or figure in the text is attributed to the Bank's report, because
+ * it need not match the headline measure this site shows (CPI or CPIH). The summary
+ * text itself is rendered exactly as received.
+ */
 export function AiCommentary({ reports, reportTime }: any) {
   return (
     <div className="fs-ai-box">
       <div className="fs-ai-note">
-        <span className="fs-ai-tag">AI commentary</span>
+        <span className="fs-ai-tag">AI commentary — not checked against the official figures</span>
         <p>
-          On the latest Bank of England publications{reportTime ? `, generated ${checkedAt(reportTime)}` : ""}.
-          It is not checked against the official figures on this site. Use the original publication to confirm facts, dates and forecasts.
+          Summaries of Bank of England publications{reportTime ? `, generated ${checkedAt(reportTime)}` : ""}.
+          Figures and inflation measures mentioned are as cited in the Bank of England report. They are not this
+          site’s official figures, which are shown above. Use the original publication to confirm facts, dates and forecasts.
         </p>
       </div>
       {reports.map((report: any) => (
         <article className="fs-ai-art" key={report.key}>
-          <h4>{reportLabel(report)}, {formatPeriod(report.report_date)}</h4>
+          <h4>{reportLabel(report)}</h4>
+          <p className="fs-ai-meta">
+            {report.report_date ? <>Bank of England report dated {formatPeriod(report.report_date)}</> : "Bank of England report, date not supplied"}
+          </p>
           <p>{report.summary}</p>
-          <OfficialLink href={report.source}>Original publication</OfficialLink>
+          <OfficialLink href={report.source}>Read the original Bank of England publication</OfficialLink>
         </article>
       ))}
       {!reports.length && (

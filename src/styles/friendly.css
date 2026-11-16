@@ -1540,6 +1540,10 @@
   font: 700 14.5px var(--font-body);
   margin-bottom: 2px;
 }
+.fs-ai-art p.fs-ai-meta {
+  font-size: 13.5px;
+  color: var(--fs-muted);
+}
 .fs-ai-art p {
   max-width: 68ch;
   font-size: 14.5px;
