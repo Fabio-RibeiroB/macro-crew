@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { RefreshCw } from "lucide-react";
+import { chartUpdated } from "../data/chartMeta.mjs";
 import { chartPoints } from "../data/verified.mjs";
 import { overviewRows } from "../data/overview.mjs";
 import { checkedAt } from "../data/format.mjs";
@@ -24,7 +25,7 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
       <Suspense fallback={<p role="status">Loading chart…</p>}>
         <div className="fs-housing-charts">
           {items.filter(([metric]) => metric?.history?.length).map(([metric, props]) => (
-            <HistoricalTrendCard key={metric.definition.metric_id} {...props} data={chartPoints(metric)} />
+            <HistoricalTrendCard key={metric.definition.metric_id} {...props} data={chartPoints(metric)} updated={chartUpdated(metric)} />
           ))}
         </div>
       </Suspense>

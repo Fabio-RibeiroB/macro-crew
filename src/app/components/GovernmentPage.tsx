@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { RefreshCw } from "lucide-react";
+import { chartUpdated } from "../data/chartMeta.mjs";
 import { chartPoints, previousReading } from "../data/verified.mjs";
 import { NOT_AVAILABLE, dayLabel, decimalDifference, monthLabel } from "../data/overview.mjs";
 import { checkedAt } from "../data/format.mjs";
@@ -66,7 +67,7 @@ export function GovernmentPage({ data, loading, error, refresh, topics, Historic
       <p>Charts will appear when verified figures are available.</p>
     ) : metric?.history?.length ? (
       <Suspense fallback={<p role="status">Loading chart…</p>}>
-        <HistoricalTrendCard {...props} data={chartPoints(metric)} />
+        <HistoricalTrendCard {...props} data={chartPoints(metric)} updated={chartUpdated(metric)} />
       </Suspense>
     ) : (
       <p>A verified history is not available yet.</p>
@@ -205,7 +206,7 @@ export function GovernmentPage({ data, loading, error, refresh, topics, Historic
                 {giltRows.map(({ key, tenor, title, label, metric }) =>
                   metric?.history?.length ? (
                     <Suspense key={key} fallback={<p role="status">Loading chart…</p>}>
-                      <HistoricalTrendCard title={title} label={label} data={chartPoints(metric)} color={topics[key].color} />
+                      <HistoricalTrendCard title={title} label={label} data={chartPoints(metric)} updated={chartUpdated(metric)} color={topics[key].color} />
                     </Suspense>
                   ) : (
                     <p key={key}>A verified history for the {tenor} yield is not available yet.</p>
