@@ -46,7 +46,8 @@ Static build inputs are allowlisted: no private config, runtime data, symlinks o
 source maps. Local generated `public/data/` must be moved out before a release
 build. Release deployment adds the approved external data link afterward; see
 [deployment and rollback](docs/dashboard-cutover.md). Apache's SPA fallback must
-serve the frontend for direct application URLs; data must remain actual JSON.
+serve the frontend for direct application URLs (per-route HTML for link previews:
+see [frontend navigation](docs/frontend-navigation.md#link-previews)); data must remain actual JSON.
 
 Keep the homepage concise and navigation in plain English. Reuse metric/chart and
 summary components; do not invent statistical coverage or generate policy claims
