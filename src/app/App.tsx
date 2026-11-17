@@ -58,6 +58,7 @@ import { GovernmentPage } from "./components/GovernmentPage";
 import { PricesPage } from "./components/PricesPage";
 import { checkedAt } from "./data/format.mjs";
 import { EventList } from "./components/EventList";
+import { FiguresTicker } from "./components/FiguresTicker";
 import { ReleaseSummaries } from "./components/ReleaseSummaries";
 import { createSummaryRefreshController, loadSummaries } from "./data/summaries.mjs";
 import "../styles/friendly.css";
@@ -650,6 +651,10 @@ function Sources() {
   );
 }
 
+const tickerHrefs = Object.fromEntries(
+  Object.entries(topics).map(([kind, topic]) => [kind, topic.detailHref]),
+);
+
 export default function App({
   pathname,
   initialData = null,
@@ -660,7 +665,8 @@ export default function App({
     pathname ??
       (typeof window === "undefined" ? "/" : window.location.pathname),
   );
-  const needsData = ["overview", "prices", "economy", "jobs-pay", "housing", "government"].includes(page.id);
+  // Every page carries the figures ticker, so every page reads the verified snapshot.
+  const needsData = true;
   const needsSummaries = ["prices", "economy", "jobs-pay", "housing", "government"].includes(page.id);
   const needsEvents = ["overview", "calendar", "prices", "economy", "jobs-pay", "housing", "government"].includes(page.id);
   const [snapshot, setSnapshot] = useState(() =>
@@ -924,6 +930,7 @@ export default function App({
           </button>
         </div>
       </header>
+      <FiguresTicker data={data} loading={loading} error={error} hrefs={tickerHrefs} />
       <main id="main-content" tabIndex={-1}>
         {page.id === "overview" && (
           <>
