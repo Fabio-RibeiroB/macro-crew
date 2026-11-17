@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { RefreshCw } from "lucide-react";
 import { chartUpdated } from "../data/chartMeta.mjs";
 import { chartPoints, previousReading } from "../data/verified.mjs";
-import { NOT_AVAILABLE, dayLabel, decimalDifference, monthLabel } from "../data/overview.mjs";
+import { NOT_AVAILABLE, changeDirection, dayLabel, decimalDifference, monthLabel } from "../data/overview.mjs";
 import { checkedAt } from "../data/format.mjs";
 import { OfficialLink } from "./OfficialLink";
 import { Lines } from "./IndicatorTable";
@@ -17,7 +17,7 @@ import { KeyFigure, Row, Sources } from "./SubjectBlock";
  * earlier layout (#public-debt, #gilt-yields) still resolve.
  */
 const MINUS = "−";
-const na = (text = NOT_AVAILABLE) => ({ text, missing: true });
+const na = (text = NOT_AVAILABLE) => ({ text, missing: true, direction: null });
 const sub = (text: string) => ({ text, sub: true });
 /** Published decimals are kept exactly as supplied ("94.0", "5.3516"). */
 const percent = (value: string) => `${String(value).replace(/^-/, MINUS)}%`;
@@ -32,11 +32,11 @@ function basisPoints(difference: string) {
     .replace(/\.$/, "");
   return `${sign}${shifted}`;
 }
-/** pp change with a neutral direction; the arrow and sign say which way, not good or bad. */
+/** pp change; colour, arrow and sign show direction only, not good or bad. */
 function changeLine(current: string, previous: string) {
   const difference = decimalDifference(current, previous);
-  const dir = difference.startsWith("+") ? "up" : difference.startsWith(MINUS) ? "down" : "flat";
-  return dir === "flat" ? { text: "No change", dir } : { text: `${difference} pp`, dir };
+  const direction = changeDirection(difference);
+  return direction === "flat" ? { text: "No change", direction } : { text: `${difference} pp`, direction };
 }
 
 /** Lines for KeyFigure and the maturity table. A missing value stays "Not available". */
@@ -239,7 +239,7 @@ export function GovernmentPage({ data, loading, error, refresh, topics, Historic
         </section>
         <p className="fs-ledger-note" id="change-note">
           * Change is the latest value minus the previous one, calculated by FinStats from the official series. pp means
-          percentage points; 1 pp = 100 basis points.
+          percentage points; 1 pp = 100 basis points. Green and red show direction only, not good or bad.
         </p>
       </div>
       <GovernmentGuide />

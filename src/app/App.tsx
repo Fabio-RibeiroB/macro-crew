@@ -469,9 +469,6 @@ function Overview({ data, loading, error, refresh }: any) {
       <span id="figures" className="fs-anchor-alias" />
       <div className="fs-pagehead">
         <h1 id="overview-title">Latest figures</h1>
-        <p className="fs-lede">
-          Official releases from the ONS, Bank of England, Ofgem, DESNZ and HM Land Registry.
-        </p>
         <button className="fs-text-button" disabled={loading} onClick={() => void refresh()}>
           <RefreshCw size={15} className={loading ? "fs-spin" : ""} aria-hidden="true" />
           {loading ? "Checking figures…" : "Check for updates"}
@@ -493,7 +490,7 @@ function Overview({ data, loading, error, refresh }: any) {
           />
           <p className="fs-ledger-note" id="change-note">
             * Change is the latest value minus the previous one, calculated by FinStats from the official
-            series. pp means percentage points. Figures last updated {checkedAt(data.published_at)} and can
+            series. pp means percentage points. Green and red show direction only, not good or bad. Figures last updated {checkedAt(data.published_at)} and can
             be revised. <a href="/sources">How we check the data</a>
           </p>
         </>

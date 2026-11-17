@@ -81,13 +81,25 @@ function poundChange(difference, suffix) {
   return `${sign}£${plain(difference.replace(/^[+−]/, ""))}${suffix}`;
 }
 
-const na = (text = NOT_AVAILABLE) => ({ text, missing: true });
+// A missing value has no direction (`direction: null`), so it is never coloured.
+const na = (text = NOT_AVAILABLE) => ({ text, missing: true, direction: null });
 const sub = (text) => ({ text, sub: true });
-const direction = (difference) => (difference.startsWith("+") ? "up" : difference.startsWith(MINUS) ? "down" : "flat");
+
+/**
+ * Direction of a signed difference from `decimalDifference` ("+0.25", "−£891", "0"):
+ * "up", "down" or "flat" (zero). Direction only, never good or bad (ADR 0002).
+ * Lines that have no comparable change carry `direction: null` instead.
+ */
+export function changeDirection(difference) {
+  const text = String(difference).trim();
+  if (text.startsWith("+")) return "up";
+  if (text.startsWith(MINUS) || text.startsWith("-")) return "down";
+  return "flat";
+}
 function changeLine(current, previous, unit) {
   const difference = decimalDifference(String(current), String(previous));
-  const dir = direction(difference);
-  return dir === "flat" ? { text: "No change", dir } : { text: UNITS[unit].change(difference), dir };
+  const direction = changeDirection(difference);
+  return direction === "flat" ? { text: "No change", direction } : { text: UNITS[unit].change(difference), direction };
 }
 const valueLine = (value, unit, extra = {}) => ({ text: UNITS[unit].value(value), ...extra });
 
@@ -242,7 +254,7 @@ function energyRow(base, metric) {
     };
   }
   if (comparison.kind === "tax_change")
-    return { ...row, previous: [na()], change: [{ text: "Not comparable", dir: "flat" }, sub("Tax treatment changed")] };
+    return { ...row, previous: [na()], change: [{ text: "Not comparable", direction: null }, sub("Tax treatment changed")] };
   return { ...row, previous: [na()], change: [na()] };
 }
 

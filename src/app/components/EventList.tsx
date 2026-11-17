@@ -1,5 +1,7 @@
 import { ArrowRight, ExternalLink, RefreshCw } from "lucide-react";
 import { eventsAreStale, upcomingEvents } from "../data/events.mjs";
+import { dateParts, eventTime, publisherTag, relativeDayLabel, shortEventTitle } from "../data/eventDisplay.mjs";
+import "../../styles/events.css";
 
 const PROVIDER_NAMES: Record<string, string> = {
   ons: "ONS releases",
@@ -10,22 +12,35 @@ const PROVIDER_NAMES: Record<string, string> = {
   ofgem_energy: "Ofgem energy announcements",
 };
 
-function eventDate(event: any) {
-  if (!event.time) return new Intl.DateTimeFormat("en-GB", { dateStyle: "full", timeZone: "Europe/London" }).format(new Date(`${event.date}T12:00:00Z`));
-  return new Intl.DateTimeFormat("en-GB", { dateStyle: "full", timeStyle: "short", timeZone: "Europe/London" }).format(new Date(event.time));
-}
-
-function EventItems({ events }: { events: any[] }) {
+function EventItems({ events, now }: { events: any[]; now: Date }) {
   if (!events.length) return <p className="fs-event-empty">No known upcoming dates are available.</p>;
-  return <ol className="fs-event-list">
-    {events.map((event) => <li key={event.id}>
-      <div className="fs-event-date">{eventDate(event)}</div>
-      <div className="fs-event-main">
-        <strong>{event.title}</strong>
-        {event.status !== "scheduled" && <span className={`fs-event-status fs-event-${event.status}`}>{event.status === "cancelled" ? "Cancelled" : "Rescheduled"}</span>}
-        <a href={event.source_url} target="_blank" rel="noreferrer">Official source <ExternalLink size={13} aria-hidden="true" /></a>
-      </div>
-    </li>)}
+  return <ol className="fs-ev-list">
+    {events.map((event) => {
+      const parts = dateParts(event.date, now);
+      const tag = publisherTag(event.source);
+      const short = shortEventTitle(event);
+      const relative = relativeDayLabel(event.date, now);
+      const time = eventTime(event);
+      return <li key={event.id} className={`fs-ev-item ${event.status === "cancelled" ? "fs-ev-cancelled" : ""}`}>
+        <time className="fs-ev-date" dateTime={event.time ?? event.date}>
+          <span className="fs-ev-sr">{parts.full}{time ? `, ${time} London time` : ""}</span>
+          <span className="fs-ev-weekday" aria-hidden="true">{parts.weekday}</span>
+          <span className="fs-ev-day" aria-hidden="true">{parts.day}</span>
+          <span className="fs-ev-month" aria-hidden="true">{parts.month}{parts.year ? ` ${parts.year}` : ""}</span>
+        </time>
+        <div className="fs-ev-main">
+          <div className="fs-ev-meta">
+            <span className="fs-ev-tag" data-tone={tag.tone} title={tag.name}>{tag.label}</span>
+            {relative && <span className="fs-ev-when" data-soon={relative === "Today" || relative === "Tomorrow"}>{relative}</span>}
+            {time && <span className="fs-ev-time">{time} London time</span>}
+            {event.status !== "scheduled" && <span className={`fs-event-status fs-event-${event.status}`}>{event.status === "cancelled" ? "Cancelled" : "Rescheduled"}</span>}
+          </div>
+          <strong className="fs-ev-title" title={short.derived ? event.title : undefined}>{short.title}</strong>
+          {short.detail && <p className="fs-ev-detail">{short.detail}</p>}
+          <a className="fs-ev-link" href={event.source_url} target="_blank" rel="noreferrer">Official source <ExternalLink size={12} aria-hidden="true" /></a>
+        </div>
+      </li>;
+    })}
   </ol>;
 }
 
@@ -50,7 +65,7 @@ export function EventList({ payload, loading, error, refresh, limit = Infinity, 
     {degraded.length > 0 && <p className="fs-event-provider-note">Source status: {degraded.map(([name, provider]) => `${PROVIDER_NAMES[name] ?? name}: ${provider.status}`).join(" · ")}. Unqualified sources have not been checked for dated events.</p>}
     {!payload && loading && <p className="fs-event-empty" aria-live="polite">Checking official dates…</p>}
     {!payload && error && <p className="fs-event-empty">Calendar dates are unavailable.</p>}
-    {payload && <EventItems events={events} />}
+    {payload && <EventItems events={events} now={now} />}
     {payload && <p className="fs-event-checked">Last calendar check: {new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/London" }).format(new Date(payload.checked_at))} · London time</p>}
   </section>;
 }
