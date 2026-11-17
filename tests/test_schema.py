@@ -96,3 +96,30 @@ def test_validate_latest_snapshot_rejects_future_report_date():
     with pytest.raises(SchemaValidationError, match="financial_stability_report.report_date cannot be in the future"):
         validate_latest_snapshot(payload, today=date(2026, 2, 20))
     validate_latest_snapshot(payload, today=date(2026, 3, 1))  # same day is allowed
+
+
+def test_headline_is_optional_on_the_monetary_policy_report():
+    payload = build_valid_payload()
+    assert "headline" not in payload["current_report_summaries"]["monetary_policy_report"]
+    validate_latest_snapshot(payload)  # absent is valid
+
+    payload["current_report_summaries"]["monetary_policy_report"]["headline"] = (
+        "The Bank held Bank Rate and expects inflation to stay above target for now."
+    )
+    validate_latest_snapshot(payload)
+
+    payload["current_report_summaries"]["monetary_policy_report"]["headline"] = "x" * 160
+    validate_latest_snapshot(payload)  # exactly at the limit
+
+
+def test_headline_must_be_a_short_string_when_present():
+    payload = build_valid_payload()
+    report = payload["current_report_summaries"]["monetary_policy_report"]
+
+    report["headline"] = "x" * 161
+    with pytest.raises(SchemaValidationError, match="monetary_policy_report.headline must be at most 160"):
+        validate_latest_snapshot(payload)
+
+    report["headline"] = 3.75
+    with pytest.raises(SchemaValidationError, match="monetary_policy_report.headline must be a string"):
+        validate_latest_snapshot(payload)
