@@ -11,8 +11,10 @@
 The production checkout is `/home/finstats/public_html/macro-crew`, owned by
 `finstats`, on `main`. Apache's HTTPS virtual host serves its `dist/` directory.
 The HTTP virtual host serves `/home/finstats/public_html`. Do not put databases,
-raw responses, backups or secrets under either document root. The daily 17:00
-`finstats` crontab invokes the existing AI scheduler. This was inspected directly,
+raw responses, backups or secrets under either document root. The daily 13:00
+(UK time; the server runs on Europe/London) `finstats` crontab invokes the
+existing AI scheduler, an hour after Bank of England 12:00 releases (moved from
+17:00 on 17 November 2026, M9). This was inspected directly,
 not inferred from old project documentation.
 
 After approval, architecture/source/storage/shadow PRs #6–#9 were merged and the

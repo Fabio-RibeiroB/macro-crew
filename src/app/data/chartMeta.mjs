@@ -83,3 +83,27 @@ export function describeGaps(spans, limit = 3) {
   const more = spans.length - limit;
   return more > 0 ? `${listed}; and ${more} more` : listed;
 }
+
+/**
+ * The Bank of England's 2% inflation target, drawn as context on the CPI and CPIH
+ * charts only. The target is set for CPI, so the CPIH label and text say so rather
+ * than implying CPIH has a target. It is a constant, never derived from the data.
+ */
+export function inflationTargetLine(kind) {
+  if (kind === "cpi") {
+    return {
+      value: 2,
+      label: "2% target",
+      description: "Dashed line: Bank of England 2% inflation target (CPI).",
+    };
+  }
+  if (kind === "cpih") {
+    return {
+      value: 2,
+      label: "2% target (set for CPI)",
+      description:
+        "Dashed line: Bank of England 2% inflation target, which is set for CPI, not CPIH. Shown for context.",
+    };
+  }
+  return undefined;
+}
