@@ -73,7 +73,13 @@ test("AI summary section renders the notice inside #ai-summary only when failed"
     const render = (aiStatus) => renderToStaticMarkup(createElement(AiCommentary, { reports: [], reportTime: SUMMARY_TIME, aiStatus }));
     const failed = render(parseAiStatus(raw()));
     assert.match(failed, /<p class="fs-ai-fail" role="status">The AI summary could not be updated on 16 November 2026 \(the AI service account is out of credit\)\. Showing the summary from 22 March 2026\. Official figures are unaffected\.<\/p>/);
-    assert.ok(failed.indexOf("fs-ai-fail") < failed.indexOf("fs-ai-tag"), "notice sits at the top of the section");
+    assert.ok(failed.startsWith('<div class="fs-ai-box"><p class="fs-ai-fail"'), "notice sits at the top of the section");
+    const withReport = renderToStaticMarkup(createElement(AiCommentary, {
+      reports: [{ key: "monetary_policy_report", summary: "Rates held. Inflation fell.", report_date: "2026-03-19", source: "https://www.bankofengland.co.uk/monetary-policy-summary-and-minutes/2026/march-2026" }],
+      reportTime: SUMMARY_TIME, aiStatus: parseAiStatus(raw()),
+    }));
+    assert.ok(withReport.indexOf("fs-ai-fail") < withReport.indexOf("fs-ai-tag"), "notice stays above the summaries");
+    assert.match(withReport, /<span class="fs-ai-tag">AI summary<\/span>/);
     for (const quiet of [parseAiStatus(raw({ outcome: "ok", failure_kind: null })), null, undefined]) {
       assert.doesNotMatch(render(quiet), /fs-ai-fail|could not be updated/);
     }

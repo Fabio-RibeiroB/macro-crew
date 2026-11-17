@@ -1,0 +1,65 @@
+/* AI summary layout (ADR 0002): a bold lead sentence, short points, a plain one-line
+   disclaimer. Colours reuse the AI tokens, so light and dark themes follow the theme. */
+.fs-ai-box .fs-aisum {
+  margin-top: 18px;
+  padding-top: 16px;
+}
+.fs-ai-box .fs-aisum:first-of-type {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.fs-aisum-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+.fs-aisum .fs-aisum-head h4 {
+  margin: 0;
+  font: 700 17px/1.3 var(--font-body);
+}
+.fs-aisum .fs-ai-meta {
+  margin: 4px 0 10px;
+}
+.fs-aisum p.fs-aisum-lead {
+  max-width: 62ch;
+  margin: 0 0 8px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--fs-ink, inherit);
+}
+.fs-aisum p.fs-aisum-lead strong {
+  font-weight: 700;
+}
+.fs-aisum-points {
+  max-width: 62ch;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.fs-aisum-points li {
+  position: relative;
+  margin: 0;
+  padding: 6px 0 6px 18px;
+  font-size: 15px;
+  line-height: 1.5;
+  border-top: 1px solid color-mix(in srgb, var(--fs-ai) 25%, transparent);
+}
+.fs-aisum-points li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 0.95em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--fs-ai);
+}
+.fs-aisum p.fs-aisum-note {
+  max-width: 62ch;
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--fs-muted);
+}
