@@ -172,6 +172,10 @@ def test_event_generation_pruning_keeps_active_symlinks_and_unexpected_files(tmp
     active_path.write_text('active'); stale_path.write_text('stale')
     old=time.time()-20*86400
     os.utime(active_path,(old,old)); os.utime(stale_path,(old,old))
+    recent='d'*64; recent_path=directory/f'{recent}.json'; recent_path.write_text('recent')
+    os.utime(recent_path,(time.time()-2*86400,)*2)
+    four_day='e'*64; four_day_path=directory/f'{four_day}.json'; four_day_path.write_text('four')
+    os.utime(four_day_path,(time.time()-4*86400,)*2)
     target=tmp_path/'outside.json'; target.write_text('preserve')
     (directory/f'{linked}.json').symlink_to(target)
     unexpected=directory/'notes.txt'; unexpected.write_text('preserve')
@@ -181,6 +185,7 @@ def test_event_generation_pruning_keeps_active_symlinks_and_unexpected_files(tmp
     (tmp_path/'events.json').write_text('private receipts remain untouched')
     prune_event_generations(tmp_path)
     assert active_path.exists() and not stale_path.exists()
+    assert recent_path.exists() and not four_day_path.exists()
     assert (directory/f'{linked}.json').is_symlink() and unexpected.exists()
     assert receipt.read_bytes()==b'private' and (tmp_path/'events.json').exists()
 
@@ -534,12 +539,24 @@ def test_export_retention_keeps_active_generations_and_all_source_evidence(tmp_p
     old_payload.write_text('{}')
     os.utime(old_payload, (1, 1))
     os.utime(current, (1, 1))
+    import time
+    recent_dir = public / 'generations' / ('d' * 32)
+    recent_dir.mkdir()
+    recent_payload = recent_dir / 'data.json'
+    recent_payload.write_text('{}')
+    os.utime(recent_payload, (time.time() - 2 * 86400,) * 2)
+    four_day_dir = public / 'generations' / ('c' * 32)
+    four_day_dir.mkdir()
+    four_day_payload = four_day_dir / 'data.json'
+    four_day_payload.write_text('{}')
+    os.utime(four_day_payload, (time.time() - 4 * 86400,) * 2)
     unusual = public / 'generations' / ('e' * 32)
     unusual.mkdir()
     (unusual / 'operator-note.txt').write_text('keep')
     prune_generations(public)
     assert current.exists()
     assert not old_dir.exists()
+    assert recent_dir.exists() and not four_day_dir.exists()
     assert unusual.exists()
     assert (private / 'statistics.sqlite3').exists()
     assert list((private / 'raw').iterdir())
