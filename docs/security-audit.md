@@ -86,6 +86,9 @@ The weaker isolation noted above (no systemd sandbox; same user as the site and
 credential) remains open. A narrow sudoers rule lets the owner account run
 commands as `finstats` only (`/etc/sudoers.d/finstats-agent`), not as root.
 
+On 17 November 2026 the owner moved the job to 13:00 UK time (M9, issue #118).
+Only the schedule changed; flags, admission gate and isolation are as above.
+
 ## Practical deployment checklist (not applied)
 
 1. Back up Apache config and run `apache2ctl configtest` before reload. Review the
