@@ -27,11 +27,11 @@ const labelFor = (row, line) => {
 /** Change line to display: arrow, unsigned magnitude and the direction used for colour. */
 function changeOf(line) {
   if (!line || line.missing || line.sub) return null;
-  if (line.dir === "up" || line.dir === "down") {
+  if (line.direction === "up" || line.direction === "down") {
     return {
-      dir: line.dir,
-      arrow: ARROWS[line.dir],
-      spoken: line.dir,
+      dir: line.direction,
+      arrow: ARROWS[line.direction],
+      spoken: line.direction,
       text: line.text.replace(/^[+−-]\s*/, "").trim(),
     };
   }
