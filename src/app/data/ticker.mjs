@@ -7,8 +7,12 @@ import { dayLabel, overviewRows } from "./overview.mjs";
 import { lastRateChange } from "./verified.mjs";
 
 export const TICKER_PX_PER_SECOND = 50;
-/** A rate change this recent (days before the latest reading) is reported as the latest decision. */
-export const MPC_DECISION_WINDOW_DAYS = 42;
+/**
+ * A rate change this recent (days before the latest reading) is reported as the latest
+ * decision. MPC meetings are at least 42 days apart (2026 schedule), so a shorter window
+ * can never report a later hold as "raised" or "cut".
+ */
+export const MPC_DECISION_WINDOW_DAYS = 35;
 export const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 const ARROWS = { up: "▲", down: "▼", flat: "" };
 const TAG_LABELS = { petrol: "Petrol", diesel: "Diesel" };
