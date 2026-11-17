@@ -86,3 +86,13 @@ def test_validate_latest_snapshot_rejects_next_date_before_current_date():
 
     with pytest.raises(SchemaValidationError, match="interest_rate.publication_date.next_publication_date"):
         validate_latest_snapshot(payload)
+
+
+def test_validate_latest_snapshot_rejects_future_report_date():
+    from datetime import date
+
+    payload = build_valid_payload()
+    payload["current_report_summaries"]["financial_stability_report"]["report_date"] = "2026-03-01"
+    with pytest.raises(SchemaValidationError, match="financial_stability_report.report_date cannot be in the future"):
+        validate_latest_snapshot(payload, today=date(2026, 2, 20))
+    validate_latest_snapshot(payload, today=date(2026, 3, 1))  # same day is allowed
