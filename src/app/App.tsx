@@ -48,6 +48,7 @@ import {
   menuFocusAction,
 } from "./data/interactions.mjs";
 import { loadEvents } from "./data/events.mjs";
+import { loadAiStatus } from "./data/aiStatus.mjs";
 import { IndicatorTable } from "./components/IndicatorTable";
 import { OfficialLink } from "./components/OfficialLink";
 import { EconomyPage } from "./components/EconomyPage";
@@ -668,6 +669,9 @@ export default function App({
   const [reportSnapshot, setReportSnapshot] = useState(() =>
     refreshSnapshot(null),
   );
+  const [aiStatusSnapshot, setAiStatusSnapshot] = useState(() =>
+    refreshSnapshot(null),
+  );
   const [summarySnapshot, setSummarySnapshot] = useState(() =>
     refreshSnapshot(initialSummaries, needsSummaries ? (initialSummaries ? "success" : "loading") : "idle"),
   );
@@ -829,12 +833,23 @@ export default function App({
     });
     return bindRefreshLifecycle(owner, window);
   }, [page.id]);
+  useEffect(() => {
+    if (page.id !== "economy") return;
+    // Optional job status: any failure to load it leaves the page unchanged.
+    const owner = createRefreshController({
+      load: (signal) => loadAiStatus(import.meta.env.BASE_URL, (url, options) =>
+        fetch(url, { ...options, signal }), signal),
+      onState: setAiStatusSnapshot,
+    });
+    return bindRefreshLifecycle(owner, window);
+  }, [page.id]);
   const { loading, error, data } = refreshView(snapshot);
   const reports = useMemo(
     () => (reportSnapshot.data ? legacyReports(reportSnapshot.data) : []),
     [reportSnapshot.data],
   );
   const reportTime = reportSnapshot.data?.metadata?.generated_at ?? null;
+  const aiStatus = aiStatusSnapshot.data ?? null;
   const stats = { data, error, loading, refresh };
   const eventView = refreshView(eventSnapshot);
   const summaryView = refreshView(summarySnapshot);
@@ -943,6 +958,7 @@ export default function App({
               topics={topics}
               reports={reports}
               reportTime={reportTime}
+              aiStatus={aiStatus}
               releaseExplanations={<ReleaseSummaries embedded subject="economy" {...summaryProps} />}
               HistoricalTrendCard={HistoricalTrendCard}
             />

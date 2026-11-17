@@ -1,6 +1,7 @@
 // Shared building blocks for subject pages (ADR 0001): a fixed label column in the
 // order Key figure, What it means, Chart, AI summary, Sources.
 import { formatPeriod, freshness, reportLabel } from "../data/verified.mjs";
+import { aiFailureNotice } from "../data/aiStatus.mjs";
 import { checkedAt } from "../data/format.mjs";
 import { Lines } from "./IndicatorTable";
 import { OfficialLink } from "./OfficialLink";
@@ -80,9 +81,11 @@ export function Sources({ metric, extra }: any) {
  * it need not match the headline measure this site shows (CPI or CPIH). The summary
  * text itself is rendered exactly as received.
  */
-export function AiCommentary({ reports, reportTime }: any) {
+export function AiCommentary({ reports, reportTime, aiStatus = null }: any) {
+  const notice = aiFailureNotice(aiStatus, reportTime);
   return (
     <div className="fs-ai-box">
+      {notice && <p className="fs-ai-fail" role="status">{notice}</p>}
       <div className="fs-ai-note">
         <span className="fs-ai-tag">AI commentary — not checked against the official figures</span>
         <p>

@@ -14,11 +14,13 @@ import argparse
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
 import time
-from datetime import date, datetime
+import tempfile
+from datetime import date, datetime, timezone
 from pathlib import Path
 from uk_macro_crew.official_schedule import fetch_official_release_schedule
 
@@ -28,6 +30,8 @@ HISTORY_FILE = PROJECT_DIR / "history_report.json"
 DIST_DIR = PROJECT_DIR / "dist"
 PUBLIC_DIR = PROJECT_DIR / "public"
 LOG_FILE = Path("/home/finstats/logs/scheduler.log")
+AI_STATUS_NAME = "ai_status.json"
+AI_STATUS_SCHEMA_VERSION = 1
 
 # Full path to uv — cron has minimal PATH
 UV_BIN = Path("/home/finstats/.local/bin/uv")
@@ -48,6 +52,106 @@ def should_retry_crew(result, attempt):
     if result.returncode == 0 or attempt >= MAX_CREW_ATTEMPTS:
         return False
     return RETRYABLE_MARKER in (result.stderr or "")
+
+
+# Conservative markers for the public failure kind. Order matters: OpenAI reports
+# exhausted credit as an HTTP 429, so credit is checked before rate limits. Only the
+# resulting kind is ever published, never the matched text.
+FAILURE_MARKERS = (
+    ("validation", (re.compile(r"schema validation failed"),)),
+    ("credit", (
+        re.compile(r"insufficient_quota"),
+        re.compile(r"exceeded your current quota"),
+        re.compile(r"\bbilling\b"),
+        re.compile(r"payment required"),
+        re.compile(r"(?:insufficient|out of|exceeded your) credits?\b"),
+        re.compile(r"(?:status(?:[ _]code)?|error code|http)\W{0,3}402\b"),
+    )),
+    ("auth", (
+        re.compile(r"invalid_api_key"),
+        re.compile(r"incorrect api key"),
+        re.compile(r"authenticationerror"),
+        re.compile(r"(?:status(?:[ _]code)?|error code|http)\W{0,3}401\b"),
+    )),
+    ("rate_limit", (
+        re.compile(r"ratelimiterror"),
+        re.compile(r"rate_limit_exceeded"),
+        re.compile(r"rate limit"),
+        re.compile(r"(?:status(?:[ _]code)?|error code|http)\W{0,3}429\b"),
+    )),
+    ("timeout", (
+        re.compile(r"timed out"),
+        re.compile(r"timeouterror"),
+        re.compile(r"\btimeout\b"),
+    )),
+)
+
+
+def classify_failure(result=None, timed_out=False):
+    """Map a failed crew process to a public failure kind (never raw text)."""
+    if timed_out:
+        return "timeout"
+    text = " ".join(
+        str(getattr(result, attr, "") or "") for attr in ("stderr", "stdout")
+    ).lower()
+    for kind, patterns in FAILURE_MARKERS:
+        if any(pattern.search(text) for pattern in patterns):
+            return kind
+    return "other"
+
+
+def _utc_now():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _previous_last_success(dest_dirs):
+    """Keep the last successful time across failures, from any readable status file."""
+    for dest_dir in dest_dirs:
+        try:
+            previous = json.loads((dest_dir / AI_STATUS_NAME).read_text())
+            value = previous.get("last_success_at")
+            if isinstance(value, str):
+                return value
+        except Exception:
+            continue
+    return None
+
+
+def write_ai_status(outcome, failure_kind=None, now=None, dest_dirs=None):
+    """Write the small public ai_status.json atomically into each destination.
+
+    Contains only the schema version, times, outcome and a coarse failure kind.
+    """
+    dest_dirs = tuple(dest_dirs) if dest_dirs is not None else (DIST_DIR, PUBLIC_DIR)
+    now = now or _utc_now()
+    status = {
+        "schema_version": AI_STATUS_SCHEMA_VERSION,
+        "last_attempt_at": now,
+        "outcome": outcome,
+        "failure_kind": failure_kind if outcome == "failed" else None,
+        "last_success_at": now if outcome == "ok" else _previous_last_success(dest_dirs),
+    }
+    payload = json.dumps(status, indent=2) + "\n"
+    for dest_dir in dest_dirs:
+        target = dest_dir / AI_STATUS_NAME
+        tmp_name = None
+        try:
+            fd, tmp_name = tempfile.mkstemp(dir=dest_dir, prefix=".ai_status.", suffix=".tmp")
+            with os.fdopen(fd, "w") as handle:
+                handle.write(payload)
+            os.chmod(tmp_name, 0o644)
+            os.replace(tmp_name, target)
+            tmp_name = None
+            logging.info(f"Wrote AI status ({outcome}) to {target}")
+        except Exception as e:
+            logging.error(f"Failed to write AI status to {target}: {e}")
+        finally:
+            if tmp_name:
+                try:
+                    os.unlink(tmp_name)
+                except OSError:
+                    pass
+    return status
 
 
 def setup_logging():
@@ -301,15 +405,18 @@ def cmd_run(args):
             )
         except subprocess.TimeoutExpired:
             logging.error(f"FAILURE: Crew run timed out after {CREW_TIMEOUT}s")
+            write_ai_status("failed", classify_failure(timed_out=True))
             sys.exit(1)
         except FileNotFoundError:
             logging.error(
                 f"FAILURE: Command not found: {CREW_CMD[0]}. "
                 "Is uv installed? Check UV_BIN in scheduler.py."
             )
+            write_ai_status("failed", "other")
             sys.exit(1)
         except Exception as e:
             logging.error(f"FAILURE: Error running crew: {e}")
+            write_ai_status("failed", "other")
             sys.exit(1)
         if not should_retry_crew(result, attempt):
             break
@@ -326,6 +433,7 @@ def cmd_run(args):
             logging.error(f"stderr (last 1000 chars): {result.stderr[-1000:]}")
         if result.stdout:
             logging.error(f"stdout (last 500 chars): {result.stdout[-500:]}")
+        write_ai_status("failed", classify_failure(result))
         sys.exit(1)
 
     logging.info(f"SUCCESS: Crew run completed in {elapsed}s")
@@ -344,6 +452,7 @@ def cmd_run(args):
             except Exception as e:
                 logging.error(f"Failed to copy report to {target}: {e}")
 
+    write_ai_status("ok")
     logging.info("Done.")
 
 
