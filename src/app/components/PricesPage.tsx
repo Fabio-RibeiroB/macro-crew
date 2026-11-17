@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { RefreshCw } from "lucide-react";
-import { chartUpdated } from "../data/chartMeta.mjs";
+import { chartUpdated, inflationTargetLine } from "../data/chartMeta.mjs";
 import { chartPoints, formatPeriod } from "../data/verified.mjs";
 import { comparableEnergyPrevious, decimalDifference, overviewRows } from "../data/overview.mjs";
 import { checkedAt } from "../data/format.mjs";
@@ -146,7 +146,7 @@ export function PricesPage({ data, loading, error, refresh, topics, HistoricalTr
             <div className={`fs-chart-grid fs-chart-count-${inflationKinds.filter((kind) => inflation[kind].metric?.history?.length).length}`}>
               {inflationKinds.map((kind) => (
                 <div key={kind}>
-                  {chart(inflation[kind].metric, { title: topics[kind].measurement, label: topics[kind].short, color: topics[kind].color })}
+                  {chart(inflation[kind].metric, { title: topics[kind].measurement, label: topics[kind].short, color: topics[kind].color, referenceLine: inflationTargetLine(kind) })}
                 </div>
               ))}
             </div>
