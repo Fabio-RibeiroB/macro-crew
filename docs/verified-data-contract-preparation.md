@@ -381,7 +381,7 @@ Never delete v2 to force fallback or downgrade the private DB to roll back JSON.
 
 Run pruning separately for each channel, preserving its active and explicitly
 retained rollback generations. Retain generations referenced by either manifest
-and those needed for the in-flight-fetch window; extending today's 14-day policy
+and those needed for the in-flight-fetch window; extending today's 3-day policy
 must be explicit. Pruning cannot infer both active IDs from only v1's manifest.
 
 ## Private storage boundary
