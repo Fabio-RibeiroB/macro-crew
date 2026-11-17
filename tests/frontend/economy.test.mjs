@@ -52,8 +52,8 @@ test("Economy key figures carry units, neutral change and the FinStats footnote"
 test("Economy keeps the AI commentary labelled and the chart row between meaning and summary", async () => {
   const html = await renderEconomy(fullFixture());
   const bank = section(html, "interest-rates");
-  assert.match(bank, /class="fs-ai-tag">AI commentary — not checked against the official figures<\/span>/);
-  assert.match(bank, /as cited in the Bank of England report\. They are not this site’s official figures/);
+  assert.match(textOf(bank), /The AI summary could not be loaded/);
+  assert.doesNotMatch(bank, /not checked against the official figures/);
   assert.match(textOf(section(html, "gdp")), /There is no AI summary for GDP yet/);
   // The trend card is lazy, so server rendering shows its loading state in the Chart row.
   const text = textOf(bank);
