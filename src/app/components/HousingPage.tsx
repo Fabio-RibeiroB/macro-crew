@@ -4,6 +4,7 @@ import { chartUpdated } from "../data/chartMeta.mjs";
 import { chartPoints } from "../data/verified.mjs";
 import { overviewRows } from "../data/overview.mjs";
 import { checkedAt } from "../data/format.mjs";
+import { PageContents } from "./PageContents";
 import { OfficialLink } from "./OfficialLink";
 import { KeyFigure, Row, Sources } from "./SubjectBlock";
 
@@ -66,6 +67,8 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
           {data ? "The last successfully loaded figures remain below." : "Verified figures are unavailable."}
         </div>
       )}
+
+      <PageContents items={[{ id: "rent", label: "Rent" }, { id: "house-prices", label: "House prices" }]} />
 
       <section className="fs-block" id="rent" aria-labelledby="rent-title">
         <h2 id="rent-title">Rent</h2>

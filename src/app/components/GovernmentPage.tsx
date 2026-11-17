@@ -4,6 +4,7 @@ import { chartUpdated } from "../data/chartMeta.mjs";
 import { chartPoints, previousReading } from "../data/verified.mjs";
 import { NOT_AVAILABLE, changeDirection, dayLabel, decimalDifference, monthLabel } from "../data/overview.mjs";
 import { checkedAt } from "../data/format.mjs";
+import { PageContents } from "./PageContents";
 import { OfficialLink } from "./OfficialLink";
 import { Lines } from "./IndicatorTable";
 import { KeyFigure, Row, Sources } from "./SubjectBlock";
@@ -109,6 +110,8 @@ export function GovernmentPage({ data, loading, error, refresh, topics, Historic
             {data ? "The last successfully loaded figures remain below." : "Verified figures are unavailable."}
           </div>
         )}
+
+        <PageContents items={[{ id: "public-debt", label: "Public debt" }, { id: "gilt-yields", label: "Gilt yields" }]} />
 
         <section className="fs-block" id="public-debt" aria-labelledby="public-debt-title">
           <h2 id="public-debt-title">Public debt</h2>

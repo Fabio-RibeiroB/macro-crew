@@ -4,6 +4,7 @@ import { chartUpdated } from "../data/chartMeta.mjs";
 import { chartPoints, previousPublishedWindow, referenceWindow } from "../data/verified.mjs";
 import { changeDirection, decimalDifference, NOT_AVAILABLE, overviewRows, windowLabel } from "../data/overview.mjs";
 import { checkedAt } from "../data/format.mjs";
+import { PageContents } from "./PageContents";
 import { OfficialLink } from "./OfficialLink";
 import { Delta } from "./IndicatorTable";
 import { KeyFigure, Row, Sources } from "./SubjectBlock";
@@ -108,6 +109,8 @@ export function JobsPayPage({ data, loading, error, refresh, topics, HistoricalT
           {data ? "The last successfully loaded figures remain below." : "Verified figures are unavailable."}
         </div>
       )}
+
+      <PageContents items={[{ id: "wages", label: "Wages" }, { id: "unemployment", label: "Unemployment" }]} />
 
       <section className="fs-block" id="wages" aria-labelledby="wages-title">
         <h2 id="wages-title">Wages</h2>
