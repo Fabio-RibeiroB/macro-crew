@@ -3,8 +3,8 @@ from crewai import Agent, Crew, LLM, Process, Task
 from crewai.project import CrewBase, agent, crew, task, after_kickoff
 from crewai.agents.agent_builder.base_agent import BaseAgent
 from typing import List
-from crewai_tools import EXASearchTool
 from crewai.tools import BaseTool
+from uk_macro_crew.tools.exa_search import ExaSearchTool
 from uk_macro_crew.ai_safety import bounded_int
 from uk_macro_crew.official_documents import fetch_official_text
 
@@ -72,7 +72,7 @@ class UkMacroCrew:
             config=self.agents_config["researcher"],  # type: ignore[index]
             verbose=False,
             tools=[
-                EXASearchTool(base_url=os.getenv("EXA_BASE_URL")),
+                ExaSearchTool(base_url=os.getenv("EXA_BASE_URL")),
                 OfficialPublicationTool(),
             ],
             llm=build_agent_llm(),
