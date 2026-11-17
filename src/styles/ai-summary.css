@@ -63,3 +63,26 @@
   line-height: 1.5;
   color: var(--fs-muted);
 }
+
+/* One-line MPC summary on the overview. */
+.fs-mpc-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-top: 16px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  border-left: 3px solid var(--fs-ai);
+}
+.fs-mpc-line p {
+  flex: 1 1 320px;
+  max-width: 70ch;
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.fs-mpc-line .fs-link {
+  font-size: 14px;
+  white-space: nowrap;
+}

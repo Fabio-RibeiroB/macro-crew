@@ -147,6 +147,9 @@ def build_history_from_snapshot(
             "source": report.get("source", "not available"),
             "collected_at": now_iso,
         }
+        # Keep the optional AI headline with the archived summary when the report has one.
+        if isinstance(report.get("headline"), str) and report["headline"].strip():
+            candidate["headline"] = report["headline"]
         _upsert_by_date(report_history[report_name], "report_date", candidate)
 
     history_payload["metadata"]["last_updated"] = now_iso

@@ -69,6 +69,33 @@ export function publicationTitle(report) {
   return "Monetary Policy Committee publication";
 }
 
+export const MPC_LINE_MAX = 160;
+
+/** Shortens text to at most `max` characters at a word boundary, ending with an ellipsis. */
+export function truncateCleanly(text, max = MPC_LINE_MAX) {
+  const source = String(text ?? "").replace(/\s+/g, " ").trim();
+  if (source.length <= max) return source;
+  const room = source.slice(0, max - 1);
+  const cut = room.lastIndexOf(" ");
+  const kept = (cut > max / 2 ? room.slice(0, cut) : room).replace(/[\s,;:–—-]+$/, "");
+  return `${kept}…`;
+}
+
+/**
+ * The one-line MPC summary for the overview: the report's optional AI `headline`, or
+ * the first sentence of its summary when there is none (or it is unusable). Returns
+ * null when there is no Monetary Policy report, so the line is hidden.
+ */
+export function mpcLine(reports) {
+  const report = (Array.isArray(reports) ? reports : []).find((item) => item?.key === "monetary_policy_report");
+  if (!report) return null;
+  const headline = typeof report.headline === "string" ? report.headline.replace(/\s+/g, " ").trim() : "";
+  if (headline && headline.length <= MPC_LINE_MAX) return { text: headline, source: "headline" };
+  const first = splitSentences(report.summary)[0];
+  if (!first) return null;
+  return { text: truncateCleanly(first), source: "summary" };
+}
+
 /** The publication name with its month, for the note: "March 2026 Monetary Policy Summary and minutes". */
 export function publicationName(report) {
   const title = publicationTitle(report);

@@ -58,6 +58,7 @@ import { GovernmentPage } from "./components/GovernmentPage";
 import { PricesPage } from "./components/PricesPage";
 import { checkedAt } from "./data/format.mjs";
 import { EventList } from "./components/EventList";
+import { MpcLine } from "./components/MpcLine";
 import { ReleaseSummaries } from "./components/ReleaseSummaries";
 import { createSummaryRefreshController, loadSummaries } from "./data/summaries.mjs";
 import "../styles/friendly.css";
@@ -818,7 +819,8 @@ export default function App({
     };
   }, [needsSummaries]);
   useEffect(() => {
-    if (page.id !== "economy") return;
+    // The overview shows one line of the Monetary Policy summary, so it reads the report too.
+    if (page.id !== "economy" && page.id !== "overview") return;
     const owner = createRefreshController({
       load: async (signal) => {
         const response = await fetch(
@@ -927,6 +929,7 @@ export default function App({
       <main id="main-content" tabIndex={-1}>
         {page.id === "overview" && (
           <>
+            <MpcLine reports={reports} />
             <Overview {...stats} />
             <EventList {...eventProps} limit={5} compact />
             <section className="fs-container fs-section">
