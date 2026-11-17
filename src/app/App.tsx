@@ -59,6 +59,7 @@ import { PricesPage } from "./components/PricesPage";
 import { checkedAt } from "./data/format.mjs";
 import { EventList } from "./components/EventList";
 import { FiguresTicker } from "./components/FiguresTicker";
+import { MpcLine } from "./components/MpcLine";
 import { ReleaseSummaries } from "./components/ReleaseSummaries";
 import { createSummaryRefreshController, loadSummaries } from "./data/summaries.mjs";
 import "../styles/friendly.css";
@@ -470,9 +471,6 @@ function Overview({ data, loading, error, refresh }: any) {
       <span id="figures" className="fs-anchor-alias" />
       <div className="fs-pagehead">
         <h1 id="overview-title">Latest figures</h1>
-        <p className="fs-lede">
-          Official releases from the ONS, Bank of England, Ofgem, DESNZ and HM Land Registry.
-        </p>
         <button className="fs-text-button" disabled={loading} onClick={() => void refresh()}>
           <RefreshCw size={15} className={loading ? "fs-spin" : ""} aria-hidden="true" />
           {loading ? "Checking figures…" : "Check for updates"}
@@ -494,7 +492,7 @@ function Overview({ data, loading, error, refresh }: any) {
           />
           <p className="fs-ledger-note" id="change-note">
             * Change is the latest value minus the previous one, calculated by FinStats from the official
-            series. pp means percentage points. Figures last updated {checkedAt(data.published_at)} and can
+            series. pp means percentage points. Green and red show direction only, not good or bad. Figures last updated {checkedAt(data.published_at)} and can
             be revised. <a href="/sources">How we check the data</a>
           </p>
         </>
@@ -824,7 +822,8 @@ export default function App({
     };
   }, [needsSummaries]);
   useEffect(() => {
-    if (page.id !== "economy") return;
+    // The overview shows one line of the Monetary Policy summary, so it reads the report too.
+    if (page.id !== "economy" && page.id !== "overview") return;
     const owner = createRefreshController({
       load: async (signal) => {
         const response = await fetch(
@@ -934,6 +933,7 @@ export default function App({
       <main id="main-content" tabIndex={-1}>
         {page.id === "overview" && (
           <>
+            <MpcLine reports={reports} />
             <Overview {...stats} />
             <EventList {...eventProps} limit={5} compact />
             <section className="fs-container fs-section">

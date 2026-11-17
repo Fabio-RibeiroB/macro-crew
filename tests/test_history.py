@@ -124,3 +124,19 @@ def test_build_history_falls_back_to_snapshot_when_official_fetch_fails():
         assert len(gdp_entries) == 1
         assert gdp_entries[0]["publication_date"] == "2026-02-12"
         assert gdp_entries[0]["value"] == "+0.1%"
+
+
+def test_build_history_keeps_the_optional_headline_only_when_present():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        history_file = os.path.join(temp_dir, "history_report.json")
+        fetcher = lambda: {"interest_rate": [], "cpih": [], "gdp": []}
+
+        snapshot = _snapshot("2026-02-12")
+        without = build_history_from_snapshot(snapshot, history_file, economic_history_fetcher=fetcher)
+        assert "headline" not in without["history"]["report_summaries"]["monetary_policy_report"][0]
+
+        snapshot["current_report_summaries"]["monetary_policy_report"]["headline"] = "Bank Rate was held."
+        with_headline = build_history_from_snapshot(snapshot, history_file, economic_history_fetcher=fetcher)
+        entry = with_headline["history"]["report_summaries"]["monetary_policy_report"][0]
+        assert entry["headline"] == "Bank Rate was held."
+        assert "headline" not in with_headline["history"]["report_summaries"]["financial_stability_report"][0]

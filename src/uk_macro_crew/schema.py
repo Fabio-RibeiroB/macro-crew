@@ -8,6 +8,9 @@ PERCENT_RE = re.compile(r"^[+-]?\d+(?:\.\d+)?%$")
 
 ALLOWED_PLACEHOLDER = "not available"
 
+# Optional one-sentence AI headline on a report summary (shown on the overview).
+MAX_HEADLINE_CHARS = 160
+
 INDICATOR_SOURCE_DOMAINS = {
     "interest_rate": ("bankofengland.co.uk",),
     "cpih": ("ons.gov.uk",),
@@ -146,6 +149,16 @@ def validate_latest_snapshot(payload: dict, today: date | None = None) -> None:
 
         if not obj["summary"].strip() and obj["summary"] != ALLOWED_PLACEHOLDER:
             raise SchemaValidationError(f"{report_name}.summary cannot be empty")
+
+        # headline is optional; when present it must be a short string.
+        if "headline" in obj:
+            headline = obj["headline"]
+            if not isinstance(headline, str):
+                raise SchemaValidationError(f"{report_name}.headline must be a string")
+            if len(headline) > MAX_HEADLINE_CHARS:
+                raise SchemaValidationError(
+                    f"{report_name}.headline must be at most {MAX_HEADLINE_CHARS} characters"
+                )
 
         if not _is_valid_date(obj[date_field]):
             raise SchemaValidationError(f"{report_name}.{date_field} must be YYYY-MM-DD or 'not available'")
