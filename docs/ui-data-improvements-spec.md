@@ -728,9 +728,39 @@ Implementation slices (one issue and one focused PR each):
    overview, labelled as AI with a link to the full summary. The AI job gains an
    optional short `headline` field; until it exists the first sentence is used.
 6. Figures ticker: a scrolling strip below the header on every page, per ADR 0002.
+7. "On this page" contents: subject pages with more than one section (Prices,
+   Economy, Jobs & Pay, Housing, Government) show a short list of section links
+   near the top, sticky or easy to reach on mobile, so a reader on Housing can
+   see that House prices follows Rent. Uses the existing anchors.
 
 **Acceptance:** each slice verified live on desktop and at 360px, light and dark;
 the ticker also with reduced motion. All tests green; no statistical change.
+
+### M11 — Housing affordability (approved 17 November 2026)
+
+**Demonstration:** Housing answers "is it harder to buy now?", not just "what is
+the average price?". Prompted by the owner's review of an affordability analysis
+(price-to-earnings, real prices, mortgage rates). Each new series goes through
+the usual source qualification before it is shown. No figure is modelled from
+assumptions (deposit, term) in this milestone.
+
+Implementation slices (one issue and one focused PR each):
+
+1. House prices after inflation: a FinStats calculation, labelled as one, that
+   shows the UK average house price in today's money using the ONS CPI index
+   (MM23 / D7BT, the same release as CPI). States the base month. Missing months
+   stay gaps.
+2. House price to earnings ratio: the official ONS ratio of median house price
+   to median gross annual workplace-based earnings (annual; England and Wales,
+   shown with that geography), with its history.
+3. Mortgage rates: Bank of England quoted rates for new 2-year and 5-year fixed
+   mortgages at 75% loan-to-value (Bankstats, monthly), with Bank Rate for context.
+
+Backlog: rent as a share of income (ONS private rental affordability); a modelled
+monthly repayment as a share of pay (needs reviewed assumptions).
+
+**Acceptance:** sources qualified and recorded; definitions, units, geography and
+reference periods shown; verified live; no change to existing figures.
 
 ## 12. Release acceptance
 
