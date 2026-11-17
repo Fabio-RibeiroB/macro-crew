@@ -2,9 +2,10 @@ import { Suspense } from "react";
 import { RefreshCw } from "lucide-react";
 import { chartUpdated } from "../data/chartMeta.mjs";
 import { chartPoints, previousPublishedWindow, referenceWindow } from "../data/verified.mjs";
-import { decimalDifference, NOT_AVAILABLE, overviewRows, windowLabel } from "../data/overview.mjs";
+import { changeDirection, decimalDifference, NOT_AVAILABLE, overviewRows, windowLabel } from "../data/overview.mjs";
 import { checkedAt } from "../data/format.mjs";
 import { OfficialLink } from "./OfficialLink";
+import { Delta } from "./IndicatorTable";
 import { KeyFigure, Row, Sources } from "./SubjectBlock";
 
 const CHART_CAPTION =
@@ -45,7 +46,7 @@ function RealPay({ nominal, real }: any) {
         <strong className="fs-jp-real-v">{String(real.latest.value)}%</strong>{" "}
         for {current ? windowLabel(current.start_month, current.end_month) : real.latest.period}
         {difference !== null && earlier
-          ? <> · {difference === "0" ? "No change" : `Change ${difference} pp`} vs {windowLabel(earlier.start_month, earlier.end_month)} (windows overlap)</>
+          ? <> · {difference === "0" ? "No change" : <>Change <Delta direction={changeDirection(difference)}>{difference} pp</Delta></>} vs {windowLabel(earlier.start_month, earlier.end_month)} (windows overlap)</>
           : " · A directly comparable previous window is not available."}
       </p>
       <p>{relationship}{real.collection_status !== "ok" ? " Update delayed, showing the last verified figure." : ""}</p>
@@ -174,7 +175,7 @@ export function JobsPayPage({ data, loading, error, refresh, topics, HistoricalT
         </Row>
       </section>
       <p className="fs-ledger-note" id="change-note">
-        * Change is the latest value minus the previous published window, calculated by FinStats from the official series. pp means percentage points. Published three-month windows overlap.
+        * Change is the latest value minus the previous published window, calculated by FinStats from the official series. pp means percentage points. Green and red show direction only, not good or bad. Published three-month windows overlap.
       </p>
     </div>
   );

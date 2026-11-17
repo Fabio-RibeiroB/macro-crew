@@ -3,7 +3,7 @@
   --fs-bg: #ffffff;
   --fs-paper: #ffffff;
   --fs-ink: #14211b;
-  --fs-muted: #556860;
+  --fs-muted: #3a4b44;
   --fs-line: #e2e9e4;
   --fs-line-strong: #c3d0c8;
   --fs-accent: #0a6847;
@@ -15,10 +15,12 @@
   --fs-ai: #5b4a94;
   --fs-ai-bg: #f6f3fb;
   /* Direction colours (ADR 0002): direction only, never good/bad. */
-  --fs-up: #0b7a3e;
+  --fs-up: #0a6b36;
   --fs-up-bg: #e7f5ec;
-  --fs-down: #c0262d;
+  --fs-down: #b3202a;
   --fs-down-bg: #fdecec;
+  /* Alternate section band on subject pages (ADR 0002). */
+  --fs-band: #f4f8f5;
   --dash-bg: var(--fs-bg);
   --dash-card: var(--fs-paper);
   --dash-border: var(--fs-line);
@@ -40,7 +42,7 @@
   --fs-bg: #0d1511;
   --fs-paper: #121e18;
   --fs-ink: #e6efe9;
-  --fs-muted: #9fb3a8;
+  --fs-muted: #b8c9bf;
   --fs-line: #223229;
   --fs-line-strong: #34493e;
   --fs-accent: #6fd1a8;
@@ -55,6 +57,7 @@
   --fs-up-bg: #12301f;
   --fs-down: #ff8a8a;
   --fs-down-bg: #3a1618;
+  --fs-band: #101b15;
 }
 .fs-container {
   max-width: 1240px;
@@ -1134,7 +1137,14 @@
 .fs-overview {
   position: relative;
   padding-top: 12px;
-  padding-bottom: 40px;
+  padding-bottom: 0;
+}
+/* A strong rule closes the figures before the next section (ADR 0002). */
+.fs-overview::after {
+  content: "";
+  display: block;
+  margin-top: 40px;
+  border-top: 3px solid var(--fs-line-strong);
 }
 .fs-pagehead {
   display: flex;
@@ -1144,7 +1154,7 @@
   margin-bottom: 8px;
 }
 .fs-pagehead h1 {
-  font-size: 26px;
+  font-size: 30px;
   line-height: 1.2;
   font-weight: 800;
   letter-spacing: -0.015em;
@@ -1163,7 +1173,7 @@
 .fs-ledger {
   width: 100%;
   border-collapse: collapse;
-  border-top: 1px solid var(--fs-line-strong);
+  border-top: 3px solid var(--fs-accent);
   font-variant-numeric: tabular-nums;
 }
 .fs-ledger th,
@@ -1173,10 +1183,10 @@
   vertical-align: middle;
 }
 .fs-ledger thead th {
-  font: 600 12.5px/1.2 var(--font-body);
-  color: var(--fs-muted);
-  padding: 7px 12px;
-  border-bottom: 1px solid var(--fs-line-strong);
+  font: 700 13px/1.2 var(--font-body);
+  color: var(--fs-ink);
+  padding: 8px 12px;
+  border-bottom: 2px solid var(--fs-ink);
   white-space: nowrap;
 }
 .fs-ledger .fs-num {
@@ -1192,11 +1202,11 @@
 }
 .fs-ledger tbody td,
 .fs-ledger tbody th {
-  padding: 5px 12px;
+  padding: 7px 12px;
   font-weight: 400;
 }
 .fs-ledger .fs-col-name {
-  padding-left: 4px;
+  padding-left: 10px;
 }
 .fs-ledger .fs-latest,
 .fs-ledger thead .fs-col-latest {
@@ -1206,20 +1216,37 @@
 .fs-ledger tbody tr:focus-within .fs-latest {
   background: var(--fs-hover);
 }
+.fs-ledger tbody tr {
+  cursor: pointer;
+}
 .fs-ledger-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   font: 700 16px/1.25 var(--font-body);
   color: var(--fs-ink);
-  text-decoration: none;
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-decoration-color: var(--fs-line-strong);
+  text-underline-offset: 4px;
+}
+.fs-ledger-chevron {
+  flex: none;
+  color: var(--fs-accent);
 }
 .fs-ledger-link::after {
   content: "";
   position: absolute;
   inset: 0;
 }
+.fs-ledger tbody tr:hover .fs-ledger-link,
 .fs-ledger-link:hover {
   color: var(--fs-accent);
-  text-decoration: underline;
-  text-underline-offset: 4px;
+  text-decoration-color: var(--fs-accent);
+}
+.fs-ledger tbody tr:hover,
+.fs-ledger tbody tr:focus-within {
+  box-shadow: inset 3px 0 0 var(--fs-accent);
 }
 .fs-ledger-link:focus-visible {
   outline-offset: -3px;
@@ -1268,10 +1295,26 @@
   color: var(--fs-warn);
   font-weight: 600;
 }
-/* Neutral direction: the arrow and sign say which way, never good or bad. */
+/* Direction colour (ADR 0002): green up, red down, neutral otherwise. The arrow and
+   sign carry the meaning too, and colour never means good or bad. */
 .fs-dir {
   font-weight: 600;
   white-space: nowrap;
+}
+.fs-delta {
+  display: inline-block;
+  padding: 0 7px;
+  border-radius: 3px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.fs-delta-up {
+  color: var(--fs-up);
+  background: var(--fs-up-bg);
+}
+.fs-delta-down {
+  color: var(--fs-down);
+  background: var(--fs-down-bg);
 }
 .fs-arrow {
   margin-right: 4px;
@@ -1359,6 +1402,7 @@
   .fs-ledger tbody tr:hover,
   .fs-ledger tbody tr:focus-within {
     background: none;
+    box-shadow: none;
   }
 }
 @media (prefers-reduced-motion: no-preference) {
@@ -1445,27 +1489,34 @@
   font-size: 13.5px;
 }
 .fs-block {
-  border-top: 1px solid var(--fs-line-strong);
-  margin-top: 24px;
+  border-top: 3px solid var(--fs-accent);
+  margin-top: 48px;
   scroll-margin-top: 68px;
 }
+/* Every second block sits on a faint band so neighbouring sections read as separate. */
+.fs-block:nth-of-type(even) {
+  background: var(--fs-band);
+  margin-left: -16px;
+  margin-right: -16px;
+  padding: 0 16px 8px;
+}
 .fs-root .fs-block > h2 {
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 800;
   line-height: 1.2;
-  letter-spacing: -0.01em;
-  padding: 12px 0 8px;
+  letter-spacing: -0.015em;
+  padding: 16px 0 10px;
 }
 .fs-row {
   display: grid;
   grid-template-columns: 132px minmax(0, 1fr);
   gap: 8px 28px;
-  padding: 16px 0;
-  border-top: 1px solid var(--fs-line);
+  padding: 20px 0;
+  border-top: 1px solid var(--fs-line-strong);
   scroll-margin-top: 68px;
 }
 .fs-root .fs-row-label {
-  font: 600 14px/1.4 var(--font-body);
+  font: 700 14px/1.4 var(--font-body);
   letter-spacing: 0;
   color: var(--fs-muted);
   padding-top: 3px;

@@ -114,7 +114,7 @@ export function EconomyPage({ data, loading, error, refresh, topics, reports, re
         <Row label="Sources" labelId="gdp-sources-label"><Sources metric={gdp} /></Row>
       </section>
       <p className="fs-ledger-note" id="change-note">
-        * Change is the latest value minus the previous one, calculated by FinStats from the official series. pp means percentage points.
+        * Change is the latest value minus the previous one, calculated by FinStats from the official series. pp means percentage points. Green and red show direction only, not good or bad.
       </p>
     </div>
   );
