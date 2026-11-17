@@ -1150,15 +1150,12 @@
   letter-spacing: -0.015em;
   margin: 0;
 }
-.fs-lede {
-  color: var(--fs-muted);
-  font-size: 14px;
-  max-width: 80ch;
-  flex: 1 1 360px;
-}
 .fs-pagehead .fs-text-button {
   font-size: 13.5px;
   padding: 4px 0;
+}
+.fs-overview .fs-pagehead .fs-text-button {
+  margin-left: auto;
 }
 .fs-ledger {
   width: 100%;
