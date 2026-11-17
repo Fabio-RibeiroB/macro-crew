@@ -27,6 +27,24 @@ Budget summary. Earlier AI summaries remain labelled, collapsible and linked to
 original sources on the Economy page; they are not reattached to fresh statistics.
 New source-grounded release explanations are still future work.
 
+## Link previews
+
+Crawlers and chat apps do not run JavaScript, so the build writes one HTML file
+per route (`prices.html`, `economy.html`, ... and the overview as `index.html`),
+each with its own `<title>`, description, canonical link and Open Graph / Twitter
+card tags and the site-wide `og-image.png` (1200x630, ADR 0001 style, no figures;
+regenerate with `scripts/make-og-image.py`). Page text comes from `PAGES` in
+`src/app/data/pages.mjs`; `scripts/link-previews.mjs` renders and verifies the
+tags and fails the build if any route lacks one, has a relative `og:url` or
+`og:image`, or has a description with digits (no live figures in previews).
+`public/.htaccess` maps `/prices` and `/prices/` to `prices.html` with an internal
+rewrite and redirects `/prices.html` to `/prices`. Any other path, including
+unknown ones, still uses the vhost's `FallbackResource /index.html`. Without
+mod_rewrite every URL still works but shares the overview's tags. Adding a page
+means adding its path to the `.htaccess` rule list (a test enforces this).
+The page body is still rendered by React in the browser; no figures are rendered
+at build time.
+
 ## Navigation choice
 
 Use native document links and a small explicit pathname-to-page map, without a

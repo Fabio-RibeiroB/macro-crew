@@ -3,6 +3,7 @@ import path from 'path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { checkStatic } from './scripts/check-static.mjs'
+import { linkPreviews } from './scripts/link-previews.mjs'
 
 let buildOutput = ''
 export default defineConfig({
@@ -20,6 +21,7 @@ export default defineConfig({
       buildStart() { checkStatic(path.resolve('public'), true) },
       closeBundle() { checkStatic(buildOutput) },
     },
+    linkPreviews(),
     react(),
     tailwindcss(),
     {

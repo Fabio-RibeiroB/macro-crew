@@ -1,6 +1,7 @@
 <IfModule mod_headers.c>
-  # The entry point must revalidate so a cached page does not pin old assets.
-  <FilesMatch "^index\.html$">
+  # Entry pages must revalidate so a cached page does not pin old assets.
+  # This covers index.html and the per-route preview pages (prices.html, ...).
+  <FilesMatch "^[a-z-]+\.html$">
     Header set Cache-Control "no-cache, must-revalidate, max-age=0"
   </FilesMatch>
   <FilesMatch "^(research_report|history_report)\.json$">
@@ -8,4 +9,21 @@
     Header set Pragma "no-cache"
     Header set Expires "0"
   </FilesMatch>
+</IfModule>
+
+# Link previews: crawlers do not run JavaScript, so each direct URL is served from
+# its own built HTML file (same app, page-specific title and Open Graph tags).
+# The list must match src/app/data/pages.mjs; tests/frontend/link-previews.test.mjs
+# enforces that. Unlisted paths (including unknown and unpublished ones) still fall
+# through to the vhost's FallbackResource /index.html. Without mod_rewrite every
+# URL keeps working with the generic page. "/prices/" is served too; the app
+# replaces it with "/prices" in the address bar.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  # A direct request for "/prices.html" goes to the canonical "/prices". THE_REQUEST
+  # holds the client's original request line, so the internal rewrite below does
+  # not trigger this rule again (no loop).
+  RewriteCond %{THE_REQUEST} "^[A-Z]+ /(calendar|prices|economy|jobs-pay|housing|government-budget|about|sources)\.html[ ?]"
+  RewriteRule ^(.+)\.html$ /$1 [R=301,L]
+  RewriteRule ^(calendar|prices|economy|jobs-pay|housing|government-budget|about|sources)/?$ $1.html [L]
 </IfModule>

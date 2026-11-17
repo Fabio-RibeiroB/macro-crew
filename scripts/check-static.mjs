@@ -3,9 +3,13 @@ import { lstatSync, readdirSync, readFileSync, existsSync } from 'node:fs';
 import { resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { PAGES } from '../src/app/data/pages.mjs';
+
 const keyPatterns = [/\bsk-(?:proj-)?[A-Za-z0-9_-]{24,}/, /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/];
+// One HTML entry per route (see link-previews.mjs); derived from the app's page list.
+const routeFiles = '(?:' + PAGES.map(page => (page.path === '/' ? 'index' : page.path.slice(1)).replace(/[^\w-]/g, '')).join('|') + ')\\.html';
 export function checkStatic(root, publicOnly = false) {
-  const allowed = new Set(['.htaccess', 'research_report.json', 'history_report.json', 'ai_status.json']);
+  const allowed = new Set(['.htaccess', 'og-image.png', 'research_report.json', 'history_report.json', 'ai_status.json']);
   function walk(dir) {
     for (const name of readdirSync(dir)) {
       const path = resolve(dir, name);
@@ -14,7 +18,7 @@ export function checkStatic(root, publicOnly = false) {
       if (stat.isSymbolicLink()) throw new Error(`Symlink in static input: ${label}`);
       if (publicOnly && !allowed.has(label)) throw new Error(`Unreviewed public file: ${label}`);
       if (stat.isDirectory()) { walk(path); continue; }
-      if (!publicOnly && !/^(?:index\.html|\.htaccess|(?:research_report|history_report|ai_status)\.json|assets\/[\w.-]+\.(?:js|css|svg|png|woff2))$/.test(label)) {
+      if (!publicOnly && !new RegExp(String.raw`^(?:${routeFiles}|og-image\.png|\.htaccess|(?:research_report|history_report|ai_status)\.json|assets\/[\w.-]+\.(?:js|css|svg|png|woff2))$`).test(label)) {
         throw new Error(`Unexpected build file: ${label}`);
       }
       if (keyPatterns.some(pattern => pattern.test(readFileSync(path, 'utf8')))) {

@@ -75,7 +75,8 @@ durable release expectations, bounded backoff and external alerts are still pend
 
 Activate the tested release by atomically switching a same-filesystem symlink or
 renaming complete directories. The original dist directory is preserved for
-rollback. Verify HTTPS: homepage/title, assets, data manifest/checksum, reference
+rollback. Verify HTTPS: homepage/title, per-route link previews (`curl -s URL` for each route
+shows its own `<title>`, `og:url` and `og:image`; `/prices.html` redirects to `/prices`), assets, data manifest/checksum, reference
 periods, statistics, source details, chart ranges, mobile layout, theme and archive.
 Test a failed refresh and confirm previous loaded figures survive. Do not switch
 if any initial official metric is unavailable or the service cannot deliver data.
