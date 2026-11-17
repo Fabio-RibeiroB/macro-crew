@@ -1,8 +1,7 @@
 // ADR 0001 overview indicator table: units sit with every number, no Unit column,
-// neutral change arrows and honest missing values.
+// arrows paired with text and honest missing values (direction colour: direction-colour.test.mjs).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { decimalDifference, overviewRows } from "../../src/app/data/overview.mjs";
 import { fullFixture, overviewRowsOf, textOf } from "./overview-helpers.mjs";
 
@@ -63,7 +62,7 @@ test("Bank Rate shows two decimals and the size of its last change in percentage
   assert.equal(row.latest[0].text, "4.25%");
   assert.deepEqual(row.previous.map((l) => l.text), ["4.00%", "Before 21 Sep 2026"]);
   assert.equal(row.change[0].text, "+0.25 pp");
-  assert.equal(row.change[0].dir, "up");
+  assert.equal(row.change[0].direction, "up");
 });
 
 test("the overview is a table with no Unit column, a plain heading and a change footnote", async () => {
@@ -86,15 +85,10 @@ test("the overview is a table with no Unit column, a plain heading and a change 
   assert.doesNotMatch(html, /<svg[^>]*sparkline|<polyline|recharts/i);
 });
 
-test("change arrows are neutral and always paired with text", async () => {
+test("change arrows are always paired with text and a sign", async () => {
   const html = await renderOverview(full());
   assert.match(html, /<span class="fs-arrow" aria-hidden="true">↑<\/span><span class="fs-sr">Up <\/span>\+0\.4 pp/);
   assert.match(html, /<span class="fs-arrow" aria-hidden="true">↓<\/span><span class="fs-sr">Down <\/span>−0\.2 pp/);
-  const css = readFileSync(new URL("../../src/styles/friendly.css", import.meta.url), "utf8");
-  const dirRules = css.match(/\.fs-dir[^{]*\{[^}]*\}/g) ?? [];
-  assert.ok(dirRules.length > 0);
-  for (const rule of dirRules) assert.doesNotMatch(rule, /color/, "direction is not coloured as good or bad");
-  assert.doesNotMatch(css, /fs-dir-(up|down)/);
 });
 
 test("missing values stay Not available and never turn into zero", async () => {

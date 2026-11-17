@@ -2,9 +2,9 @@ import { Suspense } from "react";
 import { RefreshCw } from "lucide-react";
 import { chartUpdated, inflationTargetLine } from "../data/chartMeta.mjs";
 import { chartPoints, formatPeriod } from "../data/verified.mjs";
-import { comparableEnergyPrevious, decimalDifference, overviewRows } from "../data/overview.mjs";
+import { changeDirection, comparableEnergyPrevious, decimalDifference, overviewRows } from "../data/overview.mjs";
 import { checkedAt } from "../data/format.mjs";
-import { Lines } from "./IndicatorTable";
+import { Delta, Lines } from "./IndicatorTable";
 import { OfficialLink } from "./OfficialLink";
 import { BigValue, KeyFigure, Row, Sources } from "./SubjectBlock";
 
@@ -16,7 +16,7 @@ import { BigValue, KeyFigure, Row, Sources } from "./SubjectBlock";
  */
 const money = (value: unknown) => `£${Number(value).toLocaleString("en-GB")}`;
 
-function energyComparison(metric: any) {
+function energyComparison(metric: any): React.ReactNode {
   const latest = metric?.latest;
   if (!latest?.reference) return "A verified previous comparable cap period is not available.";
   const comparison = comparableEnergyPrevious(metric);
@@ -26,7 +26,9 @@ function energyComparison(metric: any) {
   const { previous } = comparison;
   const change = decimalDifference(String(latest.value), String(previous.value));
   const sign = change.startsWith("+") || change.startsWith("−") ? change[0] : "";
-  return `${sign}${money(change.replace(/^[+−]/, ""))}/year compared with ${formatPeriod(previous.reference.effective_start)} to ${formatPeriod(previous.reference.effective_end)} on the same basis.`;
+  const amount = `${sign}${money(change.replace(/^[+−]/, ""))}/year`;
+  const rest = ` compared with ${formatPeriod(previous.reference.effective_start)} to ${formatPeriod(previous.reference.effective_end)} on the same basis.`;
+  return <><Delta direction={changeDirection(change)}>{amount}</Delta>{rest}</>;
 }
 
 /** One fuel as its own labelled figure: petrol and diesel are never blended. */
@@ -289,7 +291,7 @@ export function PricesPage({ data, loading, error, refresh, topics, HistoricalTr
         </Row>
       </section>
       <p className="fs-ledger-note" id="change-note">
-        * Change is the latest value minus the previous one, calculated by FinStats from the official series. pp means percentage points.
+        * Change is the latest value minus the previous one, calculated by FinStats from the official series. pp means percentage points. Green and red show direction only, not good or bad.
       </p>
     </div>
   );
