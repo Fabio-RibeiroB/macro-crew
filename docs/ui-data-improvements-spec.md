@@ -675,6 +675,35 @@ Implementation slices (one issue and one focused PR each, in order):
 statistical value. M7's release explanations remain separate; the CrewAI summary
 stays until M7 works and the owner approves any replacement.
 
+### M9 — Finishing touches (approved 17 November 2026)
+
+**Demonstration:** the AI summary follows Bank of England releases the same
+afternoon, the inflation charts show the 2% target, and shared links show a
+proper preview. No statistical value changes.
+
+Implementation slices (one issue and one focused PR each):
+
+1. AI summary timing: run the daily job at 13:00 UK time instead of 17:00, an hour
+   after Bank of England 12:00 releases. It still runs only when a publication is
+   due. The production crontab is updated at deploy time; docs that state 17:00
+   are updated in the same PR.
+2. Inflation target line: CPI and CPIH charts show a labelled reference line at
+   the Bank of England's 2% CPI target, with a text equivalent. The line is
+   context, not data: no other chart gets one and no value is derived from it.
+3. Link previews: each direct URL (overview, subject pages, calendar, about,
+   sources) serves page-specific title, description and Open Graph / Twitter
+   card tags in the static HTML, without JavaScript, plus one site-wide preview
+   image. Preview text and image contain no live figures, so they cannot go
+   stale.
+
+Backlog (not approved): revision labels ("revised from…"), real and nominal pay
+shown side by side. Rejected: CSV downloads. The next-release wording ("See the
+official calendar") stays as it is.
+
+**Acceptance:** each slice is verified on the live site (desktop and mobile where
+visual), keeps all tests green and changes no statistical value. Link previews
+are verified by fetching each direct URL without JavaScript.
+
 ## 12. Release acceptance
 
 - All nine headline cards and supporting Government feeds work against reviewed
