@@ -968,8 +968,8 @@ export default function App({
               the wider outlook.
             </PageHeading>
             <GovernmentPage {...stats} topics={topics} HistoricalTrendCard={HistoricalTrendCard} />
-            <ReleaseSummaries subject="government" {...summaryProps} />
             <EventList {...eventProps} indicatorIds={["uk.public_debt.net_debt_gdp"]} compact />
+            <ReleaseSummaries subject="government" {...summaryProps} />
           </>
         )}
         {page.id === "about" && (
