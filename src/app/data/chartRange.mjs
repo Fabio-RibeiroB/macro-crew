@@ -228,11 +228,13 @@ function niceAxis(lo, hi, forceZeroMin) {
  * Y-axis domain and tick values on readable steps (1, 2, 2.5 or 5 x 10^n), with
  * about 20% headroom and at most six ticks. Padding never pushes a series that
  * is all zero or above below zero, so a rate that was never negative is not
- * drawn on an axis that suggests it could have been.
+ * drawn on an axis that suggests it could have been. `include` lists extra values
+ * (a reference line) the axis must also span; they never alter the plotted data.
  */
-export function chartYAxis(values) {
-  const minVal = values.length ? Math.min(...values) : 0;
-  const maxVal = values.length ? Math.max(...values) : 1;
+export function chartYAxis(values, include = []) {
+  const all = [...values, ...include.filter((v) => Number.isFinite(v))];
+  const minVal = all.length ? Math.min(...all) : 0;
+  const maxVal = all.length ? Math.max(...all) : 1;
   const padding = (maxVal - minVal) * 0.2 || 0.5;
   let lo = minVal - padding;
   const forceZeroMin = minVal >= 0 && lo < 0;

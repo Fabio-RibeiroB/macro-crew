@@ -39,7 +39,8 @@ interface HistoricalTrendCardProps {
   /** Ignored: every chart uses the single accent colour (ADR 0001). Kept so existing callers compile. */
   color?: string;
   data: TrendPoint[];
-  referenceLine?: { value: number; label: string };
+  /** Context line (e.g. the 2% inflation target). The y-axis spans it; `description` joins the text equivalent. */
+  referenceLine?: { value: number; label: string; description?: string };
   curve?: "linear" | "stepAfter";
   /** Snapshot date label from chartUpdated(); omitted when the snapshot has no usable date. */
   updated?: { kind: string; date: string; label: string } | null;
@@ -133,7 +134,7 @@ export function HistoricalTrendCard({
   const values = visibleData
     .map((p) => p.value)
     .filter((v): v is number => typeof v === "number");
-  const { domain: [yMin, yMax], ticks: yTicks } = chartYAxis(values);
+  const { domain: [yMin, yMax], ticks: yTicks } = chartYAxis(values, referenceLine ? [referenceLine.value] : []);
 
   const gradId = `grad-${useId().replace(/:/g, "")}`;
 
@@ -218,7 +219,7 @@ export function HistoricalTrendCard({
           <div
             className="h-64"
             role="img"
-            aria-label={`${title}: line chart of ${visibleData.length} readings${latestPoint ? `, latest ${exactValue(latestPoint.value, unit)} for ${formatPeriod(latestPoint.period ?? latestPoint.date ?? "")}` : ""}. ${gaps.length ? `Periods with no official figure: ${gapText}. ` : ""}Exact values are in the table below.`}
+            aria-label={`${title}: line chart of ${visibleData.length} readings${latestPoint ? `, latest ${exactValue(latestPoint.value, unit)} for ${formatPeriod(latestPoint.period ?? latestPoint.date ?? "")}` : ""}. ${gaps.length ? `Periods with no official figure: ${gapText}. ` : ""}${referenceLine?.description ? `${referenceLine.description} ` : ""}Exact values are in the table below.`}
           >
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
@@ -277,16 +278,22 @@ export function HistoricalTrendCard({
                 {referenceLine && (
                   <ReferenceLine
                     y={referenceLine.value}
-                    stroke="var(--dash-text-4)"
-                    strokeDasharray="4 3"
-                    strokeWidth={1}
-                    label={{
-                      value: referenceLine.label,
-                      position: "insideTopRight",
-                      fontSize: 9,
-                      fill: "var(--dash-text-4)",
-                      dy: -4,
-                    }}
+                    stroke="var(--fs-muted)"
+                    strokeDasharray="5 4"
+                    strokeWidth={1.5}
+                    label={({ viewBox }: { viewBox: { x: number; y: number } }) => (
+                      <text
+                        x={viewBox.x + 4}
+                        y={viewBox.y - 5}
+                        fontSize={12}
+                        fill="var(--fs-muted)"
+                        stroke="var(--fs-paper)"
+                        strokeWidth={3}
+                        paintOrder="stroke"
+                      >
+                        {referenceLine.label}
+                      </text>
+                    )}
                   />
                 )}
                 <Area
