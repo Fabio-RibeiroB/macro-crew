@@ -72,6 +72,8 @@ test("the overview is a table with no Unit column, a plain heading and a change 
   assert.doesNotMatch(html, />Unit</);
   assert.match(html, /<h1[^>]*>Latest figures<\/h1>/);
   assert.doesNotMatch(html, /UK figures|United Kingdom figures|Latest verified figures/);
+  assert.doesNotMatch(html, /Official releases from the ONS/, "no sources line beside the heading");
+  assert.doesNotMatch(html, /class="fs-lede"/);
   assert.match(html, /\* Change is the latest value minus the previous one, calculated by FinStats from the official series\. pp means percentage points\./);
   assert.match(html, /aria-describedby="change-note"/);
   const rows = overviewRowsOf(html);
