@@ -704,6 +704,34 @@ official calendar") stays as it is.
 visual), keeps all tests green and changes no statistical value. Link previews
 are verified by fetching each direct URL without JavaScript.
 
+### M10 — Livelier, clearer pages (approved 17 November 2026)
+
+**Demonstration:** the site is easier to scan and more alive: coloured changes,
+clear sections, an obvious way to click through, a figures ticker, a readable AI
+summary and a one-line MPC summary on the overview. No statistical value changes.
+Design decisions are in ADR 0002.
+
+Implementation slices (one issue and one focused PR each):
+
+1. Overview heading: remove the "Official releases from the ONS, …" line beside
+   "Latest figures".
+2. Colour and contrast: direction colours on every change value (overview table,
+   key figures, ticker), darker muted text, clearer section separation, and row
+   and measure links that look clickable.
+3. Upcoming dates: a livelier list on the overview and calendar: a date block,
+   a coloured source tag (ONS, Bank of England, Ofgem…), a short title with the
+   detail underneath, and "in N days".
+4. AI summary: new disclaimer wording (AI summary of the named publication; it
+   can make mistakes; check the original), and readable layout (bold lead
+   sentence, short points) without editing the AI text.
+5. Overview MPC line: one short AI sentence on the latest MPC decision on the
+   overview, labelled as AI with a link to the full summary. The AI job gains an
+   optional short `headline` field; until it exists the first sentence is used.
+6. Figures ticker: a scrolling strip below the header on every page, per ADR 0002.
+
+**Acceptance:** each slice verified live on desktop and at 360px, light and dark;
+the ticker also with reduced motion. All tests green; no statistical change.
+
 ## 12. Release acceptance
 
 - All nine headline cards and supporting Government feeds work against reviewed
