@@ -343,7 +343,7 @@ test("CPI headlines inflation while CPIH stays labelled supporting data", async 
     const overview = renderToStaticMarkup(
       createElement(App, { pathname: "/", initialData: overviewData }),
     );
-    assert.match(overviewRowsOf(overview).inflation, /<a class="fs-ledger-link" href="\/prices#figures">Inflation<\/a>/);
+    assert.match(overviewRowsOf(overview).inflation, /<a class="fs-ledger-link" href="\/prices#figures">Inflation<svg[^>]*aria-hidden="true"><path d="[^"]*"><\/path><\/svg><\/a>/);
     assert.doesNotMatch(overview, /Inflation \(CPIH\)/);
     const cpihOnly = {
       published_at: "2026-10-21T12:00:00Z",
