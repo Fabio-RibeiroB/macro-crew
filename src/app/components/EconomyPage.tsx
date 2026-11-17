@@ -4,6 +4,7 @@ import { chartUpdated } from "../data/chartMeta.mjs";
 import { chartPoints } from "../data/verified.mjs";
 import { overviewRows } from "../data/overview.mjs";
 import { checkedAt } from "../data/format.mjs";
+import { PageContents } from "./PageContents";
 import { OfficialLink } from "./OfficialLink";
 import { AiCommentary, KeyFigure, Row, Sources } from "./SubjectBlock";
 
@@ -52,6 +53,8 @@ export function EconomyPage({ data, loading, error, refresh, topics, reports, re
           {data ? "The last successfully loaded figures remain below." : "Verified figures are unavailable."}
         </div>
       )}
+
+      <PageContents items={[{ id: "interest-rates", label: "Bank Rate" }, { id: "ai-summary", label: "AI summary" }, { id: "gdp", label: "GDP" }]} />
 
       <section className="fs-block" id="interest-rates" aria-labelledby="interest-rates-title">
         <h2 id="interest-rates-title">Bank Rate</h2>

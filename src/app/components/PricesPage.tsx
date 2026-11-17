@@ -5,6 +5,7 @@ import { chartPoints, formatPeriod } from "../data/verified.mjs";
 import { changeDirection, comparableEnergyPrevious, decimalDifference, overviewRows } from "../data/overview.mjs";
 import { checkedAt } from "../data/format.mjs";
 import { Delta, Lines } from "./IndicatorTable";
+import { PageContents } from "./PageContents";
 import { OfficialLink } from "./OfficialLink";
 import { BigValue, KeyFigure, Row, Sources } from "./SubjectBlock";
 
@@ -107,6 +108,8 @@ export function PricesPage({ data, loading, error, refresh, topics, HistoricalTr
           {data ? "The last successfully loaded figures remain below." : "Verified figures are unavailable."}
         </div>
       )}
+
+      <PageContents items={[{ id: "inflation", label: "Inflation" }, { id: "household-energy", label: "Household energy" }, { id: "petrol-diesel", label: "Petrol and diesel" }]} />
 
       <section className="fs-block" id="inflation" aria-labelledby="inflation-title">
         <h2 id="inflation-title">Inflation</h2>
