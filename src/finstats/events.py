@@ -357,7 +357,11 @@ def deduplicate_events(events):
             prior['linked_indicators']=sorted(set(prior.get('linked_indicators',[]))|set(item.get('linked_indicators',[])))
     return sorted(shared.values(),key=lambda e:(e['date'],e['id']))
 
-def prune_event_generations(root,retain_days=14):
+# Disposable export generations only need to outlive an in-flight page load
+# (current.json then its generation, within seconds); the production disk quota is tight.
+GENERATION_RETAIN_DAYS=3
+
+def prune_event_generations(root,retain_days=GENERATION_RETAIN_DAYS):
     """Prune old immutable public event payloads while preserving active and unknown files."""
     root=Path(root); directory=root/'event-generations'; manifest_path=root/'events-manifest.json'
     if directory.is_symlink() or not directory.is_dir() or not manifest_path.is_file() or manifest_path.is_symlink():

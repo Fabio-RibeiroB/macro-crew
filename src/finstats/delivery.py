@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 from finstats.__main__ import collect
 from finstats.sources import DEFINITIONS, UNEMPLOYMENT_QUALITY, public_definition
 from finstats.storage import atomic_write, encode
-from finstats.events import public_events, prune_event_generations
+from finstats.events import GENERATION_RETAIN_DAYS, public_events, prune_event_generations
 
 PUBLIC_FIELDS = (
     'collection_status', 'last_attempt_at', 'last_successful_check_at', 'evidence_kind',
@@ -181,7 +181,7 @@ def deliver(state_dir, output_dir, event_failure_sink=None, event_unqualified_si
 
 
 
-def prune_generations(root, retain_days=14):
+def prune_generations(root, retain_days=GENERATION_RETAIN_DAYS):
     """Bound disposable exports; never remove source evidence or active data."""
     root = Path(root)
     manifest = json.loads((root / 'current.json').read_text())

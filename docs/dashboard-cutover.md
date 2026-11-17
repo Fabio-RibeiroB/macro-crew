@@ -87,7 +87,8 @@ compatible publisher source before resuming the prior timer. Preserve the databa
 raw source archive and deployment backups; do not downgrade the database or delete
 raw evidence. Keep previously published immutable generations so an already open
 browser can complete its fetch. The delivery command prunes inactive disposable
-export generations older than 14 days. It excludes active generations, symlinks and
+export generations older than 3 days (the 4 GB production disk quota is tight; an open page
+fetches `current.json` and then its generation within seconds). It excludes active generations, symlinks and
 unexpected files, and never prunes the raw archive or SQLite history. Both
 directories still need disk monitoring.
 
