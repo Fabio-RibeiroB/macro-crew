@@ -73,7 +73,9 @@ def _assert_temporal_order(current_date: str, next_date: str, field_label: str) 
         )
 
 
-def validate_latest_snapshot(payload: dict) -> None:
+def validate_latest_snapshot(payload: dict, today: date | None = None) -> None:
+    """Validate an AI report snapshot. ``today`` (default: current date) bounds report dates."""
+    today = today or date.today()
     if not isinstance(payload, dict):
         raise SchemaValidationError("Top-level payload must be an object")
 
@@ -160,6 +162,11 @@ def validate_latest_snapshot(payload: dict) -> None:
             raise SchemaValidationError(
                 f"{report_name}.source must be from approved domains: {REPORT_SOURCE_DOMAINS[report_name]}"
             )
+
+        # A report cannot be dated after the run; the model sometimes copies the
+        # next scheduled publication date into report_date.
+        if obj[date_field] != ALLOWED_PLACEHOLDER and date.fromisoformat(obj[date_field]) > today:
+            raise SchemaValidationError(f"{report_name}.{date_field} cannot be in the future")
 
         _assert_temporal_order(
             obj[date_field],
