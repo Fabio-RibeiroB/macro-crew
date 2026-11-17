@@ -122,6 +122,8 @@ full legacy compatibility tests are currently a separate offline check.
 * `src/app/`: React application, verified-data reader and chart component.
 * `src/uk_macro_crew/`: legacy AI research, report validation/history and CLI.
 * `scheduler.py`: daily legacy scheduling and archive copying; not the official publisher.
+  After each crew attempt it writes a small public `ai_status.json` (outcome and a
+  coarse failure kind only, no error text); Economy shows a notice when it failed.
 * `deploy/`: reviewable Apache/systemd templates, not automatic deployment.
 * `tests/`: offline release fixtures, data integrity/failure tests and frontend tests.
 * `research_report.json`, `history_report.json` and public copies: retained legacy

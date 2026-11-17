@@ -1535,6 +1535,15 @@
   padding: 14px 16px;
   border-radius: 4px;
 }
+/* Calm notice when the latest daily AI update failed; the text carries the meaning. */
+.fs-ai-fail {
+  margin: 0 0 12px;
+  padding: 2px 0 2px 10px;
+  border-left: 3px solid var(--fs-ai);
+  font-size: 14.5px;
+  font-weight: 600;
+  max-width: 70ch;
+}
 .fs-ai-note {
   display: flex;
   flex-wrap: wrap;

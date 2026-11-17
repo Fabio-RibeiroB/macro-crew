@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const keyPatterns = [/\bsk-(?:proj-)?[A-Za-z0-9_-]{24,}/, /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/];
 export function checkStatic(root, publicOnly = false) {
-  const allowed = new Set(['.htaccess', 'research_report.json', 'history_report.json']);
+  const allowed = new Set(['.htaccess', 'research_report.json', 'history_report.json', 'ai_status.json']);
   function walk(dir) {
     for (const name of readdirSync(dir)) {
       const path = resolve(dir, name);
@@ -14,7 +14,7 @@ export function checkStatic(root, publicOnly = false) {
       if (stat.isSymbolicLink()) throw new Error(`Symlink in static input: ${label}`);
       if (publicOnly && !allowed.has(label)) throw new Error(`Unreviewed public file: ${label}`);
       if (stat.isDirectory()) { walk(path); continue; }
-      if (!publicOnly && !/^(?:index\.html|\.htaccess|(?:research_report|history_report)\.json|assets\/[\w.-]+\.(?:js|css|svg|png|woff2))$/.test(label)) {
+      if (!publicOnly && !/^(?:index\.html|\.htaccess|(?:research_report|history_report|ai_status)\.json|assets\/[\w.-]+\.(?:js|css|svg|png|woff2))$/.test(label)) {
         throw new Error(`Unexpected build file: ${label}`);
       }
       if (keyPatterns.some(pattern => pattern.test(readFileSync(path, 'utf8')))) {
