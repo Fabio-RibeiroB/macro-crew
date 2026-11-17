@@ -1,0 +1,161 @@
+/* Figures ticker (ADR 0002). A quiet band under the header: it is not sticky, so
+   anchor scroll offsets only ever need to clear the header. Colours come from the
+   shared direction tokens; the strip has a fixed height so loading never shifts
+   the page. */
+.fs-ticker {
+  --fs-ticker-height: 40px;
+  display: flex;
+  align-items: center;
+  height: var(--fs-ticker-height);
+  background: var(--fs-soft);
+  border-bottom: 1px solid var(--fs-line);
+  color: var(--fs-ink);
+  font-size: 14px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+}
+.fs-ticker-quiet {
+  justify-content: center;
+  color: var(--fs-muted);
+}
+.fs-ticker-toggle {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin: 0 4px 0 8px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fs-muted);
+  cursor: pointer;
+}
+.fs-ticker-toggle:hover,
+.fs-ticker-toggle[aria-pressed="true"] {
+  background: var(--fs-hover);
+  border-color: var(--fs-line-strong);
+  color: var(--fs-ink);
+}
+.fs-ticker-viewport {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  /* Soft edges so items slide in and out instead of being cut. */
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+}
+.fs-ticker-track {
+  --fs-ticker-duration: 90s;
+  display: flex;
+  width: max-content;
+  will-change: transform;
+  animation: fs-ticker-scroll var(--fs-ticker-duration) linear infinite;
+}
+/* Two identical lists; the track moves exactly one list width, so the loop is seamless. */
+@keyframes fs-ticker-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.fs-ticker:hover .fs-ticker-track,
+.fs-ticker:focus-within .fs-ticker-track,
+.fs-ticker[data-motion="paused"] .fs-ticker-track {
+  animation-play-state: paused;
+}
+.fs-ticker-list {
+  flex: none;
+  min-width: 100vw;
+  display: flex;
+  justify-content: space-around;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fs-ticker-item {
+  flex: none;
+  white-space: nowrap;
+  border-left: 1px solid var(--fs-line-strong);
+}
+.fs-root .fs-ticker-item > a,
+.fs-ticker-item > span {
+  display: block;
+  padding: 11px 18px;
+  color: inherit;
+  text-decoration: none;
+}
+.fs-root .fs-ticker-item > a:hover {
+  background: var(--fs-hover);
+}
+.fs-root .fs-ticker-item > a:hover .fs-ticker-label {
+  text-decoration: underline;
+}
+.fs-root .fs-ticker a:focus-visible {
+  outline-offset: -3px;
+}
+.fs-ticker-label {
+  font-weight: 600;
+  color: var(--fs-muted);
+}
+.fs-ticker-value {
+  font-weight: 700;
+}
+.fs-ticker-change {
+  font-weight: 700;
+}
+.fs-ticker-item[data-dir="up"] .fs-ticker-change {
+  color: var(--fs-up);
+}
+.fs-ticker-item[data-dir="down"] .fs-ticker-change {
+  color: var(--fs-down);
+}
+.fs-ticker-item[data-dir="flat"] .fs-ticker-change {
+  color: var(--fs-muted);
+  font-weight: 600;
+}
+.fs-ticker-meta {
+  color: var(--fs-muted);
+}
+
+/* No motion: a static strip that scrolls sideways by hand or keyboard. */
+.fs-ticker[data-motion="static"] .fs-ticker-viewport {
+  overflow-x: auto;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+.fs-ticker[data-motion="static"] .fs-ticker-track {
+  animation: none;
+  will-change: auto;
+}
+.fs-ticker[data-motion="static"] .fs-ticker-list {
+  min-width: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fs-ticker .fs-ticker-track {
+    animation: none;
+    will-change: auto;
+  }
+  .fs-ticker .fs-ticker-viewport {
+    overflow-x: auto;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .fs-ticker .fs-ticker-list {
+    min-width: 0;
+  }
+  .fs-ticker .fs-ticker-list[aria-hidden="true"],
+  .fs-ticker .fs-ticker-toggle {
+    display: none;
+  }
+}
+@media (max-width: 480px) {
+  .fs-ticker {
+    font-size: 13px;
+  }
+  .fs-root .fs-ticker-item > a,
+  .fs-ticker-item > span {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}

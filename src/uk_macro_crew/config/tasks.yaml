@@ -55,6 +55,7 @@ research_task:
     - CPIH: [value]% annual rate year-on-year (published: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
     - GDP: [+/-value]% (published: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
     - Monetary Policy Report Summary: [comprehensive paragraph summary covering key policy decisions, inflation outlook, economic growth assessment, and forward-looking guidance - minimum 3-4 sentences] (report date: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
+    - Monetary Policy Report Headline: [one plain sentence of at most 20 words stating the report's main message; use only facts and figures that appear in your summary above, add no new numbers]
     - Financial Stability Report Summary: [comprehensive paragraph summary covering banking system resilience, key risk areas, household debt concerns, commercial real estate issues, and systemic risk assessment - minimum 3-4 sentences] (report date: [YYYY-MM-DD]) (next: [YYYY-MM-DD]) (source: [ACTUAL_URL_FROM_SEARCH])
     
     CRITICAL FSR REQUIREMENT:
@@ -104,6 +105,8 @@ reporting_task:
     6. Include publication dates and sources for all data points
     7. Mark unavailable data as "not available" rather than omitting fields
     8. Always include the plain_english_context section with all four fields
+    9. monetary_policy_report may include an optional "headline" (one plain sentence, at most 20 words,
+       maximum 160 characters, with no figures that are not in the summary). Leave it out rather than invent one.
 
     The JSON structure should be:
     {
@@ -130,6 +133,7 @@ reporting_task:
       "current_report_summaries": {
         "monetary_policy_report": {
           "summary": "Comprehensive paragraph summary covering key policy decisions, inflation outlook, economic growth assessment, and forward-looking guidance - minimum 3-4 sentences providing substantive insights into the Bank's monetary policy stance and economic assessment...",
+          "headline": "One plain sentence, at most 20 words, giving the report's main message. Use only facts and figures that appear in the summary; omit this field if unsure.",
           "report_date": "2025-12-17",
           "next_publication_date": "2026-02-06",
           "source": "https://www.bankofengland.co.uk/monetary-policy-summary-and-minutes/2025/december-2025"
