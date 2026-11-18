@@ -762,6 +762,7 @@ Implementation slices (one issue and one focused PR each):
    the ONS xlsx is the only official route; Housing shows it as an optional section.
 3. Mortgage rates: Bank of England quoted rates for new 2-year and 5-year fixed
    mortgages at 75% loan-to-value (Bankstats, monthly), with Bank Rate for context.
+4. Say which average each house price figure is (#149).
 
 Backlog: rent as a share of income (ONS private rental affordability); a modelled
 monthly repayment as a share of pay (needs reviewed assumptions).

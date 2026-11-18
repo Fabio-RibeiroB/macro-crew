@@ -101,6 +101,10 @@ test("Housing shows the ratio as a key figure with its geography, year and histo
   assert.match(text, /England and Wales only/);
   assert.match(text, /year ending September 2025 and earnings in April 2025/);
   assert.match(text, /provisional/);
+  // #149: the ratio's median price is distinct from the UK HPI average price.
+  assert.match(text, /median house price divided by median gross annual workplace-based earnings/);
+  assert.match(text, /not comparable with the UK House Price Index average price above/);
+  assert.match(textOf(section(html, "house-prices")), /ratio below uses the median price paid in England and Wales, which is a different measure/);
   assert.match(text, /Table 1c/);
   assert.match(text, /Official release 26 March 2026/);
   assert.match(text, /29 observations, 1997 to 2025/);

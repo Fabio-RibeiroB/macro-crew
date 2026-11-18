@@ -156,7 +156,7 @@ const topics = {
     caution: "This Labour Force Survey estimate has greater sampling uncertainty than before the pandemic.",
   },
   house_price_level: {
-    short: "House prices", Icon: Landmark, measurement: "UK average house price · pounds", color: "#547b8a", detailHref: "/housing#house-prices", meaning: "The average price of a home sold in the United Kingdom.", caution: "Recent UK HPI estimates are provisional and can be revised."
+    short: "House prices", Icon: Landmark, measurement: "UK HPI average price (mix-adjusted) · pounds", color: "#547b8a", detailHref: "/housing#house-prices", meaning: "The UK House Price Index average price of a home sold in the United Kingdom: a mix-adjusted average (geometric mean), not the median.", caution: "Recent UK HPI estimates are provisional and can be revised."
   },
   household_energy: {
     short: "Household energy", Icon: Fuel,
