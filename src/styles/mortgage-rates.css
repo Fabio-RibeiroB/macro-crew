@@ -1,0 +1,50 @@
+/* Housing "Mortgage rates": chart key and tooltip. Dash patterns, not colour alone, tell the lines apart. */
+.fs-mortgage-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  font: 600 13px/1.3 var(--font-body);
+  color: var(--fs-ink);
+}
+.fs-mortgage-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.fs-mortgage-swatch {
+  flex: none;
+}
+.fs-mortgage-tip {
+  background: var(--dash-tooltip-bg);
+  border: 1px solid var(--dash-tooltip-bdr);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+}
+.fs-mortgage-tip-date {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--dash-text-4);
+}
+.fs-mortgage-tip ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.fs-mortgage-tip li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--dash-text-1);
+}
+.fs-mortgage-tip strong {
+  margin-left: auto;
+  padding-left: 12px;
+  font-variant-numeric: tabular-nums;
+}

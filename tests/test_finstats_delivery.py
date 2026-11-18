@@ -270,6 +270,7 @@ def test_delivery_publishes_cpi_headline_with_core_metrics_retained(tmp_path):
         'regular_pay_nominal_growth', 'regular_pay_real_growth', 'unemployment',
         'public_debt', 'private_rent_growth', 'private_rent_level',
         'gilt_5y', 'gilt_10y', 'gilt_20y',
+        'mortgage_2y_fixed_75', 'mortgage_5y_fixed_75',
         'house_price_level', 'house_price_growth', 'petrol_price', 'diesel_price',
         'household_energy'}
     cpi = data['metrics']['cpi']

@@ -1,5 +1,16 @@
 # Recorded official series
 
+## Bank of England quoted mortgage rates (issue #136)
+
+`boe_quoted_mortgage_rates_2y_5y_75ltv_monthly.csv` is the exact combined monthly
+Database CSV response for IUMBV34 (2-year fixed, 75% LTV) and IUMBV42 (5-year
+fixed, 75% LTV), requested from 1 January 1995 through the current date. It was
+retrieved read-only on 18 November 2026 from the endpoint encoded in the metric
+definitions. It is labelled recorded fixture evidence and is accepted only by
+offline fixture replay; it cannot be promoted to official public figures. The
+latest captured observation is the October 2026 monthly average. See
+`docs/mortgage-rate-qualification.md`.
+
 ## Bank of England gilt nominal par yields (issue #37)
 
 `boe_nominal_par_yields_5_10_20_daily.csv` is the exact combined daily Database
