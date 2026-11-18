@@ -6,6 +6,7 @@ import { realPriceSeries, realPriceTitle, baseMonthLabel } from "../data/realPri
 import { overviewRows, priceToEarningsRow } from "../data/overview.mjs";
 import { checkedAt } from "../data/format.mjs";
 import { PageContents } from "./PageContents";
+import { MoreDetail } from "./MoreDetail";
 import { OfficialLink } from "./OfficialLink";
 import { KeyFigure, Row, Sources } from "./SubjectBlock";
 import { MortgageRatesSection } from "./MortgageRatesSection";
@@ -85,12 +86,22 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
         <Row label="Key figure" labelId="rent-key-label">{figure("rent", rent, "Office for National Statistics")}</Row>
         <Row label="What it means" labelId="rent-means-label">
           <div className="fs-means">
-            <p>Annual change in private rents across the United Kingdom, from the ONS Price Index of Private Rents. Beside it is the average monthly rent in pounds: the index's mix-adjusted average (a weighted geometric mean), not the median.</p>
             <p>
-              ONS publishes UK estimates with a two-month revision window: the latest two months are provisional.
-              Northern Ireland data for those two months are imputed from its latest available two-month inflation
-              rate, then revised when observed data arrive.
+              How much UK private rents changed over the past year, with the average monthly rent in pounds beside it
+              (mix-adjusted, not the median). It shows how much more or less renters pay than a year ago.
             </p>
+            <MoreDetail label="How it’s measured">
+              <p>
+                Annual change in private rents across the United Kingdom, from the ONS Price Index of Private Rents.
+                Beside it is the average monthly rent in pounds: the index's mix-adjusted average (a weighted geometric
+                mean), not the median.
+              </p>
+              <p>
+                ONS publishes UK estimates with a two-month revision window: the latest two months are provisional.
+                Northern Ireland data for those two months are imputed from its latest available two-month inflation
+                rate, then revised when observed data arrive.
+              </p>
+            </MoreDetail>
             <OfficialLink href="https://www.ons.gov.uk/economy/inflationandpriceindices/bulletins/privaterentandhousepricesuk/latest">
               Read the latest ONS release
             </OfficialLink>
@@ -113,21 +124,32 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
         <Row label="What it means" labelId="house-means-label">
           <div className="fs-means">
             <p>
-              The UK House Price Index average price: a mix-adjusted average (geometric mean) of sale prices, not the
-              median. Mix-adjusted means it reflects a typical mix of homes, so a month with more expensive sales
-              doesn't push it up on its own. The change on a year earlier is shown beside it.
+              UK House Price Index average (mix-adjusted, not the median), with the change on a year earlier beside it.
+              It shows whether UK house prices are rising or falling.
             </p>
-            <p>
-              The house price to earnings ratio below uses the median price paid in England and Wales, which is a
-              different measure, so the two £ figures should not be compared directly.
-            </p>
-            <p>The national average covers the United Kingdom. The latest estimates are provisional and may be revised.</p>
             {real && (
               <p id="house-real-means">
-                The second chart is a FinStats calculation, not an official statistic. It restates each month's average price in {baseMonthLabel(real.base)} prices
-                using the ONS Consumer Prices Index (CPI), so earlier prices are scaled up by inflation since then. A month missing from either series stays a gap.
+                The second chart is a FinStats calculation, not an official statistic: it shows prices after inflation.
               </p>
             )}
+            <MoreDetail label="How it’s measured">
+              <p>
+                The UK House Price Index average price: a mix-adjusted average (geometric mean) of sale prices, not the
+                median. Mix-adjusted means it reflects a typical mix of homes, so a month with more expensive sales
+                doesn't push it up on its own. The change on a year earlier is shown beside it.
+              </p>
+              <p>
+                The house price to earnings ratio below uses the median price paid in England and Wales, which is a
+                different measure, so the two £ figures should not be compared directly.
+              </p>
+              <p>The national average covers the United Kingdom. The latest estimates are provisional and may be revised.</p>
+              {real && (
+                <p>
+                  The second chart is a FinStats calculation, not an official statistic. It restates each month's average price in {baseMonthLabel(real.base)} prices
+                  using the ONS Consumer Prices Index (CPI), so earlier prices are scaled up by inflation since then. A month missing from either series stays a gap.
+                </p>
+              )}
+            </MoreDetail>
             <OfficialLink href="https://www.gov.uk/government/collections/uk-house-price-index-reports">
               Read the UK House Price Index reports
             </OfficialLink>
@@ -172,17 +194,23 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
           <Row label="What it means" labelId="ratio-means-label">
             <div className="fs-means">
               <p>
-                How many times the typical yearly pay of someone working in England and Wales a typical home costs: the
-                median house price divided by median gross annual workplace-based earnings. A higher ratio means homes
+                How many times a typical year’s pay a typical home costs in England and Wales. A higher ratio means homes
                 are less affordable on typical pay.
               </p>
-              <p>
-                ONS publishes it once a year, for England and Wales only, so it is not comparable with the UK House Price Index
-                average price above. The {ratio.latest.period} figure uses house prices for the year ending September{" "}
-                {ratio.latest.period} and earnings in April {ratio.latest.period}. The latest year is provisional and
-                ONS revises it in the next annual release.
-              </p>
-              <p>It is a simple ratio. ONS notes that many other factors, such as deposits and mortgage rates, also affect affordability.</p>
+              <MoreDetail label="How it’s measured">
+                <p>
+                  How many times the typical yearly pay of someone working in England and Wales a typical home costs: the
+                  median house price divided by median gross annual workplace-based earnings. A higher ratio means homes
+                  are less affordable on typical pay.
+                </p>
+                <p>
+                  ONS publishes it once a year, for England and Wales only, so it is not comparable with the UK House Price Index
+                  average price above. The {ratio.latest.period} figure uses house prices for the year ending September{" "}
+                  {ratio.latest.period} and earnings in April {ratio.latest.period}. The latest year is provisional and
+                  ONS revises it in the next annual release.
+                </p>
+                <p>It is a simple ratio. ONS notes that many other factors, such as deposits and mortgage rates, also affect affordability.</p>
+              </MoreDetail>
               <OfficialLink href="https://www.ons.gov.uk/peoplepopulationandcommunity/housing/bulletins/housingaffordabilityinenglandandwales/latest">
                 Read the ONS housing affordability bulletin
               </OfficialLink>
