@@ -767,6 +767,28 @@ Implementation slices (one issue and one focused PR each):
 Backlog: rent as a share of income (ONS private rental affordability); a modelled
 monthly repayment as a share of pay (needs reviewed assumptions).
 
+### M12 — Simpler pages (approved 18 November 2026)
+
+**Demonstration:** subject pages are short and plain on mobile: one or two
+sentences per measure, with technical detail one tap away (ADR 0004). No
+statistical value changes.
+
+Implementation slices (one issue and one focused PR each):
+
+1. Shared disclosure: a `MoreDetail` component (native details/summary, "?"
+   glyph plus label, inline, reduced-motion safe, opens for print) and the
+   Sources row collapsed to one line (publisher and last check) on every page.
+2. Prices and Jobs & Pay: trim "What it means" to plain sentences; move
+   methodology and caveats into `MoreDetail`.
+3. Economy and Housing: the same.
+4. Government: the same, plus the gilt key figure named "10-year gilt yield" at
+   2 decimal places, and the Budget reading guide given a clear heading
+   ("How to read Budget announcements") without the decorative eyebrow, with its
+   longer text in `MoreDetail`.
+
+**Acceptance:** each page verified live at 360px and desktop, light and dark;
+disclosures open by tap and keyboard; no figure changes; tests green.
+
 **Acceptance:** sources qualified and recorded; definitions, units, geography and
 reference periods shown; verified live; no change to existing figures.
 
