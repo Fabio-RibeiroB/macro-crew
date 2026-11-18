@@ -85,7 +85,7 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
         <Row label="Key figure" labelId="rent-key-label">{figure("rent", rent, "Office for National Statistics")}</Row>
         <Row label="What it means" labelId="rent-means-label">
           <div className="fs-means">
-            <p>Annual change in average private rents across the United Kingdom, from the ONS Price Index of Private Rents. The average monthly rent in pounds is shown beside it.</p>
+            <p>Annual change in private rents across the United Kingdom, from the ONS Price Index of Private Rents. Beside it is the average monthly rent in pounds: the index's mix-adjusted average (a weighted geometric mean), not the median.</p>
             <p>
               ONS publishes UK estimates with a two-month revision window: the latest two months are provisional.
               Northern Ireland data for those two months are imputed from its latest available two-month inflation
@@ -99,7 +99,7 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
         <Row label="Chart" labelId="rent-chart-label">
           {charts([
             [rent, { title: rent?.definition?.title, label: "Annual rent growth", unit: "%", unitDescription: "percent" }],
-            [rentLevel, { title: rentLevel?.definition?.title, label: "Average monthly rent", unit: "£", unitDescription: "pounds per month" }],
+            [rentLevel, { title: rentLevel?.definition?.title, label: "Average monthly rent (ONS PIPR, mix-adjusted)", unit: "£", unitDescription: "pounds per month" }],
           ])}
         </Row>
         <Row label="Sources" labelId="rent-sources-label">
@@ -112,7 +112,15 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
         <Row label="Key figure" labelId="house-key-label">{figure("house-prices", price, "HM Land Registry and ONS")}</Row>
         <Row label="What it means" labelId="house-means-label">
           <div className="fs-means">
-            <p>The average price of a home sold in the United Kingdom, from the UK House Price Index. The change on a year earlier is shown beside it.</p>
+            <p>
+              The UK House Price Index average price: a mix-adjusted average (geometric mean) of sale prices, not the
+              median. Mix-adjusted means it reflects a typical mix of homes, so a month with more expensive sales
+              doesn't push it up on its own. The change on a year earlier is shown beside it.
+            </p>
+            <p>
+              The house price to earnings ratio below uses the median price paid in England and Wales, which is a
+              different measure, so the two £ figures should not be compared directly.
+            </p>
             <p>The national average covers the United Kingdom. The latest estimates are provisional and may be revised.</p>
             {real && (
               <p id="house-real-means">
@@ -127,7 +135,7 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
         </Row>
         <Row label="Chart" labelId="house-chart-label">
           {charts([
-            [price, { title: price?.definition?.title, label: "Average house price", unit: "£", unitDescription: "pounds" }],
+            [price, { title: "Average house price (UK HPI, mix-adjusted)", label: "Average house price (UK HPI, mix-adjusted)", unit: "£", unitDescription: "pounds" }],
             [priceGrowth, { title: priceGrowth?.definition?.title, label: "Annual change", unit: "%", unitDescription: "percent" }],
           ])}
           {real ? (
@@ -135,7 +143,7 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
               <div className="fs-housing-charts fs-housing-real">
                 <HistoricalTrendCard
                   title={realPriceTitle(real.base)}
-                  label="Average house price after inflation"
+                  label="Average house price after inflation (UK HPI, mix-adjusted)"
                   unit="£"
                   unitDescription={`pounds in ${baseMonthLabel(real.base)} prices`}
                   data={real.points}
@@ -169,7 +177,7 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
                 are less affordable on typical pay.
               </p>
               <p>
-                ONS publishes it once a year, for England and Wales only, so it is not comparable with the UK-wide
+                ONS publishes it once a year, for England and Wales only, so it is not comparable with the UK House Price Index
                 average price above. The {ratio.latest.period} figure uses house prices for the year ending September{" "}
                 {ratio.latest.period} and earnings in April {ratio.latest.period}. The latest year is provisional and
                 ONS revises it in the next annual release.

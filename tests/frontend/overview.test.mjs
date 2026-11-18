@@ -26,6 +26,12 @@ test("exact decimal differences keep published precision and use a real minus si
   assert.equal(decimalDifference("273037", "272146"), "+891");
 });
 
+test("the house prices definition names the statistic (#149)", () => {
+  const row = overviewRows(full()).find((r) => r.id === "house-prices");
+  const text = JSON.stringify(row);
+  assert.match(text, /UK House Price Index average price of a home: mix-adjusted, not the median/);
+});
+
 test("every number on the overview carries its unit", () => {
   const rows = Object.fromEntries(overviewRows(full()).map((row) => [row.id, row]));
   const t = (row, cell) => row[cell].map((line) => line.text);

@@ -112,7 +112,7 @@ const DEFINITIONS = {
   wages: "Yearly growth in regular pay (Great Britain), before bonuses. Three-month average.",
   unemployment: "Share of active people aged 16 and over who have no job and are looking for one.",
   rent: "Yearly change in private rents.",
-  house_prices: "The average price paid for a home.",
+  house_prices: "UK House Price Index average price of a home: mix-adjusted, not the median.",
   energy: "Ofgem's price cap for a typical Direct Debit home in Great Britain. It caps rates, not bills.",
   fuel: "Average pump prices in pence per litre.",
   gdp: "How much the economy's output changed compared with the previous month.",

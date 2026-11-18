@@ -173,3 +173,16 @@ test("without the CPI index the real-price view is hidden with an honest note", 
     assert.match(page, /Key figure £273,037/);
   }
 });
+
+test("Housing says which average each £ figure is (#149)", async () => {
+  const html = await renderHousing(fullFixture());
+  const prices = textOf(section(html, "house-prices")).replace(/&#x27;|’/g, "'");
+  assert.match(prices, /UK House Price Index average price: a mix-adjusted average \(geometric mean\) of sale prices, not the median/);
+  assert.match(prices, /Mix-adjusted means it reflects a typical mix of homes/);
+  assert.match(prices, /ratio below uses the median price paid in England and Wales, which is a different measure, so the two £ figures should not be compared directly/);
+  const charted = textOf(await renderHousingWithCard(fullFixture()));
+  assert.match(charted, /Average house price \(UK HPI, mix-adjusted\)/);
+  assert.match(charted, /Average house price after inflation \(UK HPI, mix-adjusted\)/);
+  assert.match(charted, /Average monthly rent \(ONS PIPR, mix-adjusted\)/);
+  assert.match(textOf(section(html, "rent")), /mix-adjusted average \(a weighted geometric mean\), not the median/);
+});
