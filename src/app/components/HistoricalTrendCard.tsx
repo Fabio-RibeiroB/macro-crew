@@ -44,9 +44,12 @@ interface HistoricalTrendCardProps {
   curve?: "linear" | "stepAfter";
   /** Snapshot date label from chartUpdated(); omitted when the snapshot has no usable date. */
   updated?: { kind: string; date: string; label: string } | null;
+  /** Range selected on first render; annual series start on "All" so the history is visible. */
+  defaultRange?: string;
 }
 
 function formatAxisDate(dateStr: string) {
+  if (/^\d{4}$/.test(dateStr)) return dateStr;
   const monthly = /^\d{4}-\d{2}$/.test(dateStr);
   const d = new Date(monthly ? `${dateStr}-01T00:00:00Z` : `${dateStr}T00:00:00Z`);
   if (isNaN(d.getTime())) return dateStr;
@@ -67,6 +70,7 @@ interface CustomTooltipProps {
 function exactValue(value: number | null | undefined, unit: string) {
   if (value === null || value === undefined) return "Missing";
   if (unit === "£") return `£${Number(value).toLocaleString("en-GB")}`;
+  if (unit === "×") return `${Number(value).toFixed(2)}×`;
   return `${value}${unit}`;
 }
 
@@ -114,8 +118,9 @@ export function HistoricalTrendCard({
   referenceLine,
   curve = "linear",
   updated,
+  defaultRange = DEFAULT_CHART_RANGE,
 }: HistoricalTrendCardProps) {
-  const [selectedRange, setSelectedRange] = useState(DEFAULT_CHART_RANGE);
+  const [selectedRange, setSelectedRange] = useState(defaultRange);
   const noteId = useId();
   const selection = useMemo(
     () => filterChartRange(data, selectedRange),

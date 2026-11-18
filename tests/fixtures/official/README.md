@@ -220,3 +220,20 @@ net debt excluding public sector banks as a percentage of GDP (NSA); it is not
 the deficit/net borrowing series or the wider PSNFL series. The fixture is
 evidence for parser and producer→reader tests only and cannot be published as
 official production data.
+
+## ONS house price to workplace-based earnings ratio (issue #135)
+
+`ons_house_price_earnings_ratio_table_1c.xlsx` is a reduced, explicitly test-only
+projection of the live ONS workbook (current edition, released 26 March 2026,
+recorded 18 November 2026). `tests/affordability_workbook.py` wrote it: the 21
+reviewed sheet names are kept, every sheet except `1c` is empty, and `1c` keeps
+rows 1 to 3 (title, header and the England and Wales `K04000001` row) with the
+original text and numeric cell values, including binary noise such as
+`5.0599999999999996`. The parser stores it as `5.06`, the two-decimal format the
+table uses. Its receipt records the original 513,860-byte file's SHA-256.
+
+`ons_house_price_earnings_dataset_page_2026-03-26.html` keeps only the page's
+schema.org Dataset JSON-LD block, verbatim. It supplies the release date
+(2026-03-26) and the one workbook link. The qualification is in
+[the house price to earnings qualification](../../../docs/house-price-earnings-qualification.md).
+Neither file can be published as official production data.

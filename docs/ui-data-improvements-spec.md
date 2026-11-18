@@ -758,6 +758,8 @@ Implementation slices (one issue and one focused PR each):
 2. House price to earnings ratio: the official ONS ratio of median house price
    to median gross annual workplace-based earnings (annual; England and Wales,
    shown with that geography), with its history.
+   Source qualified in [the house price to earnings qualification](house-price-earnings-qualification.md):
+   the ONS xlsx is the only official route; Housing shows it as an optional section.
 3. Mortgage rates: Bank of England quoted rates for new 2-year and 5-year fixed
    mortgages at 75% loan-to-value (Bankstats, monthly), with Bank Rate for context.
 

@@ -62,3 +62,7 @@ modified by a test run. A recorded fixture can never become public official data
   August 2026 reference month. The full original CSV hash and size are in that
   receipt; only the UK national rows from 2016 onward are included in the test
   fixture. No fixture value is a live production figure.
+- `producer-fuel-v1.json` also carries the optional annual `price_to_earnings`
+  member (ONS Table 1c, England and Wales, 1997 to 2025), produced from the
+  labelled reduced ONS workbook fixture and dataset-page fixture. Its period
+  labels are plain years, not months.

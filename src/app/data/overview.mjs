@@ -75,6 +75,7 @@ const UNITS = {
   poundsPerYear: { value: (v) => `£${plain(v)}/year`, change: (d) => poundChange(d, "/year") },
   poundsPerMonth: { value: (v) => `£${plain(v)}/month` },
   pence: { value: (v) => `${plain(v)}p`, change: (d) => `${d}p` },
+  ratio: { value: (v) => `${plain(fixed(v, 2))} times earnings`, change: (d) => `${d} times` },
 };
 function poundChange(difference, suffix) {
   const sign = /^[+−]/.test(difference) ? difference[0] : "";
@@ -296,6 +297,29 @@ function gdpRow(base, metric) {
     previous: previous ? [valueLine(previous.value, "signedPercent"), sub(monthLabel(previous.period))] : [na()],
     change: previous ? [changeLine(metric.latest.value, previous.value, "signedPercent")] : [na()],
     period: [{ text: monthLabel(metric.latest.period) }],
+    warnings: [statusOf(metric)].filter(Boolean),
+  };
+}
+
+/**
+ * Housing's annual ONS ratio of median house price to median workplace-based earnings
+ * (England and Wales). Not one of the nine headline rows: only Housing shows it, and
+ * only when a verified reading exists. The previous value is the year before, and only
+ * when the history proves it is the adjacent year.
+ */
+export function priceToEarningsRow(metric) {
+  const base = {
+    id: "price-to-earnings", kind: "price_to_earnings", name: "House price to earnings",
+    definition: "How many times typical yearly pay a typical home costs in England and Wales.",
+  };
+  if (!metric?.latest) return missingRow(base);
+  const previous = previousReading(metric);
+  return {
+    ...base,
+    latest: [valueLine(metric.latest.value, "ratio")],
+    previous: previous ? [valueLine(previous.value, "ratio"), sub(previous.period)] : [na()],
+    change: previous ? [changeLine(metric.latest.value, previous.value, "ratio")] : [na()],
+    period: [{ text: metric.latest.period }],
     warnings: [statusOf(metric)].filter(Boolean),
   };
 }
