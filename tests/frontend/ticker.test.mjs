@@ -9,6 +9,7 @@ import {
   MPC_DECISION_WINDOW_DAYS,
   itemText,
   motionState,
+  mpcAiItem,
   mpcItem,
   tickerDuration,
   tickerItems,
@@ -224,4 +225,14 @@ test("the MPC headline report loads on every page and is passed to the crawl", (
   const app = readFileSync(new URL("../../src/app/App.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(app, /page\.id !== "economy" && page\.id !== "overview"/);
   assert.match(app, /<FiguresTicker [^>]*reports=\{reports\}/);
+});
+
+test("the crawl shows the AI summary's first sentence whole, never cut off", () => {
+  const sentence =
+    "The November 2026 Monetary Policy Report highlights a decision by the Bank of England's Monetary Policy Committee to increase the Bank Rate to 4% in response to rising inflation caused by elevated global energy prices related to the ongoing Middle Eastern conflict.";
+  const item = mpcAiItem([{ key: "monetary_policy_report", summary: `${sentence} The Committee noted more.` }]);
+  assert.equal(item.value, sentence);
+  assert.doesNotMatch(item.value, /…$/);
+  const tooLong = `${"word ".repeat(80).trim()}.`;
+  assert.equal(mpcAiItem([{ key: "monetary_policy_report", summary: tooLong }]), null);
 });
