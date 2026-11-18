@@ -18,5 +18,6 @@ export function fullFixture() {
   const fuel = load("producer-fuel-v1.json");
   data.metrics.petrol_price = fuel.metrics.petrol_price;
   data.metrics.diesel_price = fuel.metrics.diesel_price;
+  data.metrics.cpi_index = fuel.metrics.cpi_index;
   return data;
 }

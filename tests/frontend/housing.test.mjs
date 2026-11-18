@@ -124,3 +124,52 @@ test("without verified data Housing shows honest placeholders and no zero", asyn
   none.metrics.house_price_growth = { ...none.metrics.house_price_growth, ...gone };
   assert.match(textOf(section(await renderHousing(none), "house-prices")), /A verified history is not available yet/);
 });
+
+async function renderHousingWithCard(data) {
+  const { createServer } = await import("vite");
+  const { createElement } = await import("react");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, appType: "custom" });
+  try {
+    const { HousingPage } = await server.ssrLoadModule("/src/app/components/HousingPage.tsx");
+    const { HistoricalTrendCard: Card } = await server.ssrLoadModule("/src/app/components/HistoricalTrendCard.tsx");
+    return renderToStaticMarkup(createElement(HousingPage, { data, loading: false, error: null, refresh() {}, HistoricalTrendCard: Card }));
+  } finally { await server.close(); }
+}
+
+test("House prices shows a labelled after-inflation chart with its base month, official figure stays primary", async () => {
+  const html = await renderHousingWithCard(fullFixture());
+  const text = textOf(html);
+  // The recorded house prices end in August 2026 and CPI in September 2026: the base is August.
+  assert.match(text, /After inflation \(FinStats calculation using ONS CPI, August 2026 prices\)/);
+  assert.match(text, /Exact values in pounds in August 2026 prices/);
+  assert.match(text, /The second chart is a FinStats calculation, not an official statistic/);
+  assert.match(text, /CPI index, used for the after-inflation chart/);
+  assert.doesNotMatch(text, /House prices after inflation are not shown/);
+  // The official chart and key figure come first and are unchanged.
+  assert.ok(text.indexOf("Average house price") < text.indexOf("After inflation (FinStats calculation"));
+  const full = await renderHousing(fullFixture());
+  const prices = textOf(section(full, "house-prices"));
+  assert.match(prices, /Key figure £273,037/);
+  assert.match(prices, /Official figure · HM Land Registry and ONS/);
+});
+
+test("without the CPI index the real-price view is hidden with an honest note", async () => {
+  for (const mutate of [
+    (data) => { delete data.metrics.cpi_index; },
+    (data) => {
+      data.metrics.cpi_index = { ...data.metrics.cpi_index, latest: null, history: [], collection_status: "unavailable", validation_status: "unavailable" };
+    },
+  ]) {
+    const data = fullFixture();
+    mutate(data);
+    const html = await renderHousingWithCard(data);
+    const text = textOf(html);
+    assert.doesNotMatch(text, /After inflation \(FinStats calculation/);
+    assert.doesNotMatch(text, /The second chart is a FinStats calculation/);
+    assert.match(text, /House prices after inflation are not shown because the official ONS CPI index is not available yet/);
+    assert.match(text, /Average house price/); // the official charts remain
+    const page = textOf(section(await renderHousing(data), "house-prices"));
+    assert.match(page, /Key figure £273,037/);
+  }
+});
