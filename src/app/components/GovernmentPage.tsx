@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import { RefreshCw } from "lucide-react";
 import { chartUpdated } from "../data/chartMeta.mjs";
 import { chartPoints, previousReading } from "../data/verified.mjs";
 import { NOT_AVAILABLE, changeDirection, dayLabel, decimalDifference, monthLabel } from "../data/overview.mjs";
@@ -126,12 +125,8 @@ export function GovernmentPage({ data, loading, error, refresh, topics, Historic
       <div className="fs-container fs-economy fs-government" id="figures">
         <div className="fs-statusbar">
           <p>
-            {data ? <>Figures last updated {checkedAt(data.published_at)} and can be revised. <a href="/sources">How we check the data</a></> : "Official figures"}
+            {data ? <>Figures last updated {checkedAt(data.published_at)}. We check official sources every 30 minutes and this page updates itself. <a href="/sources">How we check the data</a></> : "Official figures"}
           </p>
-          <button className="fs-text-button" disabled={loading} onClick={() => void refresh()}>
-            <RefreshCw size={15} className={loading ? "fs-spin" : ""} aria-hidden="true" />
-            {loading ? "Checking figures…" : "Check for updates"}
-          </button>
         </div>
         {error && (
           <div className="fs-alert" role="status">

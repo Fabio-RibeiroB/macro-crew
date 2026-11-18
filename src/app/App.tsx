@@ -5,7 +5,6 @@ import {
   Fuel,
   Landmark,
   Moon,
-  RefreshCw,
   ShieldCheck,
   ShoppingBasket,
   Sprout,
@@ -421,14 +420,6 @@ function Statistics({
           <h2 id={headingId}>{title ?? "Latest verified figures"}</h2>
           <p>Each figure has its own reference period and official source.</p>
         </div>
-        <button
-          className="fs-text-button"
-          disabled={loading}
-          onClick={() => void refresh()}
-        >
-          <RefreshCw size={15} className={loading ? "fs-spin" : ""} />
-          {loading ? "Checking figures…" : "Check for updates"}
-        </button>
       </div>
       {error && (
         <div className="fs-alert" role="status">
@@ -473,10 +464,6 @@ function Overview({ data, loading, error, refresh }: any) {
       <span id="figures" className="fs-anchor-alias" />
       <div className="fs-pagehead">
         <h1 id="overview-title">Latest figures</h1>
-        <button className="fs-text-button" disabled={loading} onClick={() => void refresh()}>
-          <RefreshCw size={15} className={loading ? "fs-spin" : ""} aria-hidden="true" />
-          {loading ? "Checking figures…" : "Check for updates"}
-        </button>
       </div>
       {error && (
         <div className="fs-alert" role="status">
@@ -939,8 +926,8 @@ export default function App({
         {page.id === "government" && (
           <>
             <PageHeading eyebrow="Government & Budget" title={page.title}>
-              What to look for in announcements about taxes, public services and
-              the wider outlook.
+              How much the UK government owes, what it costs to borrow, and how to
+              read Budget announcements.
             </PageHeading>
             <GovernmentPage {...stats} topics={topics} HistoricalTrendCard={HistoricalTrendCard} />
             <EventList {...eventProps} indicatorIds={["uk.public_debt.net_debt_gdp"]} compact />
