@@ -2,6 +2,7 @@ import { Suspense, lazy } from "react";
 import { chartUpdated } from "../data/chartMeta.mjs";
 import { checkedAt } from "../data/format.mjs";
 import { MORTGAGE_BASIS, MORTGAGE_RATES, mortgageChart, mortgageFigureRow, mortgageMetrics } from "../data/mortgageRates.mjs";
+import { MoreDetail } from "./MoreDetail";
 import { KeyFigure, Row, Sources } from "./SubjectBlock";
 
 // Charts are lazy like the other trend cards: Recharts stays out of the first load.
@@ -41,17 +42,22 @@ export function MortgageRatesSection({ data }: { data: any }) {
       <Row label="What it means" labelId="mortgage-means-label">
         <div className="fs-means">
           <p>
-            {MORTGAGE_BASIS}. They are averages of the headline rates that banks and building societies advertise
-            for new two-year and five-year fixed-rate mortgages, taking each lender’s lowest available rate at 75%
-            loan-to-value (a 25% deposit) and weighting lenders by their lending. They are averages, not offers: the rate you are offered depends on you, the property and
-            the lender.
+            Average advertised rates on new two-year and five-year fixed-rate mortgages. They are averages, not offers:
+            the rate you are offered depends on you, the property and the lender.
           </p>
-          <p>
-            They are not the rate paid on existing mortgages. Fees and cashback are used to pick the product but are not
-            in the rate. Bank Rate, the Bank of England policy rate, is drawn for context as its value on the last day of
-            each month. The change compares with the previous month, in percentage points (pp). The latest month can be
-            revised.
-          </p>
+          <MoreDetail label="How it’s measured">
+            <p>
+              {MORTGAGE_BASIS}. They are averages of the headline rates that banks and building societies advertise
+              for new two-year and five-year fixed-rate mortgages, taking each lender’s lowest available rate at 75%
+              loan-to-value (a 25% deposit) and weighting lenders by their lending.
+            </p>
+            <p>
+              They are not the rate paid on existing mortgages. Fees and cashback are used to pick the product but are not
+              in the rate. Bank Rate, the Bank of England policy rate, is drawn for context as its value on the last day of
+              each month. The change compares with the previous month, in percentage points (pp). The latest month can be
+              revised.
+            </p>
+          </MoreDetail>
         </div>
       </Row>
       <Row label="Chart" labelId="mortgage-chart-label">
@@ -70,12 +76,14 @@ export function MortgageRatesSection({ data }: { data: any }) {
             <Sources metric={data.metrics[key]} />
           </div>
         ))}
-        <p className="fs-src-note">
-          Bank of England Database quoted household interest rates (IUMBV34 and IUMBV42), Bankstats Table G1.3, from
-          January 1995. Before February 2019 they used month-end values from a sample of lenders; from February 2019 they
-          are monthly averages across the whole market. Last successful checks:{" "}
-          {MORTGAGE_RATES.map(({ key, name }) => `${name} ${checkedAt(data.metrics[key]?.last_successful_check_at ?? null)}`).join("; ")}.
-        </p>
+        <MoreDetail label="How the rates are compiled">
+          <p className="fs-src-note">
+            Bank of England Database quoted household interest rates (IUMBV34 and IUMBV42), Bankstats Table G1.3, from
+            January 1995. Before February 2019 they used month-end values from a sample of lenders; from February 2019 they
+            are monthly averages across the whole market. Last successful checks:{" "}
+            {MORTGAGE_RATES.map(({ key, name }) => `${name} ${checkedAt(data.metrics[key]?.last_successful_check_at ?? null)}`).join("; ")}.
+          </p>
+        </MoreDetail>
       </Row>
     </section>
   );
