@@ -11,8 +11,8 @@ import xml.etree.ElementTree as ET
 import pytest
 
 from finstats.sources import (
-    DEFINITIONS, FUEL_SOURCE_URL, ValidationError, fixture_file,
-    parse, parse_fuel_release_page, public_definition,
+    DEFINITIONS, FUEL_SOURCE_URL, ONS_AFFORDABILITY_URL, ValidationError, fixture_file,
+    parse, parse_fuel_release_page, parse_ons_dataset_page, public_definition,
 )
 
 FIXTURES = Path(__file__).parent / 'fixtures' / 'official'
@@ -28,6 +28,12 @@ def fixture(key):
 def fixture_transport(key):
     """Controlled test transport: reduced data fixtures and retained page evidence."""
     body = fixture(key)
+    if key == 'price_to_earnings':
+        page_body = (FIXTURES / 'ons_house_price_earnings_dataset_page_2026-03-26.html').read_bytes()
+        published, url = parse_ons_dataset_page(page_body)
+        return body, url, published, {
+            'body': page_body, 'url': ONS_AFFORDABILITY_URL,
+            'retrieved_at': '2026-10-21T11:00:00Z', 'evidence_kind': 'official_download'}
     if key.startswith('private_rent_'):
         return body, ('https://www.ons.gov.uk/file?uri=%2Feconomy%2Finflationandpriceindices%2Fdatasets%2Fpriceindexofprivaterentsukmonthlypricestatistics%2F21october2026%2Fpriceindexofprivaterentsukmonthlypricestatistics.xlsx')
     if key.startswith('house_price_'):

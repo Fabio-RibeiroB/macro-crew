@@ -12,7 +12,7 @@ import time
 from urllib.parse import urlsplit
 
 from finstats.__main__ import collect
-from finstats.sources import DEFINITIONS, UNEMPLOYMENT_QUALITY, public_definition
+from finstats.sources import DEFINITIONS, ONS_AFFORDABILITY_FILE, UNEMPLOYMENT_QUALITY, public_definition
 from finstats.storage import atomic_write, encode
 from finstats.events import GENERATION_RETAIN_DAYS, public_events, prune_event_generations
 
@@ -115,6 +115,11 @@ def deliver(state_dir, output_dir, event_failure_sink=None, event_unqualified_si
             if key.startswith('house_price_') and not re.fullmatch(
                     r'/market-trend-data/house-price-index-data/Average-prices-[0-9]{4}-[0-9]{2}\.csv', url.path):
                 raise ValueError('Unexpected UK HPI source CSV URL')
+            if key == 'price_to_earnings' and (
+                    not ONS_AFFORDABILITY_FILE.fullmatch(metric['source_download_url']) or
+                    metric['source_published_date'] is None or
+                    metric['source_published_date'] > metric['retrieved_at'][:10]):
+                raise ValueError('Unexpected ONS affordability workbook URL or release date')
             if key in {'petrol_price', 'diesel_price'} and (
                     url.hostname != 'assets.publishing.service.gov.uk' or
                     not re.fullmatch(r'/media/[a-f0-9]+/CSV__2018_-__\.csv', url.path)):

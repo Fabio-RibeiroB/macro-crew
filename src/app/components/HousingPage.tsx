@@ -3,7 +3,7 @@ import { RefreshCw } from "lucide-react";
 import { chartUpdated } from "../data/chartMeta.mjs";
 import { chartPoints } from "../data/verified.mjs";
 import { realPriceSeries, realPriceTitle, baseMonthLabel } from "../data/realPrices.mjs";
-import { overviewRows } from "../data/overview.mjs";
+import { overviewRows, priceToEarningsRow } from "../data/overview.mjs";
 import { checkedAt } from "../data/format.mjs";
 import { PageContents } from "./PageContents";
 import { OfficialLink } from "./OfficialLink";
@@ -22,6 +22,9 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
   const rows = data ? Object.fromEntries(overviewRows(data).map((row: any) => [row.id, row])) : {};
   const { private_rent_growth: rent, private_rent_level: rentLevel, house_price_level: price, house_price_growth: priceGrowth } =
     data?.metrics ?? {};
+  // Annual, England and Wales only: shown once a verified reading exists, otherwise hidden.
+  const ratio = data?.metrics?.price_to_earnings;
+  const showRatio = Boolean(ratio?.latest);
   // FinStats calculation, not an official figure: shown only when both verified series exist.
   const real = price?.history?.length && data?.metrics?.cpi_index?.history?.length
     ? realPriceSeries(price.history, data.metrics.cpi_index.history)
@@ -75,7 +78,7 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
         </div>
       )}
 
-      <PageContents items={[{ id: "rent", label: "Rent" }, { id: "house-prices", label: "House prices" }, { id: "mortgage-rates", label: "Mortgage rates", show: hasMortgageRates(data) }]} />
+      <PageContents items={[{ id: "rent", label: "Rent" }, { id: "house-prices", label: "House prices" }, { id: "price-to-earnings", label: "House price to earnings", show: showRatio }, { id: "mortgage-rates", label: "Mortgage rates", show: hasMortgageRates(data) }]} />
 
       <section className="fs-block" id="rent" aria-labelledby="rent-title">
         <h2 id="rent-title">Rent</h2>
@@ -152,6 +155,42 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
           </>} />
         </Row>
       </section>
+      {showRatio && (
+        <section className="fs-block" id="price-to-earnings" aria-labelledby="price-to-earnings-title">
+          <h2 id="price-to-earnings-title">House price to earnings</h2>
+          <Row label="Key figure" labelId="ratio-key-label">
+            <KeyFigure row={priceToEarningsRow(ratio)} metric={ratio} publisher="Office for National Statistics" observedLabel="Year" />
+          </Row>
+          <Row label="What it means" labelId="ratio-means-label">
+            <div className="fs-means">
+              <p>
+                How many times the typical yearly pay of someone working in England and Wales a typical home costs: the
+                median house price divided by median gross annual workplace-based earnings. A higher ratio means homes
+                are less affordable on typical pay.
+              </p>
+              <p>
+                ONS publishes it once a year, for England and Wales only, so it is not comparable with the UK-wide
+                average price above. The {ratio.latest.period} figure uses house prices for the year ending September{" "}
+                {ratio.latest.period} and earnings in April {ratio.latest.period}. The latest year is provisional and
+                ONS revises it in the next annual release.
+              </p>
+              <p>It is a simple ratio. ONS notes that many other factors, such as deposits and mortgage rates, also affect affordability.</p>
+              <OfficialLink href="https://www.ons.gov.uk/peoplepopulationandcommunity/housing/bulletins/housingaffordabilityinenglandandwales/latest">
+                Read the ONS housing affordability bulletin
+              </OfficialLink>
+            </div>
+          </Row>
+          <Row label="Chart" labelId="ratio-chart-label">
+            {charts([[ratio, {
+              title: "House price to earnings ratio, England and Wales", label: "Median house price ÷ median earnings",
+              unit: "×", unitDescription: "times annual earnings (ratio)", defaultRange: "All",
+            }]])}
+          </Row>
+          <Row label="Sources" labelId="ratio-sources-label">
+            <Sources metric={ratio} />
+          </Row>
+        </section>
+      )}
       <MortgageRatesSection data={data} />
       <p className="fs-ledger-note" id="change-note">
         * Change is the latest value minus the previous one, calculated by FinStats from the official series. pp means percentage points. Green and red show direction only, not good or bad.

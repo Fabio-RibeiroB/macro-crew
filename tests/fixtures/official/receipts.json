@@ -120,6 +120,38 @@
     "sha256": "3c52d666ba3623d668d6cf7bce60491ed3aa77db3522c2345bb30c6934508450",
     "source_published_date": null
   },
+  "ons_house_price_earnings_ratio_table_1c.xlsx": {
+    "source": "ONS House price to workplace-based earnings ratio, current edition (released 26 March 2026), Table 1c England and Wales row (reduced test fixture)",
+    "source_url": "https://www.ons.gov.uk/file?uri=/peoplepopulationandcommunity/housing/datasets/ratioofhousepricetoworkplacebasedearningslowerquartileandmedian/current/aff1ratioofhousepricetoworkplacebasedearnings.xlsx",
+    "retrieved_at": "2026-11-18T13:47:00Z",
+    "retrieval_time_basis": "Approximate: recorded the same minute as the qualification download; HTTP Date/Last-Modified headers were not retained.",
+    "evidence_kind": "recorded_fixture",
+    "sha256": "0f8a113a0f45fca596936114dd2331ae27abece6a0cf82ea01f3b241b405ee2b",
+    "source_published_date": "2026-03-26",
+    "original": {
+      "sha256": "585bc98112e801fc3dd45dbc5238d05c6507d4e48dc3ec3afab4867eded1c2f4",
+      "bytes": 513860,
+      "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=utf-8"
+    },
+    "projection": {
+      "bytes": 7089,
+      "transform": "Test-only projection written by tests/affordability_workbook.py: the 21 reviewed sheet names are kept, every sheet except 1c is emptied, and sheet 1c keeps rows 1 to 3 (title, header, England and Wales K04000001) with the original text and numeric cell values (for example 5.0599999999999996) as inline strings and numbers. No original workbook is committed.",
+      "ratio_precision": "Table 1c uses numFmtId 4 (#,##0.00). The parser quantizes the binary cell value to two decimals with ROUND_HALF_UP, e.g. 8.2799999999999994 becomes 8.28."
+    }
+  },
+  "ons_house_price_earnings_dataset_page_2026-03-26.html": {
+    "source": "ONS dataset page for House price to workplace-based earnings ratio (reduced test fixture: only the schema.org Dataset JSON-LD block is retained, verbatim)",
+    "url": "https://www.ons.gov.uk/peoplepopulationandcommunity/housing/datasets/ratioofhousepricetoworkplacebasedearningslowerquartileandmedian",
+    "retrieved_at": "2026-11-18T13:47:00Z",
+    "sha256": "d074bff3677d15c2caeaa7d0989784af2c456e21d2d38ec935060215d94e6ec6",
+    "content_type": "text/html; charset=utf-8",
+    "evidence_kind": "recorded_fixture",
+    "original": {
+      "sha256": "8b227e522821c195d84f545c51c7e846a75f91a3d153a765214d9cad98e4479d",
+      "bytes": 41924
+    },
+    "fixture_role": "release date and workbook link for the reduced workbook fixture"
+  },
   "boe_quoted_mortgage_rates_2y_5y_75ltv_monthly.csv": {
     "url": "https://www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=01/Jan/1995&Dateto=now&SeriesCodes=IUMBV34,IUMBV42&CSVF=CN&UsingCodes=Y",
     "retrieved_at": "2026-11-18T13:48:40Z",

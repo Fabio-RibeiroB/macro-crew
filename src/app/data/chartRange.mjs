@@ -41,6 +41,8 @@ function parsePeriod(value) {
       return null;
     return { year, month, day, precision: "day" };
   }
+  const annual = /^(\d{4})$/.exec(value);
+  if (annual) return { year: Number(annual[1]), month: 1, day: null, precision: "year" };
   const monthly = /^(\d{4})-(\d{2})$/.exec(value);
   if (!monthly) return null;
   const year = Number(monthly[1]);
@@ -51,13 +53,14 @@ function parsePeriod(value) {
 
 function formatKey(period) {
   const month = String(period.month).padStart(2, "0");
+  if (period.precision === "year") return String(period.year);
   if (period.precision === "month") return `${period.year}-${month}`;
   return `${period.year}-${month}-${String(period.day).padStart(2, "0")}`;
 }
 
 function subtractYears(period, years) {
   const year = period.year - years;
-  if (period.precision === "month") return { ...period, year };
+  if (period.precision === "month" || period.precision === "year") return { ...period, year };
   return {
     ...period,
     year,
@@ -68,6 +71,7 @@ function subtractYears(period, years) {
 function humanPeriod(key) {
   const period = parsePeriod(key);
   const month = MONTHS[period.month - 1];
+  if (period.precision === "year") return String(period.year);
   if (period.precision === "month") return `${month} ${period.year}`;
   return `${period.day} ${month} ${period.year}`;
 }

@@ -272,7 +272,19 @@ def test_delivery_publishes_cpi_headline_with_core_metrics_retained(tmp_path):
         'gilt_5y', 'gilt_10y', 'gilt_20y',
         'mortgage_2y_fixed_75', 'mortgage_5y_fixed_75',
         'house_price_level', 'house_price_growth', 'petrol_price', 'diesel_price',
-        'household_energy', 'cpi_index'}
+        'household_energy', 'cpi_index', 'price_to_earnings'}
+    ratio = data['metrics']['price_to_earnings']
+    assert ratio['validation_status'] == 'verified'
+    assert ratio['latest'] == {'period': '2025', 'value': '7.55', 'status': 'observed'}
+    assert ratio['latest'] == ratio['history'][-1]
+    assert ratio['history'][0] == {'period': '1997', 'value': '3.55', 'status': 'observed'}
+    assert [point['period'] for point in ratio['history']] == [str(year) for year in range(1997, 2026)]
+    assert ratio['definition']['geography'] == 'England and Wales'
+    assert ratio['definition']['area_code'] == 'K04000001'
+    assert ratio['definition']['frequency'] == 'annual'
+    assert ratio['definition']['unit'] == 'ratio'
+    assert ratio['source_published_date'] == '2026-03-26'
+    assert ratio['source_download_url'].endswith('/current/aff1ratioofhousepricetoworkplacebasedearnings.xlsx')
     cpi = data['metrics']['cpi']
     assert cpi['validation_status'] == 'verified'
     assert cpi['snapshot_evidence_kind'] == 'official_download'

@@ -246,6 +246,18 @@ export const OPTIONAL_METRICS = {
     download_url: "https://www.gov.uk/government/statistics/weekly-road-fuel-prices",
   },
 };
+// ONS House price to workplace-based earnings ratio: annual, England and Wales.
+OPTIONAL_METRICS.price_to_earnings = {
+  metric_id: "ew.house_price.median_earnings_ratio", series: "Table 1c",
+  dataset: "House price to workplace-based earnings ratio",
+  title: "Ratio of median house price to median gross annual workplace-based earnings",
+  frequency: "annual", comparison: "previous_year", adjustment: "not_applicable",
+  unit: "ratio", version: 1, geography: "England and Wales", area_code: "K04000001",
+  release_caveat: "Latest year provisional; ONS revises it in the next annual release",
+  ons_dataset_download: true,
+  source_url: "https://www.ons.gov.uk/peoplepopulationandcommunity/housing/datasets/ratioofhousepricetoworkplacebasedearningslowerquartileandmedian",
+  download_url: "https://www.ons.gov.uk/peoplepopulationandcommunity/housing/datasets/ratioofhousepricetoworkplacebasedearningslowerquartileandmedian",
+};
 const fail = (message) => {
   throw new Error(message);
 };
@@ -295,6 +307,8 @@ function validatePoint(point, frequency) {
   const validPeriod =
     frequency === "monthly"
       ? /^\d{4}-(0[1-9]|1[0-2])$/.test(point.period)
+      : frequency === "annual"
+      ? /^\d{4}$/.test(point.period)
       : isoDate(point.period);
   if (
     !validPeriod ||
@@ -359,6 +373,8 @@ function validateDefinition(definition, spec) {
     fail("Unexpected optional metric release caveat");
   if (spec.house_price_download !== undefined && definition.house_price_download !== spec.house_price_download)
     fail("Unexpected UK HPI source qualification");
+  if (spec.ons_dataset_download !== undefined && definition.ons_dataset_download !== spec.ons_dataset_download)
+    fail("Unexpected ONS dataset source qualification");
   for (const field of ["reference_kind", "sampling_basis", "price_basis"]) {
     if (spec[field] !== undefined ? definition[field] !== spec[field] : definition[field] !== undefined)
       fail("Unexpected optional metric source basis");
@@ -539,6 +555,7 @@ function hasOfficialProvenance(metric, spec) {
     (spec.table_download
       ? piprDownloadUrl(metric.source_download_url)
       : spec.house_price_download ? hpiDownloadUrl(metric.source_download_url)
+      : spec.ons_dataset_download ? onsAffordabilityUrl(metric.source_download_url)
       : spec.frequency === "weekly" ? fuelDownloadUrl(metric.source_download_url)
       : metric.source_download_url === spec.download_url) &&
     /^[a-f0-9]{64}$/.test(metric.source_sha256) &&
@@ -550,6 +567,13 @@ function piprDownloadUrl(value) {
     return url.protocol === "https:" && url.hostname === "www.ons.gov.uk" &&
       /^\/file$/.test(url.pathname) &&
       /^uri=(?:%2F|\/)economy(?:%2F|\/)inflationandpriceindices(?:%2F|\/)datasets(?:%2F|\/)priceindexofprivaterentsukmonthlypricestatistics(?:%2F|\/)[0-9]{1,2}[a-z]+[0-9]{4}(?:%2F|\/)priceindexofprivaterentsukmonthlypricestatistics\.xlsx$/.test(url.search.slice(1));
+  } catch { return false; }
+}
+function onsAffordabilityUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === "www.ons.gov.uk" && url.pathname === "/file" &&
+      /^uri=\/peoplepopulationandcommunity\/housing\/datasets\/ratioofhousepricetoworkplacebasedearningslowerquartileandmedian\/current\/[a-z0-9]+\.xlsx$/.test(url.search.slice(1));
   } catch { return false; }
 }
 function hpiDownloadUrl(value) {
@@ -701,6 +725,8 @@ export function previousReading(metric) {
     date.setUTCMonth(date.getUTCMonth() + 1);
     if (date.toISOString().slice(0, 7) !== metric.latest.period) return null;
   }
+  if (metric.definition.frequency === "annual" && Number(previous.period) + 1 !== Number(metric.latest.period))
+    return null;
   if (metric.definition.frequency === "weekly") {
     const date = new Date(`${previous.period}T00:00:00Z`);
     date.setUTCDate(date.getUTCDate() + 7);
@@ -817,6 +843,7 @@ export function freshness(metric, now = new Date()) {
 }
 export function formatPeriod(value) {
   if (!value) return "Not available";
+  if (/^\d{4}$/.test(value)) return value;
   const monthly = /^\d{4}-\d{2}$/.test(value);
   const date = new Date(
     monthly ? `${value}-01T00:00:00Z` : `${value}T00:00:00Z`,

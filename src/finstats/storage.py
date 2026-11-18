@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 from finstats.sources import (
     DEFINITIONS, MAX_SOURCE_PAGE_BYTES, ValidationError, parse,
     FUEL_SOURCE_URL, parse_fuel_release_page, parse_hpi_release_page, public_definition,
+    ONS_AFFORDABILITY_URL, PRICE_TO_EARNINGS, parse_ons_dataset_page,
 )
 
 
@@ -166,6 +167,56 @@ class Store:
                 raise OSError('DESNZ source receipt is immutable')
             return
         atomic_write(path, body)
+
+    def _verify_dataset_page(self, attempt_id, digest, candidate, source_url, evidence_kind, when,
+                             source_published_date, page_evidence):
+        """Bind an ONS dataset workbook to its archived dataset page; return the release date."""
+        try:
+            datetime.strptime(source_published_date, '%Y-%m-%d')
+        except (TypeError, ValueError) as exc:
+            raise ValidationError('Invalid ONS affordability release date') from exc
+        if source_published_date > when.date().isoformat():
+            raise ValidationError('Future ONS affordability release date')
+        if int(candidate.observations[-1].period) > int(source_published_date[:4]):
+            raise ValidationError('ONS affordability reference year follows its release')
+        if not isinstance(page_evidence, dict):
+            raise ValidationError('ONS affordability dataset page evidence missing from receipt')
+        page_body, page_kind = page_evidence.get('body'), page_evidence.get('evidence_kind')
+        if not isinstance(page_body, bytes) or len(page_body) > MAX_SOURCE_PAGE_BYTES:
+            raise ValidationError('Invalid ONS affordability dataset page bytes')
+        if page_kind not in ('official_download', 'recorded_fixture') or page_kind != evidence_kind:
+            raise ValidationError('ONS affordability page evidence kind disagrees with workbook')
+        if page_evidence.get('url') != ONS_AFFORDABILITY_URL:
+            raise ValidationError('Unexpected ONS affordability dataset page URL')
+        try:
+            page_time = datetime.fromisoformat(page_evidence['retrieved_at'].replace('Z', '+00:00'))
+        except (AttributeError, KeyError, TypeError, ValueError) as exc:
+            raise ValidationError('Invalid ONS affordability page retrieval time') from exc
+        if page_time.tzinfo is None or page_time.utcoffset() is None:
+            raise ValidationError('Invalid ONS affordability page retrieval time')
+        if page_kind == 'official_download' and page_time.astimezone(timezone.utc) > when.astimezone(timezone.utc):
+            raise ValidationError('Future ONS affordability page retrieval time')
+        page_digest = self._archive_raw(page_body)
+        page_published, page_url = parse_ons_dataset_page(page_body)
+        if page_published != source_published_date or page_url != source_url:
+            raise ValidationError('ONS affordability page evidence disagrees with workbook receipt')
+        path = self.directory / 'dataset-receipts' / f'{attempt_id}.json'
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        path.parent.chmod(0o700)
+        body = encode({
+            'schema_version': 1, 'source': 'ONS House price to workplace-based earnings ratio',
+            'attempt_id': attempt_id, 'metric_key': PRICE_TO_EARNINGS,
+            'source_file_url': source_url, 'source_file_sha256': digest,
+            'source_published_date': source_published_date,
+            'dataset_page_url': ONS_AFFORDABILITY_URL, 'dataset_page_sha256': page_digest,
+            'dataset_page_retrieved_at': timestamp(page_time),
+            'dataset_page_evidence_kind': page_kind,
+        })
+        if path.exists() and path.read_bytes() != body:
+            raise OSError('ONS dataset source receipt is immutable')
+        if not path.exists():
+            atomic_write(path, body)
+        return source_published_date
 
     def failed(self, key, when, error, source_url=None, evidence_kind='official_download'):
         with self.db:
@@ -337,6 +388,10 @@ class Store:
                 expected_edition = f'{int(released[8:])}{month}{released[:4]}'
                 if not edition or edition.group(1) != expected_edition:
                     raise ValidationError('PIPR workbook URL and cover release date disagree')
+            if key == PRICE_TO_EARNINGS:
+                candidate = replace(candidate, published_date=self._verify_dataset_page(
+                    attempt_id, digest, candidate, source_url, evidence_kind, when,
+                    source_published_date, release_page_evidence))
             semantic_hash = hashlib.sha256(encode(candidate.semantic_content())).hexdigest()
             payload = asdict(candidate)
             # Keep the historical core snapshot wire shape byte-for-byte; only

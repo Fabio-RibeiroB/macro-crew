@@ -173,3 +173,13 @@ suites, as does the CI job; no production collector or website was changed.
 Yield coverage is outside the shadow collector described above. The source
 comparison, and the owner decision still required before a yield feed is built,
 are in [Gilt-yield qualification](gilt-yield-qualification.md).
+
+## House price to earnings
+
+The optional `price_to_earnings` metric is the ONS annual ratio of median house
+price to median gross annual workplace-based earnings for England and Wales
+(Table 1c, `K04000001`). The collector reads the ONS dataset page for the release
+date and the one xlsx link, parses the workbook with the standard library only,
+and archives both. Periods are plain years (1997 onward). Source, precision,
+revision behaviour and guards are in
+[House price to earnings qualification](house-price-earnings-qualification.md).

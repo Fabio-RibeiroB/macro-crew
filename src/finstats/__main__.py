@@ -13,7 +13,9 @@ import sys
 
 from finstats.publication import publish
 from finstats.events import collect_events
-from finstats.sources import DEFINITIONS, FUEL_SOURCE_URL, fetch, fixture_file, parse_fuel_release_page, recorded_hpi_release_evidence
+from finstats.sources import (
+    DEFINITIONS, FUEL_SOURCE_URL, ONS_AFFORDABILITY_URL, PRICE_TO_EARNINGS, fetch, fixture_file,
+    parse_fuel_release_page, parse_ons_dataset_page, recorded_hpi_release_evidence)
 from finstats.storage import Store, timestamp, utc_now
 
 
@@ -60,6 +62,13 @@ def collect(directory, transport=fetch, clock=utc_now, fixtures=None, event_coll
                             if source_published_date:
                                 release_page_evidence = recorded_hpi_release_evidence(
                                     url, source_published_date, timestamp(when))
+                        if key == PRICE_TO_EARNINGS:
+                            page_body = (Path(fixtures) / 'ons_house_price_earnings_dataset_page_2026-03-26.html').read_bytes()
+                            source_published_date, url = parse_ons_dataset_page(page_body)
+                            release_page_evidence = {
+                                'body': page_body, 'url': ONS_AFFORDABILITY_URL,
+                                'retrieved_at': timestamp(when), 'evidence_kind': 'recorded_fixture',
+                            }
                         if key in {'petrol_price', 'diesel_price'}:
                             page_body = (Path(fixtures) / 'desnz_weekly_road_fuel_prices_release_2026-10-20.html').read_bytes()
                             source_published_date, url = parse_fuel_release_page(page_body)

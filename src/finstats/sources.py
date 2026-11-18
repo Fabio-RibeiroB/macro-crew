@@ -23,6 +23,7 @@ MAX_SOURCE_PAGE_BYTES = 2_000_000
 MAX_HPI_BYTES = 10_000_000
 MAX_FUEL_BYTES = 2_000_000
 MAX_OFGEM_BYTES = 2_000_000
+MAX_AFFORDABILITY_BYTES = 5_000_000
 PARSER_VERSION = 1
 MONTHS = {name: index for index, name in enumerate(
     ('JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'), 1)}
@@ -211,6 +212,24 @@ OPTIONAL_METRICS = {
     'diesel_price': {'geography': 'United Kingdom', 'reference_kind': 'weekly_observation', 'sampling_basis': 'Monday morning or next working morning on bank holidays', 'price_basis': 'retail pump price including source tax treatment'},
 }
 
+# ONS "House price to workplace-based earnings ratio" (annual, England and Wales).
+# Registered after the literals so this metric stays an isolated, additive entry.
+PRICE_TO_EARNINGS = 'price_to_earnings'
+ONS_AFFORDABILITY_URL = ONS + '/peoplepopulationandcommunity/housing/datasets/ratioofhousepricetoworkplacebasedearningslowerquartileandmedian'
+ONS_AFFORDABILITY_FILE = re.compile(
+    r'https://www\.ons\.gov\.uk/file\?uri=/peoplepopulationandcommunity/housing/datasets/'
+    r'ratioofhousepricetoworkplacebasedearningslowerquartileandmedian/current/[a-z0-9]+\.xlsx')
+DEFINITIONS[PRICE_TO_EARNINGS] = Definition(
+    'ew.house_price.median_earnings_ratio', 'Table 1c',
+    'House price to workplace-based earnings ratio',
+    'Ratio of median house price to median gross annual workplace-based earnings',
+    'annual', 'not_applicable', 'previous_year', ONS_AFFORDABILITY_URL,
+    ONS_AFFORDABILITY_URL, unit='ratio')
+OPTIONAL_METRICS[PRICE_TO_EARNINGS] = {
+    'geography': 'England and Wales', 'area_code': 'K04000001',
+    'release_caveat': 'Latest year provisional; ONS revises it in the next annual release',
+    'ons_dataset_download': True}
+
 # Keys whose official endpoint is the structured ONS JSON timeseries response
 # rather than the CSV generator. Recorded-fixture naming follows the same split.
 JSON_TIMESERIES = {'cpi', 'cpi_index', 'regular_pay_nominal_growth', 'regular_pay_real_growth', 'unemployment'}
@@ -226,6 +245,8 @@ def public_definition(key):
 def fixture_file(key):
     """Offline recorded-fixture file name; live collection never uses these."""
     definition = DEFINITIONS[key]
+    if key == PRICE_TO_EARNINGS:
+        return 'ons_house_price_earnings_ratio_table_1c.xlsx'
     if key == 'regular_pay_nominal_growth':
         return 'regular_pay_nominal_kai9_lms.json'
     if key == 'regular_pay_real_growth':
@@ -797,7 +818,164 @@ def parse_fuel(key, body, today):
     return Snapshot(DEFINITIONS[key], None, None, tuple(observations))
 
 
+AFFORDABILITY_SHEETS = ['Contents', 'Metadata', 'Terms and Conditions'] + [
+    f'{number}{table}' for number in range(1, 7) for table in 'abc']
+AFFORDABILITY_TITLE = re.compile(
+    r'Table 1c - Ratio of median house price to median gross annual workplace-based '
+    r'earnings by country and region, England and Wales, 1997 to (\d{4})')
+_SPREADSHEET = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+_OFFICE_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+
+
+def parse_ons_dataset_page(body):
+    """Re-derive the release date and the one approved xlsx link from the ONS dataset page."""
+    if not isinstance(body, bytes) or len(body) > MAX_SOURCE_PAGE_BYTES:
+        raise ValidationError('ONS affordability dataset page exceeds size limit')
+    try:
+        text = body.decode('utf-8', 'strict')
+        blocks = [json.loads(block) for block in re.findall(
+            r'<script type="application/ld\+json">(.*?)</script>', text, re.S)]
+    except (UnicodeError, ValueError) as exc:
+        raise ValidationError('Invalid ONS affordability dataset page') from exc
+    pages = [block for block in blocks if isinstance(block, dict) and block.get('@type') == 'Dataset']
+    if len(pages) != 1:
+        raise ValidationError('ONS affordability dataset description unavailable')
+    page = pages[0]
+    if (page.get('name') != DEFINITIONS[PRICE_TO_EARNINGS].dataset or page.get('url') != ONS_AFFORDABILITY_URL
+            or page.get('license') != 'https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/'):
+        raise ValidationError('Unexpected ONS affordability dataset identity')
+    released = re.fullmatch(r'(\d{4}-\d{2}-\d{2})T00:00:00(?:\.000)?Z', str(page.get('datePublished')))
+    try:
+        published = datetime.strptime(released.group(1), '%Y-%m-%d').date().isoformat()
+    except (AttributeError, ValueError) as exc:
+        raise ValidationError('Invalid ONS affordability publication date') from exc
+    links = [item.get('contentUrl') for item in page.get('distribution') or []
+             if isinstance(item, dict) and item.get('encodingFormat') == 'xlsx']
+    if len(links) != 1 or not isinstance(links[0], str) or not ONS_AFFORDABILITY_FILE.fullmatch(links[0]):
+        raise ValidationError('Current ONS affordability workbook link unavailable')
+    return published, links[0]
+
+
+def parse_price_to_earnings(body, today):
+    """Normalize malformed workbook/XML structures as a source validation failure."""
+    try:
+        return _parse_price_to_earnings(body, today)
+    except ValidationError:
+        raise
+    except (ET.ParseError, KeyError, IndexError, AttributeError, TypeError,
+            ValueError, OverflowError, OSError, zipfile.BadZipFile, zlib.error) as exc:
+        raise ValidationError('Malformed ONS affordability workbook structure') from exc
+
+
+def _parse_price_to_earnings(body, today):
+    """Read only the England and Wales row of Table 1c; every other sheet is left alone."""
+    if not isinstance(body, bytes) or len(body) > MAX_AFFORDABILITY_BYTES:
+        raise ValidationError('ONS affordability workbook exceeds size limit')
+    book = zipfile.ZipFile(io.BytesIO(body))
+    if sum(info.file_size for info in book.infolist()) > 60_000_000:
+        raise ValidationError('ONS affordability workbook expands beyond the reviewed bound')
+    ns = {'m': _SPREADSHEET, 'r': _OFFICE_REL}
+    sheets = ET.fromstring(book.read('xl/workbook.xml')).find('m:sheets', ns)
+    if sheets is None or [node.get('name') for node in sheets] != AFFORDABILITY_SHEETS:
+        raise ValidationError('Unexpected ONS affordability workbook sheets')
+    rels = ET.fromstring(book.read('xl/_rels/workbook.xml.rels'))
+    targets = {rel.get('Id'): rel.get('Target') for rel in rels}
+    node = next(sheet for sheet in sheets if sheet.get('name') == '1c')
+    path = targets[node.get('{%s}id' % _OFFICE_REL)].lstrip('/')
+    path = path if path.startswith('xl/') else 'xl/' + path
+    if book.getinfo(path).file_size > 5_000_000:
+        raise ValidationError('ONS affordability Table 1c exceeds the reviewed bound')
+    strings = []
+    if 'xl/sharedStrings.xml' in book.namelist():
+        strings = [''.join(t.text or '' for t in item.findall('.//m:t', ns))
+                   for item in ET.fromstring(book.read('xl/sharedStrings.xml')).findall('m:si', ns)]
+    rows = {}
+    for _, row in ET.iterparse(book.open(path), events=('end',)):
+        if row.tag != '{%s}row' % _SPREADSHEET:
+            continue
+        number = int(row.get('r', '0'))
+        if number > 3:
+            break
+        cells = {}
+        for cell in row.findall('m:c', ns):
+            ref = re.fullmatch(r'([A-Z]{1,3})([0-9]+)', cell.get('r', ''))
+            if not ref or int(ref[2]) != number:
+                raise ValidationError('Unexpected ONS affordability cell reference')
+            column = 0
+            for letter in ref[1]:
+                column = column * 26 + ord(letter) - 64
+            value = cell.find('m:v', ns)
+            raw = value.text if value is not None else None
+            if cell.get('t') == 'inlineStr':
+                raw = ''.join(t.text or '' for t in cell.findall('m:is//m:t', ns))
+            elif cell.get('t') == 's':
+                raw = strings[int(raw)]
+            cells[column] = None if raw is None else raw.strip()
+        rows[number] = cells
+        row.clear()
+    title = AFFORDABILITY_TITLE.fullmatch(rows.get(1, {}).get(1) or '')
+    if not title:
+        raise ValidationError('ONS affordability Table 1c title changed')
+    header = rows.get(2, {})
+    if (header.get(1), header.get(2)) != ('Code', 'Name'):
+        raise ValidationError('ONS affordability Table 1c header changed')
+    years = []
+    while re.fullmatch(r'\d{4}', header.get(3 + len(years)) or ''):
+        years.append(int(header[3 + len(years)]))
+    if not years or years != list(range(1997, 1997 + len(years))) or years[-1] != int(title[1]):
+        raise ValidationError('ONS affordability Table 1c years changed')
+    trailing = {column: text for column, text in header.items() if column >= 3 + len(years) and text}
+    if trailing not in ({}, {3 + len(years): '5-Year Average'}):
+        raise ValidationError('ONS affordability Table 1c columns changed')
+    national = rows.get(3, {})
+    if (national.get(1), national.get(2)) != ('K04000001', 'England and Wales'):
+        raise ValidationError('ONS affordability England and Wales row changed')
+    if years[-1] > today.year:
+        raise ValidationError('Future ONS affordability reference year')
+    points = []
+    for offset, year in enumerate(years):
+        raw = national.get(3 + offset)
+        if raw is None or raw == '[x]':
+            value, status = None, 'missing'
+        elif re.fullmatch(r'\d{1,2}(?:\.\d+)?', raw):
+            # Table 1c styles the ratio with Excel format #,##0.00; drop binary cell noise.
+            value = format(Decimal(raw).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP), 'f')
+            status = 'observed'
+            if Decimal(value) <= 0:
+                raise ValidationError('Implausible ONS affordability ratio')
+        else:
+            raise ValidationError('Unrecognised ONS affordability value token')
+        points.append(Observation(str(year), value, status, offset + 1))
+    if points[-1].value is None:
+        raise ValidationError('Latest England and Wales affordability ratio unavailable')
+    return Snapshot(DEFINITIONS[PRICE_TO_EARNINGS], None, None, tuple(points))
+
+
+def fetch_price_to_earnings():
+    """The dataset page names the current workbook and its release date; fetch both, bounded."""
+    headers = {'User-Agent': 'FinStats/2.0 (+https://github.com/Fabio-RibeiroB/macro-crew)'}
+    with urlopen(Request(ONS_AFFORDABILITY_URL, headers=headers), timeout=30) as response:
+        if response.status != 200 or urlsplit(response.geturl()).hostname != 'www.ons.gov.uk':
+            raise ValidationError('Unexpected ONS affordability dataset page response')
+        page = response.read(MAX_SOURCE_PAGE_BYTES + 1)
+    if len(page) > MAX_SOURCE_PAGE_BYTES:
+        raise ValidationError('ONS affordability dataset page exceeds size limit')
+    retrieved_at = datetime.now(timezone.utc).isoformat(timespec='microseconds').replace('+00:00', 'Z')
+    published, url = parse_ons_dataset_page(page)
+    with urlopen(Request(url, headers=headers), timeout=60) as response:
+        if response.status != 200 or urlsplit(response.geturl()).hostname != 'www.ons.gov.uk':
+            raise ValidationError('Unexpected ONS affordability workbook response')
+        payload = response.read(MAX_AFFORDABILITY_BYTES + 1)
+    if len(payload) > MAX_AFFORDABILITY_BYTES:
+        raise ValidationError('ONS affordability workbook exceeds size limit')
+    return payload, url, published, {
+        'body': page, 'url': ONS_AFFORDABILITY_URL, 'retrieved_at': retrieved_at,
+        'evidence_kind': 'official_download'}
+
+
 def parse(key: str, body: bytes, today: date) -> Snapshot:
+    if key == PRICE_TO_EARNINGS:
+        return parse_price_to_earnings(body, today)
     definition = DEFINITIONS[key]
     max_bytes = MAX_OFGEM_BYTES if key == 'household_energy' else MAX_PIPR_BYTES if key.startswith('private_rent_') else MAX_HPI_BYTES if key.startswith('house_price_') else MAX_BYTES
     if len(body) > max_bytes:
@@ -967,6 +1145,8 @@ def recorded_hpi_release_evidence(source_url, source_published_date, retrieved_a
 
 def fetch(key: str) -> bytes:
     """One bounded request. Retry scheduling belongs to the caller, not the parser."""
+    if key == PRICE_TO_EARNINGS:
+        return fetch_price_to_earnings()
     if key.startswith('mortgage_'):
         url = MORTGAGE_DOWNLOAD_URL
         request = Request(url, headers={'User-Agent': 'FinStats/2.0 (+https://github.com/Fabio-RibeiroB/macro-crew)'})
