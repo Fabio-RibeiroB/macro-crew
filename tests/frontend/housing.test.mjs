@@ -141,13 +141,13 @@ test("House prices shows a labelled after-inflation chart with its base month, o
   const html = await renderHousingWithCard(fullFixture());
   const text = textOf(html);
   // The recorded house prices end in August 2026 and CPI in September 2026: the base is August.
-  assert.match(text, /After inflation \(FinStats calculation using ONS CPI, August 2026 prices\)/);
+  assert.match(text, /after inflation \(FinStats calculation using ONS CPI, August 2026 prices\)/i);
   assert.match(text, /Exact values in pounds in August 2026 prices/);
   assert.match(text, /The second chart is a FinStats calculation, not an official statistic/);
   assert.match(text, /CPI index, used for the after-inflation chart/);
   assert.doesNotMatch(text, /House prices after inflation are not shown/);
   // The official chart and key figure come first and are unchanged.
-  assert.ok(text.indexOf("Average house price") < text.indexOf("After inflation (FinStats calculation"));
+  assert.ok(text.indexOf("Average house price") < text.indexOf("after inflation (FinStats calculation"));
   const full = await renderHousing(fullFixture());
   const prices = textOf(section(full, "house-prices"));
   assert.match(prices, /Key figure £273,037/);
@@ -165,7 +165,7 @@ test("without the CPI index the real-price view is hidden with an honest note", 
     mutate(data);
     const html = await renderHousingWithCard(data);
     const text = textOf(html);
-    assert.doesNotMatch(text, /After inflation \(FinStats calculation/);
+    assert.doesNotMatch(text, /after inflation \(FinStats calculation/i);
     assert.doesNotMatch(text, /The second chart is a FinStats calculation/);
     assert.match(text, /House prices after inflation are not shown because the official ONS CPI index is not available yet/);
     assert.match(text, /Average house price/); // the official charts remain
@@ -182,8 +182,8 @@ test("Housing says which average each £ figure is (#149)", async () => {
   assert.match(prices, /ratio below uses the median price paid in England and Wales, which is a different measure, so the two £ figures should not be compared directly/);
   const charted = textOf(await renderHousingWithCard(fullFixture()));
   assert.match(charted, /Average house price \(UK HPI, mix-adjusted\)/);
-  assert.match(charted, /Average house price after inflation \(UK HPI, mix-adjusted\)/);
-  assert.match(charted, /Average monthly rent \(ONS PIPR, mix-adjusted\)/);
+  assert.match(charted, /Average house price after inflation \(FinStats calculation using ONS CPI, /);
+  assert.match(charted, /Average monthly private rent \(ONS PIPR, mix-adjusted\)/);
   assert.match(textOf(section(html, "rent")), /mix-adjusted average \(a weighted geometric mean\), not the median/);
 });
 

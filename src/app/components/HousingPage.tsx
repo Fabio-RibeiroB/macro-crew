@@ -4,6 +4,7 @@ import { chartPoints } from "../data/verified.mjs";
 import { realPriceSeries, realPriceTitle, baseMonthLabel } from "../data/realPrices.mjs";
 import { overviewRows, priceToEarningsRow } from "../data/overview.mjs";
 import { checkedAt } from "../data/format.mjs";
+import { UpdatedChip } from "./UpdatedChip";
 import { PageContents } from "./PageContents";
 import { MoreDetail } from "./MoreDetail";
 import { OfficialLink } from "./OfficialLink";
@@ -62,11 +63,7 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
     );
   return (
     <div className="fs-container fs-economy fs-housing">
-      <div className="fs-statusbar">
-        <p>
-          {data ? <>Figures last updated {checkedAt(data.published_at)}. We check official sources every 30 minutes and this page updates itself. <a href="/sources">How we check the data</a></> : "Official figures"}
-        </p>
-      </div>
+      <UpdatedChip value={data?.published_at} />
       {error && (
         <div className="fs-alert" role="status">
           {error}{" "}
@@ -159,7 +156,7 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
             <Suspense fallback={<p role="status">Loading chart…</p>}>
               <div className="fs-housing-charts fs-housing-real">
                 <HistoricalTrendCard
-                  title={realPriceTitle(real.base)}
+                  title={`Average house price ${realPriceTitle(real.base).replace(/^After/, "after")}`}
                   label="Average house price after inflation (UK HPI, mix-adjusted)"
                   unit="£"
                   unitDescription={`pounds in ${baseMonthLabel(real.base)} prices`}

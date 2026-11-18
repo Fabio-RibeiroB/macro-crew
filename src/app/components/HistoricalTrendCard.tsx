@@ -157,47 +157,49 @@ export function HistoricalTrendCard({
   return (
     <div className="fs-chart">
       <div className="fs-chart-head">
-        <div className="fs-chart-toolbar">
+        <div className="fs-chart-heading">
           <p className="fs-chart-title">{title}</p>
-          <div
-            className="fs-range"
-            role="radiogroup"
-            aria-label={`Historical range for ${label}`}
-            aria-describedby={selection.notice ? noteId : undefined}
-            onKeyDown={onRangeKeyDown}
-          >
-            {CHART_RANGES.map((range) => {
-              const checked = selectedRange === range.id;
-              return (
-                <button
-                  key={range.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={checked}
-                  aria-label={`${range.label}, ${range.name}`}
-                  data-range={range.id}
-                  tabIndex={checked ? 0 : -1}
-                  onClick={() => setSelectedRange(range.id)}
-                >
-                  {range.label}
-                </button>
-              );
-            })}
-          </div>
+          {(latestPoint || updated?.label) && (
+            <p className="fs-chart-sub">
+              {latestPoint && (
+                <span>
+                  Latest: {exactValue(latestPoint.value, unit)}, {latestPoint.reference
+                    ? `${formatPeriod(latestPoint.reference.start_month)} to ${formatPeriod(latestPoint.reference.end_month)}`
+                    : formatPeriod(latestPoint.period ?? latestPoint.date ?? "")}
+                </span>
+              )}
+              {latestPoint && updated?.label && <span aria-hidden="true" className="fs-chart-sep"> · </span>}
+              {updated?.label && (
+                <span className="fs-chart-upd"><time dateTime={updated.date}>{updated.label}</time></span>
+              )}
+            </p>
+          )}
         </div>
-        <p className="fs-chart-readout">
-          {label}
-          {latestPoint
-            ? `. Latest: ${exactValue(latestPoint.value, unit)}, ${latestPoint.reference
-                ? `${formatPeriod(latestPoint.reference.start_month)} to ${formatPeriod(latestPoint.reference.end_month)}`
-                : formatPeriod(latestPoint.period ?? latestPoint.date ?? "")}`
-            : ""}
-        </p>
-        {updated?.label && (
-          <p className="fs-chart-updated">
-            <time dateTime={updated.date}>{updated.label}</time>
-          </p>
-        )}
+        <div
+          className="fs-range"
+          role="radiogroup"
+          aria-label={`Historical range for ${label}`}
+          aria-describedby={selection.notice ? noteId : undefined}
+          onKeyDown={onRangeKeyDown}
+        >
+          {CHART_RANGES.map((range) => {
+            const checked = selectedRange === range.id;
+            return (
+              <button
+                key={range.id}
+                type="button"
+                role="radio"
+                aria-checked={checked}
+                aria-label={`${range.label}, ${range.name}`}
+                data-range={range.id}
+                tabIndex={checked ? 0 : -1}
+                onClick={() => setSelectedRange(range.id)}
+              >
+                {range.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="fs-chart-body">

@@ -58,6 +58,7 @@ import { GovernmentPage } from "./components/GovernmentPage";
 import { PricesPage } from "./components/PricesPage";
 import { AboutPage } from "./components/AboutPage";
 import { checkedAt } from "./data/format.mjs";
+import { UpdatedChip } from "./components/UpdatedChip";
 import { EventList } from "./components/EventList";
 import { FiguresTicker } from "./components/FiguresTicker";
 import { MpcLine } from "./components/MpcLine";
@@ -465,6 +466,7 @@ function Overview({ data, loading, error, refresh }: any) {
       <div className="fs-pagehead">
         <h1 id="overview-title">Latest figures</h1>
       </div>
+      <UpdatedChip value={data?.published_at} />
       {error && (
         <div className="fs-alert" role="status">
           {error}{" "}
@@ -481,8 +483,7 @@ function Overview({ data, loading, error, refresh }: any) {
           />
           <p className="fs-ledger-note" id="change-note">
             * Change is the latest value minus the previous one, calculated by FinStats from the official
-            series. pp means percentage points. Green and red show direction only, not good or bad. Figures last updated {checkedAt(data.published_at)} and can
-            be revised. <a href="/sources">How we check the data</a>
+            series. pp means percentage points. Green and red show direction only, not good or bad. Figures can be revised.
           </p>
         </>
       ) : (
@@ -535,6 +536,11 @@ function Sources() {
           finstats UK downloads structured data from the ONS and Bank of England.
           We check the series definition, unit and reference period, keep source
           evidence and publish a consistent snapshot independently of AI.
+        </p>
+        <p>
+          We check the official sources every 30 minutes, and each page updates
+          itself when a new snapshot is published. Most statistics change only
+          when their publisher releases them, so a check often finds nothing new.
         </p>
         <p>
           Every figure’s source disclosure shows the series, official

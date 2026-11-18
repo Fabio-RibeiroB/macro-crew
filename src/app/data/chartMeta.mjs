@@ -25,7 +25,7 @@ export function chartUpdated(metric) {
       return {
         kind: "published",
         date: published,
-        label: `Data last updated ${new Intl.DateTimeFormat("en-GB", SHORT_DATE).format(date)}`,
+        label: `Updated ${new Intl.DateTimeFormat("en-GB", SHORT_DATE).format(date)}`,
       };
     }
   }
@@ -40,7 +40,7 @@ export function chartUpdated(metric) {
       return {
         kind: "retrieved",
         date: retrieved,
-        label: `Data retrieved ${day}`,
+        label: `Retrieved ${day}`,
       };
     }
   }

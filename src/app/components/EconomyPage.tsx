@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { chartUpdated } from "../data/chartMeta.mjs";
 import { chartPoints } from "../data/verified.mjs";
 import { overviewRows } from "../data/overview.mjs";
-import { checkedAt } from "../data/format.mjs";
+import { UpdatedChip } from "./UpdatedChip";
 import { PageContents } from "./PageContents";
 import { MoreDetail } from "./MoreDetail";
 import { OfficialLink } from "./OfficialLink";
@@ -38,11 +38,7 @@ export function EconomyPage({ data, loading, error, refresh, topics, reports, re
     );
   return (
     <div className="fs-container fs-economy" id="figures">
-      <div className="fs-statusbar">
-        <p>
-          {data ? <>Figures last updated {checkedAt(data.published_at)}. We check official sources every 30 minutes and this page updates itself. <a href="/sources">How we check the data</a></> : "Official figures"}
-        </p>
-      </div>
+      <UpdatedChip value={data?.published_at} />
       {error && (
         <div className="fs-alert" role="status">
           {error}{" "}

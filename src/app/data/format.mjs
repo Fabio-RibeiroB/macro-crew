@@ -24,6 +24,20 @@ export function checkedBrief(value) {
     : "not yet checked";
 }
 
+/** Compact UK-time stamp for the update chip: "18 Nov, 17:01"; null when there is no usable instant. */
+export function updatedShort(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleString("en-GB", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/London",
+  });
+}
+
 const hasInstant = (value) =>
   typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value) && !Number.isNaN(Date.parse(value));
 
