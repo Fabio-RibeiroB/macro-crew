@@ -5,7 +5,7 @@
 // skipped, never shown as zero. The first item is "MPC:" with the one-line AI headline
 // (`mpcLine`), tagged AI and never a number source; without a report it falls back to
 // factual wording from the official Bank Rate series.
-import { mpcLine } from "./aiSummary.mjs";
+import { MPC_CRAWL_MAX, mpcLine } from "./aiSummary.mjs";
 import { dayLabel, overviewRows } from "./overview.mjs";
 import { lastRateChange } from "./verified.mjs";
 
@@ -66,9 +66,12 @@ const daysBetween = (from, to) =>
   Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000);
 const shortDay = (period) => dayLabel(period).replace(/ \d{4}$/, "");
 
-/** The AI one-line MPC headline, tagged AI and linked to the full AI summary. */
+/**
+ * The AI one-line MPC headline, tagged AI and linked to the full AI summary. The crawl
+ * only shows whole sentences; one too long to show whole gives null (factual fallback).
+ */
 export function mpcAiItem(reports) {
-  const line = mpcLine(reports);
+  const line = mpcLine(reports, { max: MPC_CRAWL_MAX, whole: true });
   if (!line) return null;
   return { id: "mpc", kind: "mpc", label: "MPC", ai: true, value: line.text, change: null, href: AI_SUMMARY_HREF };
 }
