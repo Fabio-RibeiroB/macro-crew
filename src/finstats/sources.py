@@ -52,6 +52,10 @@ ONS = 'https://www.ons.gov.uk'
 BOE = 'https://www.bankofengland.co.uk'
 GILT_SERIES = ('IUDSNPY', 'IUDMNPY', 'IUDLNPY')
 GILT_DOWNLOAD_URL = BOE + '/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=04/Jan/2000&Dateto=now&SeriesCodes=' + ','.join(GILT_SERIES) + '&CSVF=CN&UsingCodes=Y'
+# Bank of England quoted household mortgage rates (monthly, 75% LTV). One shared
+# download carries both series; each metric parser selects and validates its own.
+MORTGAGE_SERIES = {'mortgage_2y_fixed_75': 'IUMBV34', 'mortgage_5y_fixed_75': 'IUMBV42'}
+MORTGAGE_DOWNLOAD_URL = BOE + '/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=01/Jan/1995&Dateto=now&SeriesCodes=' + ','.join(MORTGAGE_SERIES.values()) + '&CSVF=CN&UsingCodes=Y'
 OFGEM_TDCV_URL = 'https://www.ofgem.gov.uk/sites/default/files/2026-05/Review%20of%20typical%20domestic%20consumption%20values%20decision.pdf'
 OFGEM_TDCV_SOURCE_SHA256 = '009eb2ebe4979e1691d1900ad9d05e79f655eeada1801b8c6eed2f7a49a19ec9'
 OFGEM_TDCV_EFFECTIVE = '2026-07-01'
@@ -157,6 +161,8 @@ DEFINITIONS = {
     'gilt_5y': Definition('uk.gilt_yield.nominal_par_5y', 'IUDSNPY', 'IADB', 'Yield from British Government Securities, 5 year Nominal Par Yield', 'daily', 'not_applicable', 'previous_trading_day', BOE + '/boeapps/database/', GILT_DOWNLOAD_URL),
     'gilt_10y': Definition('uk.gilt_yield.nominal_par_10y', 'IUDMNPY', 'IADB', 'Yield from British Government Securities, 10 year Nominal Par Yield', 'daily', 'not_applicable', 'previous_trading_day', BOE + '/boeapps/database/', GILT_DOWNLOAD_URL),
     'gilt_20y': Definition('uk.gilt_yield.nominal_par_20y', 'IUDLNPY', 'IADB', 'Yield from British Government Securities, 20 year Nominal Par Yield', 'daily', 'not_applicable', 'previous_trading_day', BOE + '/boeapps/database/', GILT_DOWNLOAD_URL),
+    'mortgage_2y_fixed_75': Definition('uk.mortgage_rate.quoted_2y_fixed_75ltv', 'IUMBV34', 'IADB', 'Monthly interest rate of UK monetary financial institutions (excl. Central Bank) sterling 2 year (75% LTV) fixed rate mortgage to households (in percent) not seasonally adjusted', 'monthly', 'not_seasonally_adjusted', 'previous_month', BOE + '/boeapps/database/', MORTGAGE_DOWNLOAD_URL),
+    'mortgage_5y_fixed_75': Definition('uk.mortgage_rate.quoted_5y_fixed_75ltv', 'IUMBV42', 'IADB', 'Monthly interest rate of UK monetary financial institutions (excl. Central Bank) sterling 5 year (75% LTV) fixed rate mortgage to households (in percent) not seasonally adjusted', 'monthly', 'not_seasonally_adjusted', 'previous_month', BOE + '/boeapps/database/', MORTGAGE_DOWNLOAD_URL),
     'household_energy': Definition(
         'uk.energy_price_cap.typical_dual_fuel_bill', 'Ofgem dual-fuel Direct Debit cap',
         'Energy price cap unit rates and standing charges',
@@ -165,6 +171,15 @@ DEFINITIONS = {
         'https://www.ofgem.gov.uk/your-energy-supply/your-energy-bill/energy-price-cap-unit-rates-and-standing-charges',
         'https://www.ofgem.gov.uk/your-energy-supply/your-energy-bill/energy-price-cap-unit-rates-and-standing-charges',
         unit='GBP_per_year'),
+    # ONS CPI index level (not the annual rate): the deflator for FinStats'
+    # real-terms house price calculation. Same MM23 release and JSON endpoint as CPI.
+    'cpi_index': Definition(
+        'uk.cpi.index_2015_100', 'D7BT', 'MM23',
+        'CPI INDEX 00: ALL ITEMS 2015=100',
+        'monthly', 'not_seasonally_adjusted', 'level',
+        ONS + '/economy/inflationandpriceindices/timeseries/d7bt/mm23',
+        ONS + '/economy/inflationandpriceindices/timeseries/d7bt/mm23/data',
+        unit='index_2015_100'),
 }
 
 # Optional metric members: registered public-definition fields the writer is
@@ -175,6 +190,8 @@ OPTIONAL_METRICS = {
     'gilt_5y': {'geography': 'United Kingdom', 'maturity_years': 5, 'yield_type': 'fitted_nominal_par', 'primary': False},
     'gilt_10y': {'geography': 'United Kingdom', 'maturity_years': 10, 'yield_type': 'fitted_nominal_par', 'primary': True},
     'gilt_20y': {'geography': 'United Kingdom', 'maturity_years': 20, 'yield_type': 'fitted_nominal_par', 'primary': False},
+    'mortgage_2y_fixed_75': {'geography': 'United Kingdom', 'ltv': 75, 'fixed_years': 2},
+    'mortgage_5y_fixed_75': {'geography': 'United Kingdom', 'ltv': 75, 'fixed_years': 5},
     'household_energy': {'geography': 'Great Britain', 'payment_method': 'Direct Debit',
         'tariff': 'default variable tariff', 'consumption_basis': 'Ofgem typical domestic consumption values (medium; single-rate electricity)',
         'electricity_kwh_per_year': OFGEM_MEDIUM_SINGLE_RATE_ELECTRICITY_KWH,
@@ -183,6 +200,7 @@ OPTIONAL_METRICS = {
         'consumption_source_sha256': OFGEM_TDCV_SOURCE_SHA256,
         'unit': 'GBP_per_year'},
     'cpi': {'geography': 'United Kingdom'},
+    'cpi_index': {'geography': 'United Kingdom'},
     'regular_pay_nominal_growth': {'geography': 'Great Britain', 'window_months': 3},
     'regular_pay_real_growth': {'geography': 'Great Britain', 'window_months': 3, 'deflator': 'CPIH'},
     'unemployment': {'geography': 'United Kingdom', 'age_group': '16 and over', 'window_months': 3},
@@ -214,7 +232,7 @@ OPTIONAL_METRICS[PRICE_TO_EARNINGS] = {
 
 # Keys whose official endpoint is the structured ONS JSON timeseries response
 # rather than the CSV generator. Recorded-fixture naming follows the same split.
-JSON_TIMESERIES = {'cpi', 'regular_pay_nominal_growth', 'regular_pay_real_growth', 'unemployment'}
+JSON_TIMESERIES = {'cpi', 'cpi_index', 'regular_pay_nominal_growth', 'regular_pay_real_growth', 'unemployment'}
 
 
 def public_definition(key):
@@ -239,6 +257,8 @@ def fixture_file(key):
         return 'public_debt_hf6x_pusf.csv'
     if key.startswith('gilt_'):
         return 'boe_nominal_par_yields_5_10_20_daily.csv'
+    if key.startswith('mortgage_'):
+        return 'boe_quoted_mortgage_rates_2y_5y_75ltv_monthly.csv'
     if key.startswith('private_rent_'):
         return 'pipr_uk_monthly_price_statistics.xlsx'
     if key.startswith('house_price_'):
@@ -489,9 +509,12 @@ def parse_ons_json(definition, body, today):
                             ('datasetId', definition.dataset)]:
         if description.get(field) != expected:
             raise ValidationError(f'Unexpected {field}')
-    expected_unit = '' if definition.series == 'A2FA' else '%'
+    expected_unit = ('' if definition.series == 'A2FA' else
+                     'Index, base year = 100' if definition.series == 'D7BT' else '%')
     if description.get('unit') != expected_unit or description.get('preUnit') not in ('', None):
         raise ValidationError('Unexpected unit')
+    if definition.series == 'D7BT' and description.get('keyNote', '').strip() != 'Index, 2015 = 100':
+        raise ValidationError('Unexpected CPI index base year')
     if definition.series == 'MGSX':
         if (description.get('monthLabelStyle') != 'three month average' or
                 description.get('keyNote', '').strip() != 'UK: Aged 16 and over'):
@@ -973,7 +996,30 @@ def parse(key: str, body: bytes, today: date) -> Snapshot:
             raise ValidationError('Invalid UTF-8 CSV') from exc
         observations = []
         metadata = {}
-        if key == 'bank_rate' or key.startswith('gilt_'):
+        if key.startswith('mortgage_'):
+            if not rows or rows[0] != ['DATE', 'SERIES', 'VALUE']:
+                raise ValidationError('BoE mortgage series CSV header changed')
+            target_series = set(MORTGAGE_SERIES.values())
+            found_series = set()
+            for index, row in enumerate(rows[1:], 2):
+                if not row:
+                    continue
+                if len(row) != 3 or row[1] not in target_series:
+                    raise ValidationError('Unexpected BoE mortgage series or row')
+                found_series.add(row[1])
+                if row[1] != definition.series:
+                    continue
+                observed = date.fromisoformat(human_date(row[0]))
+                if observed.day != calendar.monthrange(observed.year, observed.month)[1]:
+                    raise ValidationError('BoE mortgage observation is not month-end dated')
+                value, status = number(row[2])
+                observations.append(Observation(observed.strftime('%Y-%m'), value, status, index))
+            if definition.series not in found_series:
+                raise ValidationError('BoE response is missing the requested series')
+            if not observations or observations[0].period != '1995-01':
+                raise ValidationError('BoE mortgage history does not begin at the qualified start')
+            published = next_release = None  # Observation dates are not announcement dates.
+        elif key == 'bank_rate' or key.startswith('gilt_'):
             if not rows or rows[0] != ['DATE', 'SERIES', 'VALUE']:
                 raise ValidationError('Bank Rate CSV header changed' if key == 'bank_rate' else 'BoE daily series CSV header changed')
             target_series = set(GILT_SERIES) if key.startswith('gilt_') else {definition.series}
@@ -1101,6 +1147,16 @@ def fetch(key: str) -> bytes:
     """One bounded request. Retry scheduling belongs to the caller, not the parser."""
     if key == PRICE_TO_EARNINGS:
         return fetch_price_to_earnings()
+    if key.startswith('mortgage_'):
+        url = MORTGAGE_DOWNLOAD_URL
+        request = Request(url, headers={'User-Agent': 'FinStats/2.0 (+https://github.com/Fabio-RibeiroB/macro-crew)'})
+        with urlopen(request, timeout=30) as response:
+            if response.status != 200 or response.geturl() != url:
+                raise ValidationError('Unexpected BoE mortgage rate response')
+            payload = response.read(MAX_BYTES + 1)
+        if len(payload) > MAX_BYTES:
+            raise ValidationError('BoE mortgage rate response exceeds size limit')
+        return payload
     if key.startswith('gilt_'):
         url = GILT_DOWNLOAD_URL
         request = Request(url, headers={'User-Agent': 'FinStats/2.0 (+https://github.com/Fabio-RibeiroB/macro-crew)'})

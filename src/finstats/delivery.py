@@ -104,6 +104,8 @@ def deliver(state_dir, output_dir, event_failure_sink=None, event_unqualified_si
                 raise ValueError('Unexpected official download URL')
             if key.startswith('gilt_') and metric['source_download_url'] != definition.download_url:
                 raise ValueError('Unexpected BoE gilt download URL')
+            if key.startswith('mortgage_') and metric['source_download_url'] != definition.download_url:
+                raise ValueError('Unexpected BoE mortgage download URL')
             if key == 'household_energy' and metric['source_download_url'] != definition.download_url:
                 raise ValueError('Unexpected Ofgem source page URL')
             if key.startswith('private_rent_') and not re.fullmatch(

@@ -2,11 +2,14 @@ import { Suspense } from "react";
 import { RefreshCw } from "lucide-react";
 import { chartUpdated } from "../data/chartMeta.mjs";
 import { chartPoints } from "../data/verified.mjs";
+import { realPriceSeries, realPriceTitle, baseMonthLabel } from "../data/realPrices.mjs";
 import { overviewRows, priceToEarningsRow } from "../data/overview.mjs";
 import { checkedAt } from "../data/format.mjs";
 import { PageContents } from "./PageContents";
 import { OfficialLink } from "./OfficialLink";
 import { KeyFigure, Row, Sources } from "./SubjectBlock";
+import { MortgageRatesSection } from "./MortgageRatesSection";
+import { hasMortgageRates } from "../data/mortgageRates.mjs";
 
 /**
  * Housing: each measure reads in one fixed order, Key figure, What it means, Chart,
@@ -22,6 +25,10 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
   // Annual, England and Wales only: shown once a verified reading exists, otherwise hidden.
   const ratio = data?.metrics?.price_to_earnings;
   const showRatio = Boolean(ratio?.latest);
+  // FinStats calculation, not an official figure: shown only when both verified series exist.
+  const real = price?.history?.length && data?.metrics?.cpi_index?.history?.length
+    ? realPriceSeries(price.history, data.metrics.cpi_index.history)
+    : null;
   const charts = (items: [any, any][]) =>
     !data ? (
       <p>Charts will appear when verified figures are available.</p>
@@ -71,7 +78,7 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
         </div>
       )}
 
-      <PageContents items={[{ id: "rent", label: "Rent" }, { id: "house-prices", label: "House prices" }, { id: "price-to-earnings", label: "House price to earnings", show: showRatio }]} />
+      <PageContents items={[{ id: "rent", label: "Rent" }, { id: "house-prices", label: "House prices" }, { id: "price-to-earnings", label: "House price to earnings", show: showRatio }, { id: "mortgage-rates", label: "Mortgage rates", show: hasMortgageRates(data) }]} />
 
       <section className="fs-block" id="rent" aria-labelledby="rent-title">
         <h2 id="rent-title">Rent</h2>
@@ -107,6 +114,12 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
           <div className="fs-means">
             <p>The average price of a home sold in the United Kingdom, from the UK House Price Index. The change on a year earlier is shown beside it.</p>
             <p>The national average covers the United Kingdom. The latest estimates are provisional and may be revised.</p>
+            {real && (
+              <p id="house-real-means">
+                The second chart is a FinStats calculation, not an official statistic. It restates each month's average price in {baseMonthLabel(real.base)} prices
+                using the ONS Consumer Prices Index (CPI), so earlier prices are scaled up by inflation since then. A month missing from either series stays a gap.
+              </p>
+            )}
             <OfficialLink href="https://www.gov.uk/government/collections/uk-house-price-index-reports">
               Read the UK House Price Index reports
             </OfficialLink>
@@ -117,9 +130,29 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
             [price, { title: price?.definition?.title, label: "Average house price", unit: "£", unitDescription: "pounds" }],
             [priceGrowth, { title: priceGrowth?.definition?.title, label: "Annual change", unit: "%", unitDescription: "percent" }],
           ])}
+          {real ? (
+            <Suspense fallback={<p role="status">Loading chart…</p>}>
+              <div className="fs-housing-charts fs-housing-real">
+                <HistoricalTrendCard
+                  title={realPriceTitle(real.base)}
+                  label="Average house price after inflation"
+                  unit="£"
+                  unitDescription={`pounds in ${baseMonthLabel(real.base)} prices`}
+                  data={real.points}
+                />
+              </div>
+            </Suspense>
+          ) : data && price?.history?.length ? (
+            <p className="fs-housing-real-note">
+              House prices after inflation are not shown because the official ONS CPI index is not available yet.
+            </p>
+          ) : null}
         </Row>
         <Row label="Sources" labelId="house-sources-label">
-          <Sources metric={price} extra={secondarySource(priceGrowth, "Annual change")} />
+          <Sources metric={price} extra={<>
+            {secondarySource(priceGrowth, "Annual change")}
+            {real && secondarySource(data.metrics.cpi_index, "CPI index, used for the after-inflation chart")}
+          </>} />
         </Row>
       </section>
       {showRatio && (
@@ -158,6 +191,7 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
           </Row>
         </section>
       )}
+      <MortgageRatesSection data={data} />
       <p className="fs-ledger-note" id="change-note">
         * Change is the latest value minus the previous one, calculated by FinStats from the official series. pp means percentage points. Green and red show direction only, not good or bad.
       </p>
