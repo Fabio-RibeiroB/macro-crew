@@ -881,3 +881,25 @@ the owner from mocked options; page PRs are delegated one at a time.
 References establish the intended statistical families; exact downloads and source
 contracts are qualified within the relevant milestone before implementing adapters.
 No current numerical values are hardcoded in this specification.
+
+### M13 — Clearer layout and a visual inflation explainer (approved 18 November 2026)
+
+**Demonstration:** on a phone, each section is easy to tell apart, detail opens
+in a contained box, the update time is a small chip, and Prices shows what
+inflation means with a worked visual example. Mobile (360px) first. No
+statistical value changes.
+
+Implementation slices (one issue and one focused PR each):
+
+1. Layout pass: `MoreDetail` as a contained box (bordered bar closed, tinted
+   panel open); row labels as real subheadings with more space between rows;
+   one clear chart title and one subtitle line instead of three small lines;
+   the status line as a compact "Last updated 18 Nov, 17:01" chip with a clock
+   icon and a "How we check" link, on every page.
+2. Inflation explainer (pilot): "What 3.6% means" worked example from the
+   latest CPI: £100 of shopping a year ago now costs £103.60, beside the 2%
+   target (£102), drawn with icons and bars and labelled as a FinStats
+   illustration; inside "How it's measured", a three-step diagram (basket of
+   everyday items → prices collected monthly → compared with a year earlier).
+   Other measures follow only if the owner likes the pilot.
+
