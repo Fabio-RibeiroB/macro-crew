@@ -7,6 +7,7 @@ import { checkedAt } from "../data/format.mjs";
 import { Delta, Lines } from "./IndicatorTable";
 import { PageContents } from "./PageContents";
 import { OfficialLink } from "./OfficialLink";
+import { MoreDetail } from "./MoreDetail";
 import { BigValue, KeyFigure, Row, Sources } from "./SubjectBlock";
 
 /**
@@ -128,22 +129,22 @@ export function PricesPage({ data, loading, error, refresh, topics, HistoricalTr
           <div className="fs-means">
             <p>
               {headline
-                ? `Annual ${headlineLabel} inflation was ${(cpiHeadline ? inflation.cpi : inflation.cpih).row.latest[0].text} in ${formatPeriod(headline.period)}. ${Number(headline.value) > 0 ? "Average prices were higher than a year earlier." : Number(headline.value) < 0 ? "Average prices were lower than a year earlier." : "Average prices were unchanged from a year earlier."}`
+                ? `Annual ${headlineLabel} inflation was ${(cpiHeadline ? inflation.cpi : inflation.cpih).row.latest[0].text} in ${formatPeriod(headline.period)}, so average prices were ${Number(headline.value) > 0 ? "higher than" : Number(headline.value) < 0 ? "lower than" : "unchanged from"} a year earlier.`
                 : "Inflation measures how average prices change over time."}{" "}
-              Your own experience depends on what you buy.
+              If your pay and benefits rise more slowly than prices, they buy less.
             </p>
-            <p>
-              {topics.cpi.meaning} {topics.cpi.caution} Pay and benefits matter too: if your income rises more slowly
-              than the prices you face, it buys less.
-            </p>
-            <p>
-              CPIH also includes owner occupiers’ housing costs, so its readings differ from CPI and should not be
-              compared directly with the 2% target. The Consumer Prices Index (CPI) covers everyday goods and services.
-            </p>
-            <p className="fs-caption">Food-price breakdowns are not yet part of our verified dataset.</p>
-            <OfficialLink href="https://www.ons.gov.uk/economy/inflationandpriceindices">
-              Read the official inflation releases
-            </OfficialLink>
+            <MoreDetail label="How it's measured">
+              <p>Your own experience depends on what you buy.</p>
+              <p>{topics.cpi.meaning} {topics.cpi.caution}</p>
+              <p>
+                CPIH also includes owner occupiers’ housing costs, so its readings differ from CPI and should not be
+                compared directly with the 2% target. The Consumer Prices Index (CPI) covers everyday goods and services.
+              </p>
+              <p className="fs-caption">Food-price breakdowns are not yet part of our verified dataset.</p>
+              <OfficialLink href="https://www.ons.gov.uk/economy/inflationandpriceindices">
+                Read the official inflation releases
+              </OfficialLink>
+            </MoreDetail>
           </div>
         </Row>
         <Row label="Chart" id="trends" labelId="inflation-chart-label">
@@ -174,31 +175,37 @@ export function PricesPage({ data, loading, error, refresh, topics, HistoricalTr
         </Row>
         <Row label="What it means" labelId="energy-means-label">
           <div className="fs-means">
-            <p>{topics.household_energy.meaning} {topics.household_energy.caution}</p>
             <p>
-              The benchmark is medium typical consumption: {r?.electricity_kwh_per_year?.toLocaleString("en-GB") ?? "2,500"} kWh of
-              single-rate electricity and {r?.gas_kwh_per_year?.toLocaleString("en-GB") ?? "9,500"} kWh of gas per year. It is the
-              Ofgem average for England, Scotland and Wales, not a quote for a particular region.
+              The energy price cap is Ofgem’s illustrative yearly gas and electricity bill for a typical household.
+              Your own bill depends on how much energy you use and where you live.
             </p>
-            {r && (
-              <>
-                <p>
-                  Effective {formatPeriod(r.effective_start)} to {formatPeriod(r.effective_end)}. Electricity: {r.electricity.unit_rate_p_per_kwh}p/kWh and {r.electricity.standing_charge_p_per_day}p/day. Gas: {r.gas.unit_rate_p_per_kwh}p/kWh and {r.gas.standing_charge_p_per_day}p/day.
-                </p>
-                <p>
-                  Tax: {r.tax_treatment}. The annual figure is Ofgem's published amount, not recalculated from rounded rates. {energyComparison(energy)}
-                </p>
-              </>
-            )}
-            {upcoming && (
+            <MoreDetail label="How it's measured">
+              <p>{topics.household_energy.meaning} {topics.household_energy.caution}</p>
               <p>
-                Announced upcoming cap: {money(upcoming.value)}/year for {formatPeriod(upcoming.reference.effective_start)} to {formatPeriod(upcoming.reference.effective_end)}. It will become current only when that effective period begins. Announcement date: {upcoming.reference.announcement_date ?? "not supplied"}.
+                The benchmark is medium typical consumption: {r?.electricity_kwh_per_year?.toLocaleString("en-GB") ?? "2,500"} kWh of
+                single-rate electricity and {r?.gas_kwh_per_year?.toLocaleString("en-GB") ?? "9,500"} kWh of gas per year. It is the
+                Ofgem average for England, Scotland and Wales, not a quote for a particular region.
               </p>
-            )}
-            <p>The cap limits unit rates and standing charges, not total bills. Actual costs depend on use and region. It does not cover Northern Ireland, fixed tariffs or heating oil.</p>
-            <OfficialLink href={energy?.definition.source_url ?? "https://www.ofgem.gov.uk/your-energy-supply/your-energy-bill/energy-price-cap-unit-rates-and-standing-charges"}>
-              Ofgem energy cap rates and standing charges
-            </OfficialLink>
+              {r && (
+                <>
+                  <p>
+                    Effective {formatPeriod(r.effective_start)} to {formatPeriod(r.effective_end)}. Electricity: {r.electricity.unit_rate_p_per_kwh}p/kWh and {r.electricity.standing_charge_p_per_day}p/day. Gas: {r.gas.unit_rate_p_per_kwh}p/kWh and {r.gas.standing_charge_p_per_day}p/day.
+                  </p>
+                  <p>
+                    Tax: {r.tax_treatment}. The annual figure is Ofgem's published amount, not recalculated from rounded rates. {energyComparison(energy)}
+                  </p>
+                </>
+              )}
+              {upcoming && (
+                <p>
+                  Announced upcoming cap: {money(upcoming.value)}/year for {formatPeriod(upcoming.reference.effective_start)} to {formatPeriod(upcoming.reference.effective_end)}. It will become current only when that effective period begins. Announcement date: {upcoming.reference.announcement_date ?? "not supplied"}.
+                </p>
+              )}
+              <p>The cap limits unit rates and standing charges, not total bills. Actual costs depend on use and region. It does not cover Northern Ireland, fixed tariffs or heating oil.</p>
+              <OfficialLink href={energy?.definition.source_url ?? "https://www.ofgem.gov.uk/your-energy-supply/your-energy-bill/energy-price-cap-unit-rates-and-standing-charges"}>
+                Ofgem energy cap rates and standing charges
+              </OfficialLink>
+            </MoreDetail>
           </div>
         </Row>
         <Row label="Chart" labelId="energy-chart-label">
@@ -252,19 +259,28 @@ export function PricesPage({ data, loading, error, refresh, topics, HistoricalTr
         </Row>
         <Row label="What it means" labelId="fuel-means-label">
           <div className="fs-means">
-            <p>{topics.petrol_price.meaning} {topics.petrol_price.caution}</p>
             <p>
-              The week is referenced to Monday. DESNZ samples on Monday morning, or the next working morning on a bank
-              holiday; this does not assert that the actual sample was taken on Monday. The shared sample is weighted
-              by company sales and is a UK average, not a local forecourt quote.
+              These are average petrol and diesel pump prices across the UK, in pence per litre.
+              Your local station may charge more or less.
             </p>
-            <p>
-              Petrol and diesel are independent pump-price series in pence per litre, so they are shown separately and
-              never combined. Duty and VAT are already included in the published pump prices and are not recalculated.
-            </p>
-            <OfficialLink href={petrol?.definition?.source_url ?? "https://www.gov.uk/government/statistics/weekly-road-fuel-prices"}>
-              DESNZ weekly road fuel prices and current downloads
-            </OfficialLink>
+            <MoreDetail label="How it's measured">
+              <p>{topics.petrol_price.meaning} {topics.petrol_price.caution}</p>
+              <p>
+                The week is referenced to Monday. DESNZ samples on Monday morning, or the next working morning on a bank
+                holiday; this does not assert that the actual sample was taken on Monday. The shared sample is weighted
+                by company sales and is a UK average, not a local forecourt quote.
+              </p>
+              <p>
+                Petrol and diesel are independent pump-price series in pence per litre, so they are shown separately and
+                never combined. Duty and VAT are already included in the published pump prices and are not recalculated.
+              </p>
+              <p>
+                DESNZ Weekly road fuel prices CSV, 2018 onward. The accompanying workbook describes a sales-weighted UK average from six companies, covering around 60% of market volume using 2022 sales.
+              </p>
+              <OfficialLink href={petrol?.definition?.source_url ?? "https://www.gov.uk/government/statistics/weekly-road-fuel-prices"}>
+                DESNZ weekly road fuel prices and current downloads
+              </OfficialLink>
+            </MoreDetail>
           </div>
         </Row>
         <Row label="Chart" labelId="fuel-chart-label">
@@ -288,9 +304,6 @@ export function PricesPage({ data, loading, error, refresh, topics, HistoricalTr
               <Sources metric={metric} />
             </div>
           ))}
-          <p className="fs-caption">
-            DESNZ Weekly road fuel prices CSV, 2018 onward. The accompanying workbook describes a sales-weighted UK average from six companies, covering around 60% of market volume using 2022 sales.
-          </p>
         </Row>
       </section>
       <p className="fs-ledger-note" id="change-note">
