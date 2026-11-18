@@ -361,7 +361,7 @@ test("BoE 5/10/20 nominal par producer export binds exact series and renders Gov
     assert.match(government, /headline figure is the 10-year yield/);
     assert.match(government, /<th scope="row">5-year<\/th>/);
     assert.match(government, /<th scope="row">20-year<\/th>/);
-    assert.match(government, /−2\.24 basis points/);
+    assert.match(government, /−2\.2 bp/);
     assert.match(government, /4 January 2000/);
     assert.match(government, /market financing conditions/);
     assert.match(government, /not the average cost of the government’s outstanding debt/);

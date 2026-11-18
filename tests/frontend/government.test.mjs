@@ -61,15 +61,15 @@ test("Public debt figures carry units, pp change and the end-of-month reference"
   assert.match(means, /<details class="fs-more">(?:(?!<\/details>)[\s\S])*How it(?:'|&#x27;)s measured(?:(?!<\/details>)[\s\S])*PSNFL/);
 });
 
-test("Gilt yields show every number with %, pp and basis points, and keep the honest caveat", async () => {
+test("Gilt yields show every number with % and basis points, and keep the honest caveat", async () => {
   const html = await renderGovernment(fixture());
   const gilts = textOf(section(html, "gilt-yields"));
   assert.match(gilts, /10-year gilt yield UK government 10-year borrowing cost 5\.35 ?%/, "10-year is the primary figure, named and shown at 2 decimal places");
   assert.match(gilts, /Previous 5\.37% 19 Oct 2026/);
-  assert.match(gilts, /↓ Down −0\.02 pp −2\.24 basis points/);
+  assert.match(gilts, /↓ Down −2\.2 bp/);
   assert.match(gilts, /Observed on 20 Oct 2026/);
-  assert.match(gilts, /5-year 4\.97% 4\.96% 20 Oct 2026 ↑ Up \+0\.01 pp \+0\.82 basis points 21 Oct 2026/);
-  assert.match(gilts, /20-year 5\.67% 5\.67% 20 Oct 2026 ↑ Up Less than 0\.01 pp \+0\.13 basis points 21 Oct 2026/);
+  assert.match(gilts, /5-year 4\.97% 4\.96% 20 Oct 2026 ↑ Up \+0\.8 bp 21 Oct 2026/);
+  assert.match(gilts, /20-year 5\.67% 5\.67% 20 Oct 2026 ↑ Up \+0\.1 bp 21 Oct 2026/);
   assert.match(gilts, /previous available trading observation/);
   assert.match(gilts, /One percentage point equals 100 basis points/);
   assert.match(gilts, /market financing conditions/);
@@ -80,7 +80,7 @@ test("Gilt yields show every number with %, pp and basis points, and keep the ho
   assert.match(gilts, /Last successful checks: 5-year .*; 10-year .*; 20-year /);
   // No four-decimal yield is shown; the exact values stay in the data, not on the cards.
   assert.doesNotMatch(gilts, /5\.3516|4\.9700|5\.6700/);
-  assert.match(html, /1 pp = 100 basis points/);
+  assert.match(html, /1 pp = 100 bp/);
   // The degraded 10-year series is flagged rather than hidden.
   assert.match(gilts, /Update delayed · showing last verified figure/);
 });
@@ -146,6 +146,6 @@ test("2 decimal display rounds half away from zero and never shows a real change
   const gilts = textOf(section(await renderGovernment(data), "gilt-yields"));
   assert.match(gilts, /10-year gilt yield UK government 10-year borrowing cost 5\.32 ?%/);
   assert.match(gilts, /Previous 5\.31% /);
-  assert.match(gilts, /Up \+0\.01 pp \+1\.01 basis points/);
-  assert.match(gilts, /5-year 5\.00% 5\.01% .* Down −0\.01 pp −1 basis points/);
+  assert.match(gilts, /Up \+1\.0 bp/);
+  assert.match(gilts, /5-year 5\.00% 5\.01% .* Down −1\.0 bp/);
 });

@@ -38,13 +38,18 @@ const yieldPercent = (value: string) => {
   const { text, negative } = twoPlaces(value);
   return `${negative ? MINUS : ""}${text}%`;
 };
-/** Yield change in pp at 2 decimal places. A real but tiny change is never shown as 0.00. */
+/**
+ * Yield change in basis points (1 pp = 100 bp), the market convention, at 1 decimal
+ * place ("+1.4 bp"). Basis points avoid a rounded pp change that disagrees with the
+ * rounded yields; a real but tiny change keeps two decimals rather than showing 0.
+ */
 function yieldChangeLine(current: string, previous: string) {
   const difference = decimalDifference(current, previous);
   const direction = changeDirection(difference);
   if (direction === "flat") return { text: "No change", direction };
-  const { text, zero } = twoPlaces(difference);
-  return { text: zero ? "Less than 0.01 pp" : `${difference[0] === MINUS ? MINUS : "+"}${text} pp`, direction };
+  const bp = Math.abs(Number(basisPoints(difference).replace(MINUS, "-")));
+  const shown = bp >= 0.05 ? bp.toFixed(1) : bp.toFixed(2);
+  return { text: `${direction === "down" ? MINUS : "+"}${shown} bp`, direction };
 }
 type Format = { value: (value: string) => string; change: (current: string, previous: string) => { text: string; direction: string } };
 const PLAIN: Format = { value: percent, change: changeLine };
@@ -114,9 +119,7 @@ export function GovernmentPage({ data, loading, error, refresh, topics, Historic
   const giltRows = GILTS.map(([key, tenor, title, label]) => {
     const metric = data?.metrics?.[key];
     const previous = metric?.latest ? previousReading(metric) : null;
-    const bp = previous ? basisPoints(decimalDifference(metric.latest.value, previous.value)) : null;
-    const extra = previous && bp && !/^[+−]?0$/.test(bp) ? [sub(`${bp} basis points`)] : [];
-    return { key, tenor, title, label, metric, row: figureRow(metric, previous, true, extra, YIELD) };
+    return { key, tenor, title, label, metric, row: figureRow(metric, previous, true, [], YIELD) };
   });
   const [tenYear, ...otherTenors] = giltRows;
 
@@ -280,7 +283,7 @@ export function GovernmentPage({ data, loading, error, refresh, topics, Historic
         </section>
         <p className="fs-ledger-note" id="change-note">
           * Change is the latest value minus the previous one, calculated by FinStats from the official series. pp means
-          percentage points; 1 pp = 100 basis points. Green and red show direction only, not good or bad.
+          percentage points; bp means basis points (1 pp = 100 bp). Green and red show direction only, not good or bad.
         </p>
       </div>
       <GovernmentGuide />
