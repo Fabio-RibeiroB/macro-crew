@@ -727,11 +727,16 @@ Implementation slices (one issue and one focused PR each):
 5. Overview MPC line: one short AI sentence on the latest MPC decision on the
    overview, labelled as AI with a link to the full summary. The AI job gains an
    optional short `headline` field; until it exists the first sentence is used.
-6. Figures ticker: a scrolling strip below the header on every page, per ADR 0002.
+6. Figures ticker: a scrolling strip below the header on every page, per ADR 0002
+   (reshaped by slice 8).
 7. "On this page" contents: subject pages with more than one section (Prices,
    Economy, Jobs & Pay, Housing, Government) show a short list of section links
    near the top, sticky or easy to reach on mobile, so a reader on Housing can
    see that House prices follows Rent. Uses the existing anchors.
+8. News-style crawl (ADR 0003, approved 18 November 2026): the ticker reads like
+   a news crawl of short plain-English items ("Inflation: 3.5%, up from 3.1%")
+   and "MPC:" with the AI one-line headline, tagged "AI" and linked to the full
+   summary, falling back to factual Bank Rate wording when there is no report.
 
 **Acceptance:** each slice verified live on desktop and at 360px, light and dark;
 the ticker also with reduced motion. All tests green; no statistical change.
