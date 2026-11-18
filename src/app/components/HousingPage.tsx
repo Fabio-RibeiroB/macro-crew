@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import { RefreshCw } from "lucide-react";
 import { chartUpdated } from "../data/chartMeta.mjs";
 import { chartPoints } from "../data/verified.mjs";
 import { realPriceSeries, realPriceTitle, baseMonthLabel } from "../data/realPrices.mjs";
@@ -65,12 +64,8 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
     <div className="fs-container fs-economy fs-housing">
       <div className="fs-statusbar">
         <p>
-          {data ? <>Figures last updated {checkedAt(data.published_at)} and can be revised. <a href="/sources">How we check the data</a></> : "Official figures"}
+          {data ? <>Figures last updated {checkedAt(data.published_at)}. We check official sources every 30 minutes and this page updates itself. <a href="/sources">How we check the data</a></> : "Official figures"}
         </p>
-        <button className="fs-text-button" disabled={loading} onClick={() => void refresh()}>
-          <RefreshCw size={15} className={loading ? "fs-spin" : ""} aria-hidden="true" />
-          {loading ? "Checking figures…" : "Check for updates"}
-        </button>
       </div>
       {error && (
         <div className="fs-alert" role="status">
