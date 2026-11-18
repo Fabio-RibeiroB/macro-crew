@@ -822,8 +822,7 @@ export default function App({
     };
   }, [needsSummaries]);
   useEffect(() => {
-    // The overview shows one line of the Monetary Policy summary, so it reads the report too.
-    if (page.id !== "economy" && page.id !== "overview") return;
+    // Every page's crawl carries the one-line MPC headline (ADR 0003), so the report loads everywhere.
     const owner = createRefreshController({
       load: async (signal) => {
         const response = await fetch(
@@ -929,7 +928,7 @@ export default function App({
           </button>
         </div>
       </header>
-      <FiguresTicker data={data} loading={loading} error={error} hrefs={tickerHrefs} />
+      <FiguresTicker data={data} loading={loading} error={error} hrefs={tickerHrefs} reports={reports} />
       <main id="main-content" tabIndex={-1}>
         {page.id === "overview" && (
           <>

@@ -1,8 +1,11 @@
-// Figures ticker items (ADR 0002, decision 3). Pure functions over the same verified
-// snapshot as the overview table: values and changes come straight from
-// `overviewRows`, so the ticker can never disagree with the table. Missing values
-// are skipped, never shown as zero. The MPC item is derived only from the official
-// Bank Rate series; no AI text is involved.
+// News-style crawl items (ADR 0003, superseding ADR 0002 decision 3). Pure functions over
+// the same verified snapshot as the overview table: figures and changes come straight
+// from `overviewRows`, so the crawl can never disagree with the table. Each figure reads
+// as a short plain-English phrase ("Inflation: 3.5%, up from 3.1%"). Missing values are
+// skipped, never shown as zero. The first item is "MPC:" with the one-line AI headline
+// (`mpcLine`), tagged AI and never a number source; without a report it falls back to
+// factual wording from the official Bank Rate series.
+import { mpcLine } from "./aiSummary.mjs";
 import { dayLabel, overviewRows } from "./overview.mjs";
 import { lastRateChange } from "./verified.mjs";
 
@@ -14,96 +17,109 @@ export const TICKER_PX_PER_SECOND = 50;
  */
 export const MPC_DECISION_WINDOW_DAYS = 35;
 export const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
-const ARROWS = { up: "▲", down: "▼", flat: "" };
+export const AI_SUMMARY_HREF = "/economy#ai-summary";
 const TAG_LABELS = { petrol: "Petrol", diesel: "Diesel" };
+const LABELS = {
+  inflation: { cpi: "Inflation", cpih: "Inflation (CPIH)" },
+  "bank-rate": "Bank Rate",
+  wages: "Pay growth",
+  unemployment: "Unemployment",
+  rent: "Rent growth",
+  "house-prices": "House prices",
+  energy: "Energy price cap",
+  gdp: "GDP growth",
+};
 
 const labelFor = (row, line) => {
   if (line.tag) return TAG_LABELS[line.tag] ?? line.tag;
-  if (row.id === "inflation") return row.kind === "cpi" ? "CPI" : row.kind === "cpih" ? "CPIH" : row.name;
-  if (row.id === "energy") return "Energy cap";
-  return row.name;
+  const label = LABELS[row.id];
+  return (typeof label === "object" ? label[row.kind] : label) ?? row.name;
 };
 
-/** Change line to display: arrow, unsigned magnitude and the direction used for colour. */
-function changeOf(line) {
+/** Spoken-style value: "£1,723/year" becomes "£1,723 a year", "174.57p" "174.57p a litre". */
+function valueOf(row, line) {
+  if (line.tag) return `${line.text} a litre`;
+  return line.text.replace(/\/year$/, " a year");
+}
+
+/**
+ * Change phrase and its direction. Percentage-point changes name the earlier value
+ * ("up from 3.1%"); money and pence changes give the size ("up £891"). No comparable
+ * change gives null, so the item shows just the figure.
+ */
+function changeOf(line, previous) {
   if (!line || line.missing || line.sub) return null;
-  if (line.direction === "up" || line.direction === "down") {
+  if (line.direction === "flat") return { dir: "flat", text: "unchanged" };
+  if (line.direction !== "up" && line.direction !== "down") return null;
+  const size = line.text.replace(/^[+−-]\s*/, "").trim().replace(/\/year$/, " a year");
+  const phrase = line.direction;
+  if (/ pp$/.test(line.text)) {
     return {
-      dir: line.direction,
-      arrow: ARROWS[line.direction],
-      spoken: line.direction,
-      text: line.text.replace(/^[+−-]\s*/, "").trim(),
+      dir: phrase,
+      text: previous && !previous.missing ? `${phrase} from ${previous.text}` : `${phrase} ${size.replace(/ pp$/, " points")}`,
     };
   }
-  return { dir: "flat", arrow: "", spoken: "", text: line.text === "No change" ? "no change" : line.text.toLowerCase() };
+  return { dir: phrase, text: `${phrase} ${size}` };
 }
 
 const daysBetween = (from, to) =>
   Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000);
+const shortDay = (period) => dayLabel(period).replace(/ \d{4}$/, "");
 
-/** One MPC item from the official Bank Rate series, or null when it cannot be evidenced. */
+/** The AI one-line MPC headline, tagged AI and linked to the full AI summary. */
+export function mpcAiItem(reports) {
+  const line = mpcLine(reports);
+  if (!line) return null;
+  return { id: "mpc", kind: "mpc", label: "MPC", ai: true, value: line.text, change: null, href: AI_SUMMARY_HREF };
+}
+
+/** Factual MPC item from the official Bank Rate series, or null when it cannot be evidenced. */
 export function mpcItem(metric, rateText, href = null) {
   if (!metric?.latest || metric.latest.value == null || !rateText) return null;
   const change = lastRateChange(metric);
   if (!change) return null;
   const recent = daysBetween(change.period, metric.latest.period) <= MPC_DECISION_WINDOW_DAYS;
-  const date = dayLabel(change.period);
-  if (recent) {
-    const raised = change.difference > 0;
-    return {
-      id: "mpc",
-      kind: "mpc",
-      label: "MPC",
-      value: raised ? `raised to ${rateText} (tightening)` : `cut to ${rateText} (loosening)`,
-      change: { dir: raised ? "up" : "down", arrow: raised ? ARROWS.up : ARROWS.down, spoken: "", text: "" },
-      meta: date,
-      href,
-    };
-  }
-  return {
-    id: "mpc",
-    kind: "mpc",
-    label: "MPC",
-    value: `held at ${rateText} (on hold)`,
-    change: { dir: "flat", arrow: "", spoken: "", text: "" },
-    meta: `last change ${date}`,
-    href,
-  };
+  const value = recent
+    ? `${change.difference > 0 ? "raised" : "cut"} Bank Rate to ${rateText} on ${shortDay(change.period)}`
+    : `held Bank Rate at ${rateText}`;
+  return { id: "mpc", kind: "mpc", label: "MPC", ai: false, value, change: null, href };
 }
 
-/** Ticker items in overview order. `hrefs` maps a metric kind to its subject page anchor. */
-export function tickerItems(data, hrefs = {}) {
+/**
+ * Crawl items: the MPC item first, then the overview figures in order. `hrefs` maps a
+ * metric kind to its subject page anchor. Without figures there is nothing to crawl.
+ */
+export function tickerItems(data, hrefs = {}, reports = null) {
   if (!data?.metrics) return [];
-  const items = [];
-  for (const row of overviewRows(data)) {
+  const rows = overviewRows(data);
+  const bankRate = rows.find((row) => row.id === "bank-rate")?.latest[0];
+  const mpc =
+    mpcAiItem(reports) ??
+    mpcItem(data.metrics.bank_rate, bankRate && !bankRate.missing ? bankRate.text : null, hrefs.bank_rate ?? null);
+  const items = mpc ? [mpc] : [];
+  for (const row of rows) {
     const changes = row.change.filter((line) => !line.sub);
+    const previous = row.previous.filter((line) => !line.sub);
     row.latest.forEach((line, index) => {
       if (line.missing || line.sub) return;
       items.push({
         id: line.tag ? `${row.id}-${line.tag}` : row.id,
         kind: row.kind,
         label: labelFor(row, line),
-        value: line.text,
-        change: changeOf(changes[index]),
-        meta: null,
+        ai: false,
+        value: valueOf(row, line),
+        change: changeOf(changes[index], previous[index]),
         href: hrefs[row.kind] ?? null,
       });
     });
-    if (row.id === "bank-rate") {
-      const rate = row.latest[0];
-      const mpc = mpcItem(data.metrics.bank_rate, rate && !rate.missing ? rate.text : null, hrefs.bank_rate ?? null);
-      if (mpc) items.push(mpc);
-    }
   }
   return items;
 }
 
 /** Plain-text reading of an item, as a screen reader gets it. */
 export function itemText(item) {
-  const parts = [item.label, item.value];
-  if (item.change) parts.push([item.change.spoken, item.change.text].filter(Boolean).join(" "));
-  if (item.meta) parts.push(item.meta);
-  return parts.filter(Boolean).join(" ");
+  const head = `${item.label}: ${item.ai ? "AI " : ""}${item.value}`;
+  return item.change ? `${head}, ${item.change.text}` : head;
 }
 
 /** "running" scrolls, "paused" holds position, "static" is a plain scrollable strip. */
