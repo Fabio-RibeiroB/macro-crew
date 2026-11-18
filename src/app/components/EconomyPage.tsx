@@ -5,6 +5,7 @@ import { chartPoints } from "../data/verified.mjs";
 import { overviewRows } from "../data/overview.mjs";
 import { checkedAt } from "../data/format.mjs";
 import { PageContents } from "./PageContents";
+import { MoreDetail } from "./MoreDetail";
 import { OfficialLink } from "./OfficialLink";
 import { AiCommentary, KeyFigure, Row, Sources } from "./SubjectBlock";
 
@@ -62,19 +63,21 @@ export function EconomyPage({ data, loading, error, refresh, topics, reports, re
         <Row label="What it means" labelId="bank-means-label">
           <div className="fs-means">
             <p>{topics.bank_rate.meaning}</p>
-            <p>
-              The Bank of England’s Monetary Policy Committee, or MPC, sets Bank Rate to help keep inflation low and
-              stable. A change can reach variable-rate borrowers sooner. Fixed mortgage payments usually stay the same
-              during the fixed period, but the cost can change when the deal ends. Savings providers do not all pass on
-              changes in the same way.
-            </p>
-            <p>When a rate decision is announced, look at:</p>
-            <ul>
-              <li><strong>The decision:</strong> did the rate change?</li>
-              <li><strong>The votes:</strong> did members agree, and why?</li>
-              <li><strong>The outlook:</strong> what evidence could change the next decision?</li>
-            </ul>
-            <p>{topics.bank_rate.caution} A forecast or a voting split is not a promise about the next meeting.</p>
+            <MoreDetail label="How it’s set and what to watch">
+              <p>
+                The Bank of England’s Monetary Policy Committee, or MPC, sets Bank Rate to help keep inflation low and
+                stable. A change can reach variable-rate borrowers sooner. Fixed mortgage payments usually stay the same
+                during the fixed period, but the cost can change when the deal ends. Savings providers do not all pass on
+                changes in the same way.
+              </p>
+              <p>When a rate decision is announced, look at:</p>
+              <ul>
+                <li><strong>The decision:</strong> did the rate change?</li>
+                <li><strong>The votes:</strong> did members agree, and why?</li>
+                <li><strong>The outlook:</strong> what evidence could change the next decision?</li>
+              </ul>
+              <p>{topics.bank_rate.caution} A forecast or a voting split is not a promise about the next meeting.</p>
+            </MoreDetail>
             <OfficialLink href="https://www.bankofengland.co.uk/monetary-policy/the-interest-rate-bank-rate">
               Read the latest official rate decision
             </OfficialLink>
@@ -95,12 +98,17 @@ export function EconomyPage({ data, loading, error, refresh, topics, reports, re
         <Row label="Key figure" labelId="gdp-key-label">{figure("gdp", gdp, "Office for National Statistics", "Period")}</Row>
         <Row label="What it means" labelId="gdp-means-label">
           <div className="fs-means">
-            <p>{topics.gdp.meaning}</p>
             <p>
-              This figure is the change from the previous month, after removing seasonal patterns and price changes. It
-              is not a yearly figure.
+              GDP is the monthly change in how much the UK economy produces, not a yearly figure. Growth can support
+              business activity and jobs, but it does not tell us whether every household is better off.
             </p>
-            <p>{topics.gdp.caution}</p>
+            <MoreDetail label="How it’s measured">
+              <p>
+                GDP measures economic output. This figure is the change from the previous month, after removing
+                seasonal patterns and price changes.
+              </p>
+              <p>{topics.gdp.caution}</p>
+            </MoreDetail>
             <OfficialLink href="https://www.ons.gov.uk/economy/grossdomesticproductgdp">
               Explore the GDP releases
             </OfficialLink>

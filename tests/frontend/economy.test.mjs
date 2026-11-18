@@ -73,3 +73,17 @@ test("without verified data Economy shows honest placeholders and no zero", asyn
   assert.match(partial, /A verified history is not available yet/);
   assert.doesNotMatch(partial, /Key figure [+−]?0(\.0+)?%/);
 });
+
+test("Economy keeps What it means short and puts methodology in a MoreDetail disclosure (ADR 0004)", async () => {
+  const html = await renderEconomy(fullFixture());
+  for (const id of ["interest-rates", "gdp"]) {
+    const block = section(html, id);
+    const cell = /id="[a-z]+-means-label"[^>]*>What it means<\/h3><div[^>]*>([\s\S]*?)<\/div><\/div><div class="fs-row"/.exec(block)[1];
+    assert.match(cell, /<details class="fs-more">/, `${id} has a MoreDetail`);
+    const visible = textOf(cell.replace(/<details[\s\S]*?<\/details>/g, ""));
+    assert.ok(visible.split(" ").length < 60, `${id} visible text is short: ${visible}`);
+  }
+  const bank = textOf(section(html, "interest-rates"));
+  assert.match(bank, /Monetary Policy Committee/, "the detail is kept in the markup");
+  assert.match(textOf(section(html, "gdp")), /after removing seasonal patterns and price changes/);
+});

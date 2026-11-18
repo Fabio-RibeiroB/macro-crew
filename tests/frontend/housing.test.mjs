@@ -186,3 +186,19 @@ test("Housing says which average each £ figure is (#149)", async () => {
   assert.match(charted, /Average monthly rent \(ONS PIPR, mix-adjusted\)/);
   assert.match(textOf(section(html, "rent")), /mix-adjusted average \(a weighted geometric mean\), not the median/);
 });
+
+test("Housing keeps What it means short, with the average labelled and detail in a MoreDetail (ADR 0004)", async () => {
+  const html = await renderHousing(fullFixture());
+  const meansCell = (block) => />What it means<\/h3><div[^>]*>([\s\S]*?)<\/div><\/div><div class="fs-row"/.exec(block)[1];
+  const visibleOf = (cell) => textOf(cell.replace(/<details[\s\S]*?<\/details>/g, "")).replace(/&#x27;|’/g, "'");
+  for (const id of ["rent", "house-prices"]) {
+    const cell = meansCell(section(html, id));
+    assert.match(cell, /<details class="fs-more">/, `${id} has a MoreDetail`);
+    assert.match(visibleOf(cell), /mix-adjusted, not the median/, `${id} says which average it is, visibly`);
+    assert.ok(visibleOf(cell).split(" ").length < 70, `${id} visible text is short`);
+  }
+  const prices = visibleOf(meansCell(section(html, "house-prices")));
+  assert.match(prices, /^UK House Price Index average \(mix-adjusted, not the median\)/);
+  assert.match(prices, /FinStats calculation, not an official statistic/, "the after-inflation chart is labelled visibly");
+  assert.doesNotMatch(prices, /should not be compared directly/, "the comparison caveat is inside the disclosure");
+});

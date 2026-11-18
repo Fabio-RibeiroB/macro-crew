@@ -235,3 +235,14 @@ test("the chart renders all three lines with a key, exact values and no gaps dra
     assert.match(text, /Nothing is estimated or shown as zero/);
   } finally { await server.close(); }
 });
+
+test("Mortgage rates keeps 'averages, not offers' visible and the method in a MoreDetail (ADR 0004)", async () => {
+  const html = await renderHousing(withMortgages());
+  const block = section(html, "mortgage-rates");
+  const cell = />What it means<\/h3><div[^>]*>([\s\S]*?)<\/div><\/div><div class="fs-row"/.exec(block)[1];
+  assert.match(cell, /<details class="fs-more">/);
+  const visible = textOf(cell.replace(/<details[\s\S]*?<\/details>/g, ""));
+  assert.match(visible, /Average advertised rates .* They are averages, not offers/);
+  assert.doesNotMatch(visible, /75% loan-to-value|existing mortgages/);
+  assert.match(textOf(cell), /not the rate paid on existing mortgages/);
+});
