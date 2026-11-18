@@ -7,6 +7,7 @@ import { checkedAt } from "../data/format.mjs";
 import { PageContents } from "./PageContents";
 import { OfficialLink } from "./OfficialLink";
 import { Delta } from "./IndicatorTable";
+import { MoreDetail } from "./MoreDetail";
 import { KeyFigure, Row, Sources } from "./SubjectBlock";
 
 const CHART_CAPTION =
@@ -50,7 +51,10 @@ function RealPay({ nominal, real }: any) {
           ? <> · {difference === "0" ? "No change" : <>Change <Delta direction={changeDirection(difference)}>{difference} pp</Delta></>} vs {windowLabel(earlier.start_month, earlier.end_month)} (windows overlap)</>
           : " · A directly comparable previous window is not available."}
       </p>
-      <p>{relationship}{real.collection_status !== "ok" ? " Update delayed, showing the last verified figure." : ""}</p>
+      {real.collection_status !== "ok" && <p>Update delayed, showing the last verified figure.</p>}
+      <MoreDetail label="How it's matched">
+        <p>{relationship}</p>
+      </MoreDetail>
     </div>
   );
 }
@@ -119,13 +123,19 @@ export function JobsPayPage({ data, loading, error, refresh, topics, HistoricalT
         </Row>
         <Row label="What it means" labelId="wages-means-label">
           <div className="fs-means">
-            <p>{topics.regular_pay_nominal_growth.meaning}</p>
             <p>
-              Regular pay excludes bonuses and covers Great Britain. The headline figure is not adjusted for rising
-              prices. The after-inflation figure is the ONS series adjusted using CPIH, and it is dated separately.
+              Regular pay growth is how much average earnings, leaving out bonuses, have risen compared with a year
+              earlier. The after-inflation figure shows whether pay is keeping up with prices.
             </p>
-            <p>{topics.regular_pay_nominal_growth.caution}</p>
-            <OfficialLink href={BULLETIN_PAY}>ONS Average weekly earnings in Great Britain</OfficialLink>
+            <MoreDetail label="How it's measured">
+              <p>{topics.regular_pay_nominal_growth.meaning}</p>
+              <p>
+                Regular pay excludes bonuses and covers Great Britain. The headline figure is not adjusted for rising
+                prices. The after-inflation figure is the ONS series adjusted using CPIH, and it is dated separately.
+              </p>
+              <p>{topics.regular_pay_nominal_growth.caution}</p>
+              <OfficialLink href={BULLETIN_PAY}>ONS Average weekly earnings in Great Britain</OfficialLink>
+            </MoreDetail>
           </div>
         </Row>
         <Row label="Chart" labelId="wages-chart-label">
@@ -135,7 +145,7 @@ export function JobsPayPage({ data, loading, error, refresh, topics, HistoricalT
               {chart(real, { title: "Official CPIH-adjusted annual regular-pay growth", label: "Real regular pay · CPIH" })}
             </div>
           )}
-          <p className="fs-caption">{CHART_CAPTION}</p>
+          <MoreDetail label="How to read this chart"><p>{CHART_CAPTION}</p></MoreDetail>
         </Row>
         <Row label="Sources" labelId="wages-sources-label">
           <Sources
@@ -155,20 +165,26 @@ export function JobsPayPage({ data, loading, error, refresh, topics, HistoricalT
         <Row label="Key figure" labelId="unemployment-key-label">{figure("unemployment", unemployment)}</Row>
         <Row label="What it means" labelId="unemployment-means-label">
           <div className="fs-means">
-            <p>{topics.unemployment.meaning}</p>
-            <p>Covers UK residents aged 16 and over, seasonally adjusted. Each reading is a rolling three-month window.</p>
             <p>
-              {unemployment?.quality_note ?? "The Labour Force Survey unemployment rate's 95% confidence intervals remain wider than before the pandemic."}{" "}
-              Treat small movements with care.
+              The unemployment rate is the share of people in the workforce who are out of work and looking for a job.
+              Small changes from one reading to the next should be treated with care.
             </p>
-            <OfficialLink href={unemployment?.quality_source_url ?? LFS_QUALITY}>
-              ONS Labour Force Survey quality update, October 2026
-            </OfficialLink>
+            <MoreDetail label="How it's measured">
+              <p>{topics.unemployment.meaning}</p>
+              <p>Covers UK residents aged 16 and over, seasonally adjusted. Each reading is a rolling three-month window.</p>
+              <p>
+                {unemployment?.quality_note ?? "The Labour Force Survey unemployment rate's 95% confidence intervals remain wider than before the pandemic."}{" "}
+                Treat small movements with care.
+              </p>
+              <OfficialLink href={unemployment?.quality_source_url ?? LFS_QUALITY}>
+                ONS Labour Force Survey quality update, October 2026
+              </OfficialLink>
+            </MoreDetail>
           </div>
         </Row>
         <Row label="Chart" labelId="unemployment-chart-label">
           {chart(unemployment, { title: "UK unemployment rate, aged 16 and over", label: "Unemployment rate · seasonally adjusted" })}
-          <p className="fs-caption">{CHART_CAPTION}</p>
+          <MoreDetail label="How to read this chart"><p>{CHART_CAPTION}</p></MoreDetail>
         </Row>
         <Row label="Sources" labelId="unemployment-sources-label">
           <Sources

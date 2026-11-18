@@ -45,6 +45,13 @@ test("each Prices measure reads Key figure, What it means, Chart, Sources in ord
   for (const id of ["inflation", "household-energy", "petrol-diesel"])
     assert.deepEqual(labelsOf(section(html, id)), ["Key figure", "What it means", "Chart", "Sources"], id);
   assert.doesNotMatch(html, /fs-ai-box|class="fs-ai-tag"/, "no AI summary row where no AI report is about prices");
+  // Technical wording sits in a "How it's measured" disclosure inside each What it means row (ADR 0004).
+  for (const id of ["inflation", "household-energy", "petrol-diesel"]) {
+    const block = section(html, id);
+    const means = block.slice(block.search(/<h3 class="fs-row-label"[^>]*>What it means/), block.search(/<h3 class="fs-row-label"[^>]*>Chart/));
+    assert.match(means, /<details class="fs-more"><summary>[\s\S]*How it&#x27;s measured[\s\S]*<\/summary>/, id);
+    assert.doesNotMatch(means, /<details[^>]* open/, id);
+  }
   assert.ok(html.indexOf('id="inflation"') < html.indexOf('id="household-energy"'));
   assert.ok(html.indexOf('id="household-energy"') < html.indexOf('id="petrol-diesel"'));
   // Chart sits between the explanation and the sources (lazy card: loading state in SSR).
