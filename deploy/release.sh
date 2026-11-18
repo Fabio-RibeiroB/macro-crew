@@ -13,6 +13,7 @@
 #   FINSTATS_HOME        account home [$HOME]
 #   FINSTATS_SITE        checkout containing the dist symlink [$FINSTATS_HOME/public_html/macro-crew]
 #   FINSTATS_MAX_USED_MB abort a deploy above this usage [3600; hard quota is 4096]
+#   FINSTATS_TODAY       date used in the release name [today]
 set -euo pipefail
 
 FINSTATS_HOME="${FINSTATS_HOME:-$HOME}"
@@ -51,13 +52,16 @@ check_disk_guard() {
   log "disk guard ok: ${used} MB used (limit ${MAX_USED_MB} MB)"
 }
 
+# One more than today's highest N, never a gap left by pruning, so names only go up.
+# The live and previous releases are never pruned, so the highest N always survives.
 next_release_name() {
-  local today n=1
-  today=$(date +%F)
-  while [[ -e "$RELEASES/deploy-$today.$n" || -L "$RELEASES/deploy-$today.$n" ]]; do
-    n=$((n + 1))
+  local today n=0 entry num
+  today=${FINSTATS_TODAY:-$(date +%F)}
+  for entry in "$RELEASES/deploy-$today".*; do
+    num=${entry##*/deploy-"$today".}
+    [[ "$num" =~ ^[0-9]+$ ]] && (( 10#$num > n )) && n=$((10#$num))
   done
-  printf 'deploy-%s.%s\n' "$today" "$n"
+  printf 'deploy-%s.%s\n' "$today" "$((n + 1))"
 }
 
 # Names of real (non-symlink) directories in $1 that match regex $2, oldest first.

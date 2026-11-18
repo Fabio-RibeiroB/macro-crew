@@ -222,3 +222,22 @@ test("prune-merged keeps everything when gh is unavailable", { skip }, () => {
     assert.deepEqual(branches(work), ["main", "merged-a", "merged-open-pr", "unmerged"]);
   } finally { rmSync(base, { recursive: true, force: true }); }
 });
+
+test("release names only go up, never reuse a number freed by pruning", { skip }, () => {
+  const h = mkdtempSync(join(tmpdir(), "finstats-name-"));
+  try {
+    const name = () =>
+      spawnSync("bash", ["-c", `source "${RELEASE}"; next_release_name`], {
+        encoding: "utf8",
+        env: { ...process.env, FINSTATS_HOME: h, FINSTATS_TODAY: "2026-11-18" },
+      }).stdout.trim();
+    mkdirSync(join(h, "releases"), { recursive: true });
+    assert.equal(name(), "deploy-2026-11-18.1");
+    for (const n of ["deploy-2026-11-18.7", "deploy-2026-11-18.10", "deploy-2026-11-17.40", "deploy-2026-11-18.x"]) {
+      mkdirSync(join(h, "releases", n));
+    }
+    assert.equal(name(), "deploy-2026-11-18.11");
+  } finally {
+    rmSync(h, { recursive: true, force: true });
+  }
+});
