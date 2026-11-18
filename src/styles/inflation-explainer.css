@@ -1,0 +1,202 @@
+/* Pilot inflation explainer (issue #172). Tokens come from the ADR 0001/0002 palette; the one
+   coloured element is the extra cost, in the direction colour. No animation, so nothing to reduce. */
+.fs-ex,
+.fs-steps {
+  --ex-base: #7b8f87;
+}
+.fs-ex {
+  margin: 14px 0 12px;
+  padding: 14px 16px 12px;
+  max-width: 480px;
+  border: 1px solid var(--fs-line-strong);
+  background: var(--fs-soft);
+  border-radius: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.dark .fs-ex,
+.dark .fs-steps {
+  --ex-base: #6d8579;
+}
+.fs-ex-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.fs-ex-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--fs-paper);
+  border: 1px solid var(--fs-line-strong);
+  color: var(--fs-accent);
+}
+.fs-root .fs-ex h4 {
+  margin: 0;
+  font: 700 20px/1.2 var(--font-body);
+  letter-spacing: -0.01em;
+  color: var(--fs-ink);
+}
+.fs-ex-sentence {
+  margin: 10px 0 0;
+  color: var(--fs-ink);
+}
+.fs-ex-sentence strong {
+  font-weight: 700;
+}
+.fs-ex-bars {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+.fs-ex-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: 12px;
+  row-gap: 4px;
+  font-size: 13.5px;
+  color: var(--fs-muted);
+}
+.fs-ex-amt {
+  font-weight: 700;
+  color: var(--fs-ink);
+}
+.fs-ex-now .fs-ex-amt {
+  font-size: 15px;
+}
+.fs-ex-bar {
+  grid-column: 1 / -1;
+  display: flex;
+  height: 14px;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.fs-ex-base {
+  flex: none;
+  background: var(--ex-base);
+}
+.fs-ex-diff {
+  flex: none;
+  min-width: 4px;
+  box-sizing: border-box;
+}
+.fs-ex-up {
+  background: var(--fs-up);
+}
+.fs-ex-down {
+  background: var(--fs-down);
+}
+.fs-ex-target {
+  background: repeating-linear-gradient(135deg, var(--fs-muted) 0 2px, transparent 2px 4px);
+}
+.fs-ex-gain {
+  margin-left: 6px;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+.fs-ex-gain-up {
+  color: var(--fs-up);
+}
+.fs-ex-gain-down {
+  color: var(--fs-down);
+}
+.fs-ex figcaption {
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: var(--fs-muted);
+}
+
+/* Three-step "how it is measured" diagram. */
+.fs-steps {
+  list-style: none;
+  margin: 4px 0 14px;
+  padding: 0;
+  display: grid;
+  gap: 0;
+}
+.fs-steps li {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding-bottom: 18px;
+}
+.fs-steps li:last-child {
+  padding-bottom: 0;
+}
+/* Connector: a line down from each icon on narrow screens. */
+.fs-steps li:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 19px;
+  top: 42px;
+  bottom: 4px;
+  width: 2px;
+  background: var(--ex-base);
+}
+.fs-step-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--fs-soft);
+  border: 1px solid var(--fs-line-strong);
+  color: var(--fs-accent);
+}
+.fs-step-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  color: var(--fs-ink);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.fs-step-text strong {
+  font-weight: 700;
+}
+.fs-step-n {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--fs-muted);
+}
+.fs-step-result {
+  margin-top: 2px;
+  color: var(--fs-accent);
+}
+@media (min-width: 640px) {
+  .fs-steps {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 28px;
+  }
+  .fs-steps li {
+    flex-direction: column;
+    gap: 8px;
+    padding-bottom: 0;
+  }
+  .fs-steps li:not(:last-child)::before {
+    left: 48px;
+    right: -20px;
+    top: 19px;
+    bottom: auto;
+    width: auto;
+    height: 2px;
+  }
+  .fs-steps li:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    right: -22px;
+    top: 14px;
+    width: 8px;
+    height: 8px;
+    border-top: 2px solid var(--ex-base);
+    border-right: 2px solid var(--ex-base);
+    transform: rotate(45deg);
+  }
+}
