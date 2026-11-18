@@ -37,7 +37,8 @@ test("each Government measure reads Key figure, What it means, Chart, Sources in
   assert.ok(html.indexOf('id="public-debt"') < html.indexOf('id="gilt-yields"'));
   assert.ok(html.indexOf('id="gilt-yields"') < html.indexOf("Three things to keep separate"));
   // Budget and OBR guidance is kept.
-  assert.match(html, /Start with who is affected/);
+  assert.match(html, /How to read Budget announcements/);
+  assert.doesNotMatch(html, /Start with who is affected|What to look for<|fs-eyebrow">(What to look for|Checking the wider picture)/);
   assert.match(html, /What do the independent forecasts say\?/);
   assert.match(html, /Read the Economic and Fiscal Outlook/);
 });
@@ -52,23 +53,33 @@ test("Public debt figures carry units, pp change and the end-of-month reference"
   assert.match(debt, /percentage points \(pp\), not percent growth/);
   assert.match(debt, /deficit, or net borrowing, is the amount borrowed over a period/);
   assert.match(debt, /HF6X/);
+  // Methodology sits in a "How it's measured" disclosure; two plain sentences stay visible.
+  const means = section(await renderGovernment(fixture()), "public-debt");
+  const visible = textOf(means.slice(means.indexOf("fs-means"), means.indexOf("<details")));
+  assert.match(visible, /Public sector net debt is how much the public sector owes/);
+  assert.doesNotMatch(visible, /PSNFL|not seasonally adjusted/);
+  assert.match(means, /<details class="fs-more">(?:(?!<\/details>)[\s\S])*How it(?:'|&#x27;)s measured(?:(?!<\/details>)[\s\S])*PSNFL/);
 });
 
 test("Gilt yields show every number with %, pp and basis points, and keep the honest caveat", async () => {
   const html = await renderGovernment(fixture());
   const gilts = textOf(section(html, "gilt-yields"));
-  assert.match(gilts, /Key figure 5\.3516 ?%/, "10-year is the primary figure");
-  assert.match(gilts, /Previous 5\.374% 19 Oct 2026/);
-  assert.match(gilts, /↓ Down −0\.0224 pp −2\.24 basis points/);
+  assert.match(gilts, /10-year gilt yield UK government 10-year borrowing cost 5\.35 ?%/, "10-year is the primary figure, named and shown at 2 decimal places");
+  assert.match(gilts, /Previous 5\.37% 19 Oct 2026/);
+  assert.match(gilts, /↓ Down −0\.02 pp −2\.24 basis points/);
   assert.match(gilts, /Observed on 20 Oct 2026/);
-  assert.match(gilts, /5-year 4\.9700% 4\.9618% 20 Oct 2026 ↑ Up \+0\.0082 pp \+0\.82 basis points 21 Oct 2026/);
-  assert.match(gilts, /20-year 5\.6700% 5\.6687% 20 Oct 2026 ↑ Up \+0\.0013 pp \+0\.13 basis points 21 Oct 2026/);
+  assert.match(gilts, /5-year 4\.97% 4\.96% 20 Oct 2026 ↑ Up \+0\.01 pp \+0\.82 basis points 21 Oct 2026/);
+  assert.match(gilts, /20-year 5\.67% 5\.67% 20 Oct 2026 ↑ Up Less than 0\.01 pp \+0\.13 basis points 21 Oct 2026/);
   assert.match(gilts, /previous available trading observation/);
   assert.match(gilts, /One percentage point equals 100 basis points/);
   assert.match(gilts, /market financing conditions/);
   assert.match(gilts, /not the average cost of the government’s outstanding debt/);
   assert.match(gilts, /IUDSNPY, IUDMNPY and IUDLNPY/);
+  assert.match(gilts, /Variable Roughness Penalty/);
   assert.match(gilts, /4 January 2000/);
+  assert.match(gilts, /Last successful checks: 5-year .*; 10-year .*; 20-year /);
+  // No four-decimal yield is shown; the exact values stay in the data, not on the cards.
+  assert.doesNotMatch(gilts, /5\.3516|4\.9700|5\.6700/);
   assert.match(html, /1 pp = 100 basis points/);
   // The degraded 10-year series is flagged rather than hidden.
   assert.match(gilts, /Update delayed · showing last verified figure/);
@@ -89,7 +100,7 @@ test("without verified data Government shows honest placeholders and no zero", a
   assert.match(html, /Checking the official-data export/);
   assert.match(html, /Charts will appear when verified figures are available/);
   assert.doesNotMatch(html, /fs-fig-v/);
-  assert.match(html, /Start with who is affected/);
+  assert.match(html, /How to read Budget announcements/);
 
   const missing = fixture();
   for (const key of ["public_debt", "gilt_10y", "gilt_5y", "gilt_20y"]) {
@@ -101,7 +112,40 @@ test("without verified data Government shows honest placeholders and no zero", a
   assert.match(debt, /A verified history is not available yet/);
   assert.doesNotMatch(debt, /Key figure [+−]?0(\.0+)?%/);
   const gilts = textOf(section(page, "gilt-yields"));
-  assert.match(gilts, /Key figure Not available/);
+  assert.match(gilts, /Key figure 10-year gilt yield UK government 10-year borrowing cost Not available/);
   assert.match(gilts, /5-year Not available Not available Not available No verified reading yet/);
   assert.doesNotMatch(gilts, /[+−]?0(\.0+)?%/);
+});
+
+test("gilt methodology sits in a disclosure, off the Sources one-liner, with two plain sentences visible", async () => {
+  const block = section(await renderGovernment(fixture()), "gilt-yields");
+  const means = block.slice(block.indexOf('fs-means'), block.indexOf("<details"));
+  const visible = textOf(means);
+  assert.match(visible, /10-year gilt yield is the return investors require/);
+  assert.equal((means.match(/<p>/g) ?? []).length, 2, "two plain sentences visible");
+  assert.doesNotMatch(visible, /IUDSNPY|Variable Roughness|nominal par|4 January 2000|Last successful checks/);
+  const measured = /How it(?:'|&#x27;)s measured/;
+  const disclosure = block.slice(block.indexOf("<details"), block.indexOf("</details>"));
+  assert.match(disclosure, measured);
+  assert.match(disclosure, /IUDSNPY[\s\S]*4 January 2000[\s\S]*Last successful checks/);
+  // The Sources row is the one-line disclosure and no longer carries the methodology note.
+  const sources = block.slice(block.lastIndexOf("<details"));
+  assert.match(textOf(sources), /Source: Bank of England · checked/);
+  assert.doesNotMatch(sources, /IUDSNPY|Last successful checks/);
+});
+
+test("2 decimal display rounds half away from zero and never shows a real change as zero", async () => {
+  const data = fixture();
+  const set = (key, latest, previous) => {
+    const metric = data.metrics[key];
+    metric.latest = { ...metric.latest, value: latest };
+    metric.history = [...metric.history.slice(0, -1), { ...metric.history.at(-1), value: previous }, { ...metric.latest, value: latest }];
+  };
+  set("gilt_10y", "5.3151", "5.3050");
+  set("gilt_5y", "4.9950", "5.0050");
+  const gilts = textOf(section(await renderGovernment(data), "gilt-yields"));
+  assert.match(gilts, /10-year gilt yield UK government 10-year borrowing cost 5\.32 ?%/);
+  assert.match(gilts, /Previous 5\.31% /);
+  assert.match(gilts, /Up \+0\.01 pp \+1\.01 basis points/);
+  assert.match(gilts, /5-year 5\.00% 5\.01% .* Down −0\.01 pp −1 basis points/);
 });

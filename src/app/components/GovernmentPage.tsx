@@ -8,6 +8,7 @@ import { PageContents } from "./PageContents";
 import { OfficialLink } from "./OfficialLink";
 import { Lines } from "./IndicatorTable";
 import { KeyFigure, Row, Sources } from "./SubjectBlock";
+import { MoreDetail } from "./MoreDetail";
 
 /**
  * Government: Public debt and Gilt yields each read in one fixed order, Key figure,
@@ -22,6 +23,34 @@ const na = (text = NOT_AVAILABLE) => ({ text, missing: true, direction: null });
 const sub = (text: string) => ({ text, sub: true });
 /** Published decimals are kept exactly as supplied ("94.0", "5.3516"). */
 const percent = (value: string) => `${String(value).replace(/^-/, MINUS)}%`;
+/**
+ * Round a decimal string to 2 places, half away from zero, without floating point.
+ * Display only: the data and the chart's exact values are never altered.
+ */
+function twoPlaces(value: string) {
+  const negative = /^[-−]/.test(value);
+  const [whole, fraction = ""] = value.replace(/^[-−+]/, "").split(".");
+  const scaled = BigInt(`${whole}${fraction.slice(0, 2).padEnd(2, "0")}`) + (Number(fraction[2] ?? 0) >= 5 ? 1n : 0n);
+  const digits = scaled.toString().padStart(3, "0");
+  return { text: `${digits.slice(0, -2)}.${digits.slice(-2)}`, negative, zero: scaled === 0n };
+}
+/** Gilt yields read at 2 decimal places ("5.32%"). */
+const yieldPercent = (value: string) => {
+  const { text, negative } = twoPlaces(value);
+  return `${negative ? MINUS : ""}${text}%`;
+};
+/** Yield change in pp at 2 decimal places. A real but tiny change is never shown as 0.00. */
+function yieldChangeLine(current: string, previous: string) {
+  const difference = decimalDifference(current, previous);
+  const direction = changeDirection(difference);
+  if (direction === "flat") return { text: "No change", direction };
+  const { text, zero } = twoPlaces(difference);
+  return { text: zero ? "Less than 0.01 pp" : `${difference[0] === MINUS ? MINUS : "+"}${text} pp`, direction };
+}
+type Format = { value: (value: string) => string; change: (current: string, previous: string) => { text: string; direction: string } };
+const PLAIN: Format = { value: percent, change: changeLine };
+const YIELD: Format = { value: yieldPercent, change: yieldChangeLine };
+
 /** Move the decimal point two places right: percentage points to basis points. */
 function basisPoints(difference: string) {
   const sign = /^[+−]/.test(difference) ? difference[0] : "";
@@ -41,15 +70,15 @@ function changeLine(current: string, previous: string) {
 }
 
 /** Lines for KeyFigure and the maturity table. A missing value stays "Not available". */
-function figureRow(metric: any, previous: any, daily: boolean, extraChange: any[] = []) {
+function figureRow(metric: any, previous: any, daily: boolean, extraChange: any[] = [], format: Format = PLAIN) {
   if (!metric?.latest) {
     return { latest: [na()], previous: [na()], change: [na()], period: [na("No verified reading yet")] };
   }
   const when = (period: string) => (daily ? dayLabel(period) : monthLabel(period));
   return {
-    latest: [{ text: percent(metric.latest.value) }],
-    previous: previous ? [{ text: percent(previous.value) }, sub(when(previous.period))] : [na()],
-    change: previous ? [changeLine(metric.latest.value, previous.value), ...extraChange] : [na()],
+    latest: [{ text: format.value(metric.latest.value) }],
+    previous: previous ? [{ text: format.value(previous.value) }, sub(when(previous.period))] : [na()],
+    change: previous ? [format.change(metric.latest.value, previous.value), ...extraChange] : [na()],
     period: [{ text: when(metric.latest.period) }],
   };
 }
@@ -88,7 +117,7 @@ export function GovernmentPage({ data, loading, error, refresh, topics, Historic
     const previous = metric?.latest ? previousReading(metric) : null;
     const bp = previous ? basisPoints(decimalDifference(metric.latest.value, previous.value)) : null;
     const extra = previous && bp && !/^[+−]?0$/.test(bp) ? [sub(`${bp} basis points`)] : [];
-    return { key, tenor, title, label, metric, row: figureRow(metric, previous, true, extra) };
+    return { key, tenor, title, label, metric, row: figureRow(metric, previous, true, extra, YIELD) };
   });
   const [tenYear, ...otherTenors] = giltRows;
 
@@ -123,17 +152,25 @@ export function GovernmentPage({ data, loading, error, refresh, topics, Historic
           <Row label="What it means" labelId="debt-means-label">
             <div className="fs-means">
               <p>
-                Public sector net debt excluding public sector banks, as a share of GDP. It is the debt the public sector
-                owes, less its liquid assets, compared with the value of the UK economy over a year.
+                Public sector net debt is how much the public sector owes, after subtracting its liquid assets, compared
+                with a year of UK economic output (GDP).
               </p>
-              <p>
-                Debt is the outstanding balance at the end of a month. The deficit, or net borrowing, is the amount borrowed
-                over a period. Public sector net financial liabilities (PSNFL) is a wider balance-sheet measure that includes
-                more financial assets and liabilities. The change is in percentage points (pp), not percent growth.
-              </p>
-              <p>
-                UK, monthly, not seasonally adjusted. The ONS can revise the history, including when GDP estimates change.
-              </p>
+              <p>The change is in percentage points (pp), not percent growth.</p>
+              <MoreDetail label="How it's measured">
+                <p>
+                  The measure is public sector net debt excluding public sector banks, as a share of GDP. It is the debt
+                  the public sector owes, less its liquid assets, compared with the value of the UK economy over a year.
+                </p>
+                <p>
+                  Debt is the outstanding balance at the end of a month. The deficit, or net borrowing, is the amount
+                  borrowed over a period. Public sector net financial liabilities (PSNFL) is a wider balance-sheet measure
+                  that includes more financial assets and liabilities. The change is in percentage points (pp), not percent
+                  growth.
+                </p>
+                <p>
+                  UK, monthly, not seasonally adjusted. The ONS can revise the history, including when GDP estimates change.
+                </p>
+              </MoreDetail>
             </div>
           </Row>
           <Row label="Chart" labelId="debt-chart-label">
@@ -154,6 +191,8 @@ export function GovernmentPage({ data, loading, error, refresh, topics, Historic
           <Row label="Key figure" labelId="gilt-key-label">
             {data ? (
               <>
+                <h4 className="fs-fig-name">10-year gilt yield</h4>
+                <p className="fs-fig-measure">UK government 10-year borrowing cost</p>
                 <KeyFigure row={tenYear.row} metric={primary} publisher="Bank of England" observedLabel="Observed on" />
                 <div className="fs-tenors-wrap" tabIndex={0} role="region" aria-label="5-year and 20-year yields">
                 <table className="fs-tenors">
@@ -186,19 +225,35 @@ export function GovernmentPage({ data, loading, error, refresh, topics, Historic
           <Row label="What it means" labelId="gilt-means-label">
             <div className="fs-means">
               <p>
-                A gilt yield is the return investors require to lend to the UK government for a set number of years. The
-                headline figure is the 10-year yield, with the 5-year and 20-year yields beside it. Each yield describes
-                market financing conditions at that maturity.
+                The 10-year gilt yield is the return investors require to lend to the UK government for ten years. The
+                5-year and 20-year yields sit beside it.
               </p>
-              <p>
-                It is not the average cost of the government’s outstanding debt, and not the redemption yield on one
-                benchmark gilt. It is a fitted nominal par yield from a Bank of England model.
-              </p>
-              <p>
-                The change compares with the previous available trading observation, in percentage points (pp). One
-                percentage point equals 100 basis points. Weekends and other non-trading dates have no value, and are never
-                filled with zero.
-              </p>
+              <p>It is a market rate, not what the government pays on all its existing debt.</p>
+              <MoreDetail label="How it's measured">
+                <p>
+                  A gilt yield is the return investors require to lend to the UK government for a set number of years. The
+                  headline figure is the 10-year yield, with the 5-year and 20-year yields beside it. Each yield describes
+                  market financing conditions at that maturity.
+                </p>
+                <p>
+                  It is not the average cost of the government’s outstanding debt, and not the redemption yield on one
+                  benchmark gilt. It is a fitted nominal par yield from a Bank of England model.
+                </p>
+                <p>
+                  The change compares with the previous available trading observation, in percentage points (pp). One
+                  percentage point equals 100 basis points. Weekends and other non-trading dates have no value, and are never
+                  filled with zero.
+                </p>
+                <p>
+                  Figures show 2 decimal places; the chart’s exact values table keeps the published precision. Source: Bank
+                  of England Database nominal par yields (IUDSNPY, IUDMNPY and IUDLNPY), fitted with its Variable Roughness
+                  Penalty term-structure model at fixed 5-, 10- and 20-year maturities. The 10-year maturity is primary. The
+                  comparable family begins 4 January 2000. Last successful checks: 5-year{" "}
+                  {checkedAt(data?.metrics?.gilt_5y?.last_successful_check_at ?? null)}; 10-year{" "}
+                  {checkedAt(primary?.last_successful_check_at ?? null)}; 20-year{" "}
+                  {checkedAt(data?.metrics?.gilt_20y?.last_successful_check_at ?? null)}.
+                </p>
+              </MoreDetail>
             </div>
           </Row>
           <Row label="Chart" labelId="gilt-chart-label">
@@ -220,19 +275,7 @@ export function GovernmentPage({ data, loading, error, refresh, topics, Historic
             )}
           </Row>
           <Row label="Sources" labelId="gilt-sources-label">
-            <Sources
-              metric={primary}
-              extra={
-                <p className="fs-src-note">
-                  Bank of England Database nominal par yields (IUDSNPY, IUDMNPY and IUDLNPY), fitted with its Variable
-                  Roughness Penalty term-structure model at fixed 5-, 10- and 20-year maturities. The 10-year maturity is
-                  primary. The comparable family begins 4 January 2000. Last successful checks: 5-year{" "}
-                  {checkedAt(data?.metrics?.gilt_5y?.last_successful_check_at ?? null)}; 10-year{" "}
-                  {checkedAt(primary?.last_successful_check_at ?? null)}; 20-year{" "}
-                  {checkedAt(data?.metrics?.gilt_20y?.last_successful_check_at ?? null)}.
-                </p>
-              }
-            />
+            <Sources metric={primary} />
             {!primary?.definition && (
               <OfficialLink href="https://www.bankofengland.co.uk/boeapps/database/">
                 Bank of England Database nominal par yields
@@ -256,19 +299,24 @@ function GovernmentGuide() {
     <>
       <section className="fs-container fs-section fs-reading-grid">
         <article>
-          <p className="fs-eyebrow">What to look for</p>
-          <h2>Start with who is affected — and when</h2>
+          <h2>How to read Budget announcements</h2>
           <p>
-            The Chancellor’s Budget sets out tax and spending plans. Parliament
-            scrutinises the measures. A headline announcement may apply months
-            or years later, and some plans need legislation.
+            General guidance on reading Budget announcements. It is not a claim
+            about current policy.
           </p>
-          <p>
-            Ask which tax, benefit or service changes; which people or
-            businesses it covers; and the date it takes effect. A tax-rate
-            change and a frozen tax threshold can affect take-home pay in
-            different ways.
-          </p>
+          <MoreDetail label="More on reading Budget announcements">
+            <p>
+              The Chancellor’s Budget sets out tax and spending plans. Parliament
+              scrutinises the measures. A headline announcement may apply months
+              or years later, and some plans need legislation.
+            </p>
+            <p>
+              Ask which tax, benefit or service changes; which people or
+              businesses it covers; and the date it takes effect. A tax-rate
+              change and a frozen tax threshold can affect take-home pay in
+              different ways.
+            </p>
+          </MoreDetail>
           <OfficialLink href="https://www.parliament.uk/about/how/role/check-and-approve-government-spending-and-taxation/the-budget-and-parliament/">
             How the Budget becomes policy
           </OfficialLink>
@@ -298,18 +346,22 @@ function GovernmentGuide() {
       <section className="fs-decisions">
         <div className="fs-container fs-reading-grid">
           <article>
-            <p className="fs-eyebrow">Checking the wider picture</p>
             <h2>What do the independent forecasts say?</h2>
             <p>
               The Office for Budget Responsibility, or OBR, assesses the
-              economic and public-finance outlook. Its forecasts help put
-              government plans in context, but depend on assumptions about
-              growth, inflation, interest rates and policy.
+              economic and public-finance outlook to put government plans in
+              context.
             </p>
-            <p>
-              Forecasts can change. Compare the assumptions and uncertainty, as
-              well as the headline borrowing or debt numbers.
-            </p>
+            <MoreDetail label="More on forecasts">
+              <p>
+                Its forecasts depend on assumptions about growth, inflation,
+                interest rates and policy.
+              </p>
+              <p>
+                Forecasts can change. Compare the assumptions and uncertainty, as
+                well as the headline borrowing or debt numbers.
+              </p>
+            </MoreDetail>
             <OfficialLink href="https://obr.uk/efo/">
               Read the Economic and Fiscal Outlook
             </OfficialLink>
@@ -320,10 +372,12 @@ function GovernmentGuide() {
               Source-checked summaries of individual Budget measures and OBR
               forecasts are not available here yet.
             </p>
-            <p>
-              This page explains how to read those announcements. It does not
-              claim that a particular tax or benefit has just changed.
-            </p>
+            <MoreDetail label="What this page does">
+              <p>
+                This page explains how to read those announcements. It does not
+                claim that a particular tax or benefit has just changed.
+              </p>
+            </MoreDetail>
             <OfficialLink href="https://www.gov.uk/government/organisations/hm-treasury">
               Visit HM Treasury
             </OfficialLink>
