@@ -508,6 +508,61 @@ def test_regular_pay_crosses_year_boundary_in_reference_windows():
         'kind': 'rolling_months', 'start_month': '2025-11', 'end_month': '2026-01'}
 
 
+def test_boe_mortgage_rates_exact_contract_history_and_series_isolation():
+    body = fixture('mortgage_2y_fixed_75')
+    expected = {'mortgage_2y_fixed_75': ('IUMBV34', 2, '5.39'), 'mortgage_5y_fixed_75': ('IUMBV42', 5, '5.19')}
+    for key, (series, years, latest) in expected.items():
+        definition = public_definition(key)
+        assert definition['series'] == series
+        assert definition['dataset'] == 'IADB'
+        assert definition['frequency'] == 'monthly'
+        assert definition['unit'] == 'percent'
+        assert definition['geography'] == 'United Kingdom'
+        assert definition['ltv'] == 75 and definition['fixed_years'] == years
+        assert f'{years} year (75% LTV) fixed rate mortgage' in definition['title']
+        assert definition['download_url'].endswith('SeriesCodes=IUMBV34,IUMBV42&CSVF=CN&UsingCodes=Y')
+        snapshot = parse(key, body, date(2026, 11, 18))
+        assert snapshot.published_date is None and snapshot.next_release is None
+        periods = [point.period for point in snapshot.observations]
+        assert periods[0] == '1995-01' and periods[-1] == '2026-10'
+        assert len(periods) == len(set(periods)) == 382
+        assert all(len(period) == 7 for period in periods)
+        assert snapshot.observations[-1].value == latest
+        assert all(point.status == 'observed' for point in snapshot.observations)
+    # Series are selected by code, never by position: the two histories differ.
+    assert parse('mortgage_2y_fixed_75', body, date(2026, 11, 18)).observations[0].value == '8.13'
+    assert parse('mortgage_5y_fixed_75', body, date(2026, 11, 18)).observations[0].value == '9.44'
+
+
+def test_boe_mortgage_parser_rejects_substituted_truncated_or_malformed_series():
+    body = fixture('mortgage_2y_fixed_75')
+    today = date(2026, 11, 18)
+    with pytest.raises(ValidationError, match='Unexpected BoE mortgage series'):
+        parse('mortgage_2y_fixed_75', body.replace(b'IUMBV42', b'IUMBV43'), today)
+    with pytest.raises(ValidationError, match='Unexpected BoE mortgage series'):
+        parse('mortgage_5y_fixed_75', body + b'30 Nov 2026,IUMBV60,4.00\r\n', today)
+    with pytest.raises(ValidationError, match='missing the requested series'):
+        parse('mortgage_5y_fixed_75', b'DATE,SERIES,VALUE\r\n31 Jan 1995,IUMBV34,8.13\r\n', today)
+    with pytest.raises(ValidationError, match='header changed'):
+        parse('mortgage_2y_fixed_75', body.replace(b'DATE,SERIES,VALUE', b'DATE,CODE,VALUE', 1), today)
+    with pytest.raises(ValidationError, match='qualified start'):
+        parse('mortgage_2y_fixed_75', body.replace(b'31 Jan 1995,IUMBV34', b'28 Feb 1995,IUMBV34', 1), today)
+    with pytest.raises(ValidationError, match='month-end'):
+        parse('mortgage_2y_fixed_75', body.replace(b'31 Oct 2026,IUMBV34', b'30 Oct 2026,IUMBV34'), today)
+    with pytest.raises(ValidationError, match='Future reference period'):
+        parse('mortgage_2y_fixed_75', body, date(2026, 9, 30))
+    with pytest.raises(ValidationError, match='Unrecognised numerical value'):
+        parse('mortgage_2y_fixed_75', body.replace(b'31 Oct 2026,IUMBV34,5.39', b'31 Oct 2026,IUMBV34,n/a'), today)
+    with pytest.raises(ValidationError, match='Latest observation unavailable'):
+        parse('mortgage_2y_fixed_75', body.replace(b'31 Oct 2026,IUMBV34,5.39', b'31 Oct 2026,IUMBV34,'), today)
+
+
+def test_boe_mortgage_interior_blank_stays_missing_never_zero():
+    body = fixture('mortgage_2y_fixed_75').replace(b'31 Mar 2026,IUMBV34,4.45', b'31 Mar 2026,IUMBV34,')
+    point = {p.period: p for p in parse('mortgage_2y_fixed_75', body, date(2026, 11, 18)).observations}['2026-03']
+    assert point.value is None and point.status == 'missing'
+
+
 def test_cpi_index_is_the_d7bt_index_level_from_the_qualified_json_endpoint():
     data = parse('cpi_index', fixture('cpi_index'), CPI_TODAY)
     definition = data.definition

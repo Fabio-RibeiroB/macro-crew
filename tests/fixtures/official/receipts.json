@@ -120,6 +120,13 @@
     "sha256": "3c52d666ba3623d668d6cf7bce60491ed3aa77db3522c2345bb30c6934508450",
     "source_published_date": null
   },
+  "boe_quoted_mortgage_rates_2y_5y_75ltv_monthly.csv": {
+    "url": "https://www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=01/Jan/1995&Dateto=now&SeriesCodes=IUMBV34,IUMBV42&CSVF=CN&UsingCodes=Y",
+    "retrieved_at": "2026-11-18T13:48:40Z",
+    "evidence_kind": "recorded_fixture",
+    "sha256": "39c06c50c48ca2b144763a65bd1fedc3313e204617c6ed961097023313b72a28",
+    "source_published_date": null
+  },
   "cpi_index_d7bt_mm23.json": {
     "url": "https://www.ons.gov.uk/economy/inflationandpriceindices/timeseries/d7bt/mm23/previous/v133/data",
     "retrieved_at": "2026-11-18T13:48:33.255305+00:00",

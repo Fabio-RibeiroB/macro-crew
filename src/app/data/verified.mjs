@@ -169,6 +169,22 @@ export const OPTIONAL_METRICS = {
     source_url: "https://www.bankofengland.co.uk/boeapps/database/",
     download_url: "https://www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=04/Jan/2000&Dateto=now&SeriesCodes=IUDSNPY,IUDMNPY,IUDLNPY&CSVF=CN&UsingCodes=Y",
   },
+  mortgage_2y_fixed_75: {
+    metric_id: "uk.mortgage_rate.quoted_2y_fixed_75ltv", series: "IUMBV34", dataset: "IADB",
+    title: "Monthly interest rate of UK monetary financial institutions (excl. Central Bank) sterling 2 year (75% LTV) fixed rate mortgage to households (in percent) not seasonally adjusted",
+    frequency: "monthly", comparison: "previous_month", adjustment: "not_seasonally_adjusted",
+    unit: "percent", version: 1, geography: "United Kingdom", ltv: 75, fixed_years: 2,
+    source_url: "https://www.bankofengland.co.uk/boeapps/database/",
+    download_url: "https://www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=01/Jan/1995&Dateto=now&SeriesCodes=IUMBV34,IUMBV42&CSVF=CN&UsingCodes=Y",
+  },
+  mortgage_5y_fixed_75: {
+    metric_id: "uk.mortgage_rate.quoted_5y_fixed_75ltv", series: "IUMBV42", dataset: "IADB",
+    title: "Monthly interest rate of UK monetary financial institutions (excl. Central Bank) sterling 5 year (75% LTV) fixed rate mortgage to households (in percent) not seasonally adjusted",
+    frequency: "monthly", comparison: "previous_month", adjustment: "not_seasonally_adjusted",
+    unit: "percent", version: 1, geography: "United Kingdom", ltv: 75, fixed_years: 5,
+    source_url: "https://www.bankofengland.co.uk/boeapps/database/",
+    download_url: "https://www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=01/Jan/1995&Dateto=now&SeriesCodes=IUMBV34,IUMBV42&CSVF=CN&UsingCodes=Y",
+  },
   private_rent_growth: {
     metric_id: "uk.private_rent.annual_growth", series: "Annual change",
     dataset: "Price Index of Private Rents, UK: monthly price statistics, Table 1",
@@ -321,6 +337,16 @@ function validateDefinition(definition, spec) {
         "source_url", "title", "unit", "version", "yield_type",
       ].sort().join(","))
     fail("Unexpected gilt definition fields");
+  if (spec.ltv !== undefined &&
+      Object.keys(definition).sort().join(",") !== [
+        "adjustment", "comparison", "dataset", "download_url", "fixed_years", "frequency",
+        "geography", "ltv", "metric_id", "series", "source_url", "title", "unit", "version",
+      ].join(","))
+    fail("Unexpected mortgage-rate definition fields");
+  for (const field of ["ltv", "fixed_years"]) {
+    if (spec[field] !== undefined ? definition[field] !== spec[field] : definition[field] !== undefined)
+      fail("Unexpected mortgage-rate qualification");
+  }
   if (spec.title !== undefined && definition.title !== spec.title)
     fail("Unexpected optional metric title");
   for (const field of ["maturity_years", "yield_type", "primary"]) {

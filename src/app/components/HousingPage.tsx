@@ -8,6 +8,8 @@ import { checkedAt } from "../data/format.mjs";
 import { PageContents } from "./PageContents";
 import { OfficialLink } from "./OfficialLink";
 import { KeyFigure, Row, Sources } from "./SubjectBlock";
+import { MortgageRatesSection } from "./MortgageRatesSection";
+import { hasMortgageRates } from "../data/mortgageRates.mjs";
 
 /**
  * Housing: each measure reads in one fixed order, Key figure, What it means, Chart,
@@ -73,7 +75,7 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
         </div>
       )}
 
-      <PageContents items={[{ id: "rent", label: "Rent" }, { id: "house-prices", label: "House prices" }]} />
+      <PageContents items={[{ id: "rent", label: "Rent" }, { id: "house-prices", label: "House prices" }, { id: "mortgage-rates", label: "Mortgage rates", show: hasMortgageRates(data) }]} />
 
       <section className="fs-block" id="rent" aria-labelledby="rent-title">
         <h2 id="rent-title">Rent</h2>
@@ -150,6 +152,7 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
           </>} />
         </Row>
       </section>
+      <MortgageRatesSection data={data} />
       <p className="fs-ledger-note" id="change-note">
         * Change is the latest value minus the previous one, calculated by FinStats from the official series. pp means percentage points. Green and red show direction only, not good or bad.
       </p>
