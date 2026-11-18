@@ -13,28 +13,22 @@ type Item = ReturnType<typeof tickerItems>[number];
 function TickerItem({ item, copy }: { item: Item; copy: boolean }) {
   const body = (
     <>
-      <span className="fs-ticker-label">{item.label}</span>{" "}
+      <span className="fs-ticker-label">{item.label}:</span>{" "}
+      {item.ai && (
+        <>
+          <span className="fs-ai-tag" title="Written by AI">AI</span>{" "}
+        </>
+      )}
       <span className="fs-ticker-value">{item.value}</span>
       {item.change && (
         <>
-          {" "}
-          <span className="fs-ticker-change">
-            {item.change.arrow && <span aria-hidden="true">{item.change.arrow}</span>}
-            {item.change.spoken && <span className="fs-sr"> {item.change.spoken} </span>}
-            {item.change.text && <span>{item.change.arrow ? " " : ""}{item.change.text}</span>}
-          </span>
-        </>
-      )}
-      {item.meta && (
-        <>
-          {" "}
-          <span className="fs-ticker-meta">{item.meta}</span>
+          , <span className="fs-ticker-change">{item.change.text}</span>
         </>
       )}
     </>
   );
   return (
-    <li className="fs-ticker-item" data-dir={item.change?.dir ?? "flat"}>
+    <li className="fs-ticker-item" data-dir={item.change?.dir ?? "flat"} data-ai={item.ai ? "true" : undefined}>
       {item.href ? (
         <a href={item.href} tabIndex={copy ? -1 : undefined}>
           {body}
@@ -52,7 +46,9 @@ function prefersReducedMotion() {
 }
 
 /**
- * A strip of headline official figures below the site header (ADR 0002). The first
+ * A news-style crawl below the site header (ADR 0003, superseding ADR 0002 decision 3):
+ * the AI one-line MPC headline (tagged AI) then short plain-English official figures.
+ * The first
  * list is the real, focusable list; the second only makes the loop seamless and is
  * hidden from assistive technology and the tab order. With reduced motion the strip
  * is static and scrolls horizontally with no duplicate.
@@ -62,13 +58,16 @@ export function FiguresTicker({
   loading,
   error,
   hrefs,
+  reports = null,
 }: {
   data: any;
   loading: boolean;
   error: unknown;
   hrefs: Record<string, string>;
+  /** Legacy AI report list; a missing or failed load only swaps the MPC item to its factual form. */
+  reports?: any[] | null;
 }) {
-  const items = useMemo(() => tickerItems(data, hrefs), [data, hrefs]);
+  const items = useMemo(() => tickerItems(data, hrefs, reports), [data, hrefs, reports]);
   const [paused, setPaused] = useState(false);
   const [reduced, setReduced] = useState(prefersReducedMotion);
   const [duration, setDuration] = useState<number | null>(null);
@@ -108,7 +107,7 @@ export function FiguresTicker({
   return (
     <section
       className="fs-ticker"
-      aria-label="Latest official figures"
+      aria-label="Latest figures and MPC headline"
       data-motion={state}
       data-stale={error ? "true" : undefined}
     >

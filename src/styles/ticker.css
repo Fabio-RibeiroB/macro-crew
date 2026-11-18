@@ -1,4 +1,4 @@
-/* Figures ticker (ADR 0002). A quiet band under the header: it is not sticky, so
+/* News-style crawl (ADR 0003, after ADR 0002). A quiet band under the header: it is not sticky, so
    anchor scroll offsets only ever need to clear the header. Colours come from the
    shared direction tokens; the strip has a fixed height so loading never shifts
    the page. */
@@ -114,8 +114,12 @@
   color: var(--fs-muted);
   font-weight: 600;
 }
-.fs-ticker-meta {
-  color: var(--fs-muted);
+/* The AI tag stays visible in the crawl so AI words are never mistaken for figures. */
+.fs-ticker .fs-ai-tag {
+  font-size: 11px;
+  line-height: 1.3;
+  padding: 1px 6px;
+  vertical-align: 1px;
 }
 
 /* No motion: a static strip that scrolls sideways by hand or keyboard. */

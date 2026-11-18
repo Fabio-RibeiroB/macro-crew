@@ -1,5 +1,6 @@
-// ADR 0002 figures ticker: items come from the overview rows of the same verified
-// snapshot; the MPC item comes only from official Bank Rate observations.
+// ADR 0003 news-style crawl: figure items come from the overview rows of the same
+// verified snapshot; the MPC item is the tagged AI headline, with a factual fallback
+// from official Bank Rate observations when there is no report.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -25,6 +26,7 @@ const HREFS = {
   petrol_price: "/prices#petrol-diesel",
   gdp: "/economy#gdp",
 };
+const REPORTS = [{ key: "monetary_policy_report", headline: "The Bank held rates and flagged slower inflation ahead.", summary: "Ignored when a headline exists." }];
 const byId = (items) => Object.fromEntries(items.map((item) => [item.id, item]));
 
 /** Weekday dates from `start`, one per day, so the series has no unobserved weekday. */
@@ -49,41 +51,39 @@ const withBankRate = (metric) => {
   return data;
 };
 
-test("items are built from the overview rows with units, signs and directions", () => {
+test("figure items read as plain English from the overview rows", () => {
   const data = fullFixture();
   const rows = Object.fromEntries(overviewRows(data).map((row) => [row.id, row]));
   const items = byId(tickerItems(data, HREFS));
-  assert.equal(items.inflation.label, "CPI");
-  assert.equal(items.inflation.value, rows.inflation.latest[0].text);
-  assert.deepEqual(
-    { dir: items.inflation.change.dir, arrow: items.inflation.change.arrow, text: items.inflation.change.text },
-    { dir: "up", arrow: "▲", text: "0.4 pp" },
-  );
-  assert.equal(itemText(items.inflation), "CPI 3.5% up 0.4 pp");
-  assert.equal(itemText(items.unemployment), "Unemployment 4.7% down 0.2 pp");
-  assert.equal(items.unemployment.change.arrow, "▼");
-  assert.equal(itemText(items["house-prices"]), "House prices £273,037 up £891");
-  assert.equal(items.energy.value, "£1,723/year");
-  assert.equal(itemText(items["fuel-petrol"]), "Petrol 174.57p down 0.71p");
-  assert.equal(itemText(items["fuel-diesel"]), "Diesel 199.33p down 0.71p");
-  assert.equal(itemText(items.gdp), "GDP +0.1% down 0.3 pp");
-  // Same numbers as the table, never recomputed.
+  assert.equal(itemText(items.inflation), "Inflation: 3.5%, up from 3.1%");
+  assert.equal(itemText(items.unemployment), "Unemployment: 4.7%, down from 4.9%");
+  assert.equal(itemText(items["house-prices"]), "House prices: £273,037, up £891");
+  assert.equal(itemText(items["fuel-petrol"]), "Petrol: 174.57p a litre, down 0.71p");
+  assert.equal(itemText(items["fuel-diesel"]), "Diesel: 199.33p a litre, down 0.71p");
+  assert.equal(itemText(items.gdp), "GDP growth: +0.1%, down from +0.4%");
+  assert.equal(items.energy.label, "Energy price cap");
+  assert.equal(items.energy.value, "£1,723 a year");
+  assert.equal(items.energy.change, null, "not comparable: just the figure");
+  assert.equal(items.inflation.change.dir, "up");
+  assert.equal(items.unemployment.change.dir, "down");
+  assert.equal(items.rent.change.text, "unchanged");
+  assert.equal(items.rent.change.dir, "flat");
+  // Same numbers as the table, never recomputed; no codes or arrows in the wording.
   assert.equal(items.wages.value, rows.wages.latest[0].text);
-  assert.equal(items.wages.change.text, rows.wages.change[0].text.replace(/^[+−]/, ""));
+  assert.ok(items.wages.change.text.endsWith(rows.wages.previous[0].text));
+  for (const item of Object.values(items)) assert.doesNotMatch(itemText(item), /[▲▼]|\bCPI\b| pp\b/, item.id);
 });
 
-test("no change and not comparable are neutral and carry no arrow", () => {
-  const items = byId(tickerItems(fullFixture(), HREFS));
-  assert.deepEqual(
-    { dir: items.rent.change.dir, arrow: items.rent.change.arrow, text: items.rent.change.text },
-    { dir: "flat", arrow: "", text: "no change" },
-  );
-  assert.equal(items.energy.change.dir, "flat");
-  assert.equal(items.energy.change.text, "not comparable");
+test("a figure with no comparable earlier reading shows just the figure", () => {
+  const data = fullFixture();
+  data.metrics.cpi = { ...data.metrics.cpi, history: [data.metrics.cpi.history.at(-1)] };
+  const inflation = byId(tickerItems(data, HREFS)).inflation;
+  assert.equal(itemText(inflation), "Inflation: 3.5%");
+  assert.equal(inflation.change, null);
 });
 
 test("every item links to its subject page and the strip never shows zero for a gap", () => {
-  const items = tickerItems(fullFixture(), HREFS);
+  const items = tickerItems(fullFixture(), HREFS, REPORTS);
   assert.ok(items.length >= 9);
   for (const item of items) assert.match(item.href, /^\/[a-z-]+#/, item.id);
   const data = fullFixture();
@@ -96,35 +96,44 @@ test("every item links to its subject page and the strip never shows zero for a 
   assert.equal(gaps["fuel-petrol"], undefined);
   assert.ok(gaps["fuel-diesel"], "an available sibling stays");
   for (const item of Object.values(gaps)) assert.doesNotMatch(item.value, /^0(\.0+)?(%|p)?$|Not available/);
-  assert.deepEqual(tickerItems(null, HREFS), []);
+  assert.deepEqual(tickerItems(null, HREFS, REPORTS), []);
   assert.deepEqual(tickerItems({ metrics: {} }, HREFS).filter((item) => item.id !== "mpc"), []);
 });
 
-test("MPC item: raised, cut and held wording from official Bank Rate only", () => {
-  const raised = tickerItems(withBankRate(bankRate("3.75", "4.00", 10)), HREFS);
-  const up = byId(raised).mpc;
-  assert.equal(`${up.label}: ${up.value}`, "MPC: raised to 4.00% (tightening)");
-  assert.equal(up.change.dir, "up");
-  assert.match(up.meta, /^\d{1,2} \w{3} 2026$/, "decision date included");
-  assert.equal(up.href, HREFS.bank_rate);
-  assert.equal(raised.findIndex((item) => item.id === "mpc"), raised.findIndex((item) => item.id === "bank-rate") + 1);
-
-  const cut = byId(tickerItems(withBankRate(bankRate("4.00", "3.75", 10)), HREFS)).mpc;
-  assert.equal(`${cut.label}: ${cut.value}`, "MPC: cut to 3.75% (loosening)");
-  assert.equal(cut.change.dir, "down");
-
-  const held = byId(tickerItems(withBankRate(bankRate("4.00", "3.75", MPC_DECISION_WINDOW_DAYS + 20)), HREFS)).mpc;
-  assert.equal(`${held.label}: ${held.value}`, "MPC: held at 3.75% (on hold)");
-  assert.equal(held.change.dir, "flat");
-  assert.match(held.meta, /^last change \d{1,2} \w{3} 2026$/);
+test("MPC item: the AI headline comes first, tagged and linked to the AI summary", () => {
+  const items = tickerItems(withBankRate(bankRate("3.75", "4.00", 10)), HREFS, REPORTS);
+  assert.equal(items[0].id, "mpc");
+  assert.equal(items[0].ai, true);
+  assert.equal(items[0].href, "/economy#ai-summary");
+  assert.equal(itemText(items[0]), "MPC: AI The Bank held rates and flagged slower inflation ahead.");
+  assert.equal(items.filter((item) => item.id === "mpc").length, 1);
+  // Without a headline the first summary sentence is used, as on the overview line.
+  const summaryOnly = tickerItems(fullFixture(), HREFS, [{ key: "monetary_policy_report", summary: "Rates held. Other detail." }]);
+  assert.equal(summaryOnly[0].value, "Rates held.");
 });
 
-test("MPC item is omitted when Bank Rate cannot evidence a decision", () => {
+test("MPC fallback: factual Bank Rate wording without the AI tag", () => {
+  for (const reports of [null, [], [{ key: "other" }]]) {
+    const raised = tickerItems(withBankRate(bankRate("3.75", "4.00", 10)), HREFS, reports);
+    assert.equal(raised[0].id, "mpc");
+    assert.equal(raised[0].ai, false);
+    assert.match(itemText(raised[0]), /^MPC: raised Bank Rate to 4\.00% on \d{1,2} \w{3}$/);
+    assert.equal(raised[0].href, HREFS.bank_rate);
+  }
+  const cut = tickerItems(withBankRate(bankRate("4.00", "3.75", 10)), HREFS)[0];
+  assert.match(itemText(cut), /^MPC: cut Bank Rate to 3\.75% on \d{1,2} \w{3}$/);
+  const held = tickerItems(withBankRate(bankRate("4.00", "3.75", MPC_DECISION_WINDOW_DAYS + 20)), HREFS)[0];
+  assert.equal(itemText(held), "MPC: held Bank Rate at 3.75%");
+});
+
+test("MPC fallback is omitted when Bank Rate cannot evidence a decision", () => {
   const flat = dailySeries("2026-01-05", Array(40).fill("3.75"));
   assert.equal(mpcItem({ latest: flat.at(-1), history: flat }, "3.75%"), null);
   assert.equal(mpcItem({ latest: null, history: [] }, "3.75%"), null);
   assert.equal(mpcItem(null, "3.75%"), null);
   assert.equal(byId(tickerItems(withBankRate({ latest: null, history: [] }), HREFS)).mpc, undefined);
+  // The AI headline does not need the Bank Rate series.
+  assert.ok(byId(tickerItems(withBankRate({ latest: null, history: [] }), HREFS, REPORTS)).mpc);
 });
 
 test("motion state and loop speed", () => {
@@ -157,7 +166,7 @@ async function renderTicker(props, { reduced = false } = {}) {
 const textOfMarkup = (markup) => markup.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 
 test("markup: one real list, a hidden unfocusable duplicate, a pause button", async () => {
-  const html = await renderTicker({ data: withBankRate(bankRate("3.75", "4.00", 10)), loading: false, error: null, hrefs: HREFS });
+  const html = await renderTicker({ data: withBankRate(bankRate("3.75", "4.00", 10)), loading: false, error: null, hrefs: HREFS, reports: REPORTS });
   const lists = [...html.matchAll(/<ul class="fs-ticker-list"([^>]*)>([\s\S]*?)<\/ul>/g)];
   assert.equal(lists.length, 2);
   assert.doesNotMatch(lists[0][1], /aria-hidden/);
@@ -167,13 +176,22 @@ test("markup: one real list, a hidden unfocusable duplicate, a pause button", as
   assert.ok(!/tabindex="-1"/.test(lists[0][2]));
   const links = (lists[1][2].match(/<a /g) ?? []).length;
   assert.equal((lists[1][2].match(/tabindex="-1"/g) ?? []).length, links, "duplicate links are out of the tab order");
-  assert.match(html, /<section class="fs-ticker"[^>]*aria-label="Latest official figures"[^>]*data-motion="running"/);
+  assert.match(html, /<section class="fs-ticker"[^>]*aria-label="Latest figures and MPC headline"[^>]*data-motion="running"/);
   assert.match(html, /<button[^>]*aria-pressed="false"[^>]*aria-label="Pause scrolling figures"/);
-  assert.match(textOfMarkup(lists[0][2]), /MPC raised to 4\.00% \(tightening\)/);
-  assert.match(lists[0][2], /href="\/economy#interest-rates"/);
-  // Direction is carried by arrow and words as well as colour.
-  assert.match(lists[0][2], /<span aria-hidden="true">▲<\/span>/);
-  assert.match(lists[0][2], /class="fs-sr"> up </);
+  const text = textOfMarkup(lists[0][2]);
+  assert.match(text, /^MPC: AI The Bank held rates and flagged slower inflation ahead\. Inflation: 3\.5% , up from 3\.1%/);
+  assert.match(lists[0][2], /<span class="fs-ai-tag"[^>]*>AI<\/span>/);
+  assert.match(lists[0][2], /href="\/economy#ai-summary"/);
+  // Direction is carried by words as well as colour; no arrows.
+  assert.match(lists[0][2], /<span class="fs-ticker-change">up from 3\.1%<\/span>/);
+  assert.doesNotMatch(html, /[▲▼]/);
+});
+
+test("markup: a missing report shows the factual MPC item with no AI tag", async () => {
+  const html = await renderTicker({ data: withBankRate(bankRate("3.75", "4.00", 10)), loading: false, error: null, hrefs: HREFS, reports: [] });
+  assert.doesNotMatch(html, /fs-ai-tag/);
+  assert.match(textOfMarkup(html), /MPC: raised Bank Rate to 4\.00% on/);
+  assert.match(html, /href="\/economy#interest-rates"/);
 });
 
 test("markup: reduced motion renders one static list and no pause button", async () => {
@@ -200,4 +218,10 @@ test("the ticker is mounted once below the header on every page, outside the sti
   const css = readFileSync(new URL("../../src/styles/ticker.css", import.meta.url), "utf8");
   assert.doesNotMatch(css, /position:\s*(sticky|fixed)/);
   assert.match(css, /prefers-reduced-motion: reduce/);
+});
+
+test("the MPC headline report loads on every page and is passed to the crawl", () => {
+  const app = readFileSync(new URL("../../src/app/App.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(app, /page\.id !== "economy" && page\.id !== "overview"/);
+  assert.match(app, /<FiguresTicker [^>]*reports=\{reports\}/);
 });
