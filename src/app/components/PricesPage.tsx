@@ -7,6 +7,7 @@ import { Delta, Lines } from "./IndicatorTable";
 import { PageContents } from "./PageContents";
 import { OfficialLink } from "./OfficialLink";
 import { MoreDetail } from "./MoreDetail";
+import { InflationExplainer, InflationSteps } from "./InflationExplainer";
 import { BigValue, KeyFigure, Row, Sources } from "./SubjectBlock";
 
 /**
@@ -128,7 +129,9 @@ export function PricesPage({ data, loading, error, refresh, topics, HistoricalTr
                 : "Inflation measures how average prices change over time."}{" "}
               If your pay and benefits rise more slowly than prices, they buy less.
             </p>
+            {data && <InflationExplainer kind={cpiHeadline ? "cpi" : "cpih"} latest={headline} />}
             <MoreDetail label="How it's measured">
+              <InflationSteps />
               <p>Your own experience depends on what you buy.</p>
               <p>{topics.cpi.meaning} {topics.cpi.caution}</p>
               <p>
