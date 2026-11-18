@@ -252,7 +252,7 @@ test("DESNZ petrol and diesel render as two weekly UK prices with direct history
       for (const [label, present, metric] of [["Unleaded petrol", petrolPresent, petrol], ["Diesel", dieselPresent, diesel]]) {
         const start = partialPrices.indexOf(`<div class="fs-src-set"><h4 class="fs-fig-name">${label}</h4>`);
         assert.ok(start >= 0, `${label} sources block`);
-        const block = textOf(partialPrices.slice(start, start + 900));
+        const block = textOf(partialPrices.slice(start, start + 2500));
         if (present) assert.match(block, new RegExp(`Official release ${formatPeriod(metric.source_published_date)}`));
         else assert.match(block, /Source details appear when a verified reading is available/);
       }

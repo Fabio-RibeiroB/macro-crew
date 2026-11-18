@@ -1,8 +1,9 @@
 // Shared building blocks for subject pages (ADR 0001): a fixed label column in the
 // order Key figure, What it means, Chart, AI summary, Sources.
 import { formatPeriod, freshness } from "../data/verified.mjs";
-import { checkedAt } from "../data/format.mjs";
+import { checkedAt, checkedBrief } from "../data/format.mjs";
 import { Lines } from "./IndicatorTable";
+import { MoreDetail } from "./MoreDetail";
 import { OfficialLink } from "./OfficialLink";
 
 /** One labelled row of a subject block: the fixed label column marks the agreed order. */
@@ -47,12 +48,31 @@ export function KeyFigure({ row, metric, publisher, observedLabel }: any) {
   );
 }
 
-export function Sources({ metric, extra }: any) {
+const PUBLISHERS: Record<string, string> = {
+  "ons.gov.uk": "Office for National Statistics",
+  "bankofengland.co.uk": "Bank of England",
+  "ofgem.gov.uk": "Ofgem",
+  "obr.uk": "Office for Budget Responsibility",
+  "gov.uk": "GOV.UK",
+};
+
+/** Publisher name from the official series URL's host; unknown hosts are not named. */
+export function publisherOf(url?: string): string {
+  try {
+    const host = new URL(url ?? "").hostname.replace(/^(www|api\.beta)\./, "");
+    return PUBLISHERS[host] ?? "Official source";
+  } catch {
+    return "Official source";
+  }
+}
+
+/** One line (publisher and last successful check) that opens to the full source list. */
+export function Sources({ metric, extra, publisher }: any) {
   if (!metric?.definition) return <p>Source details appear when a verified reading is available.</p>;
   const { definition } = metric;
   const history = metric.history ?? [];
   return (
-    <>
+    <MoreDetail label={`Source: ${publisher ?? publisherOf(definition.source_url)} · ${checkedBrief(metric.last_successful_check_at)}`}>
       <dl className="fs-src">
         <div><dt>Series</dt><dd>{definition.title ? `${definition.title}, ` : ""}{definition.dataset} / {definition.series}</dd></div>
         <div>
@@ -69,7 +89,7 @@ export function Sources({ metric, extra }: any) {
       </dl>
       <OfficialLink href={definition.source_url}>View the official series</OfficialLink>
       {extra}
-    </>
+    </MoreDetail>
   );
 }
 

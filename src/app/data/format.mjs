@@ -10,3 +10,16 @@ export function checkedAt(value) {
       }) + " UK time"
     : "Not yet checked";
 }
+
+/** Short form for one-line summaries: "checked 20 Oct, 12:00" (UK time). */
+export function checkedBrief(value) {
+  return value
+    ? "checked " + new Date(value).toLocaleString("en-GB", {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "Europe/London",
+      })
+    : "not yet checked";
+}
