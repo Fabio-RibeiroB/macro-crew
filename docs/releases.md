@@ -36,3 +36,26 @@ checkout or downgrade a statistical database without a compatibility review.
 
 Official statistics update independently every 30 minutes through the publisher.
 Routine data refreshes do not require application tags or frontend rebuilds.
+
+## Release script
+
+Production deployments run `deploy/release.sh` as the `finstats` user. It checks
+the 4 GB account quota (aborts above 3600 MB), backs up the live release (without
+published data), builds `origin/main` outside the served directory, runs the tests,
+switches `dist` atomically, fast-forwards the checkout and writes a mode-0600
+`receipt.json` into the backup directory. The release name is
+`deploy-YYYY-MM-DD.N` with the next free `N`.
+
+After a successful switch it prunes, keeping only the live release, the previous
+release and the newest backup. It deletes only directories named exactly
+`~/releases/deploy-YYYY-MM-DD.N` and `~/backups/macro-crew/YYYYMMDDTHHMMSSZ`, never
+the live target, never through symlinks, and never `~/published-data` or
+`~/.local/state`. To list candidates without removing anything:
+
+```
+deploy/release.sh --prune-only --dry-run
+```
+
+Drop `--dry-run` to prune without deploying. `scripts/prune-merged.sh` is a separate
+local developer tool for merged branches and clean agent worktrees (dry run by
+default; `--apply` deletes).

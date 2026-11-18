@@ -65,6 +65,10 @@ and current timer state. Build with `npm ci && npm test && npm run build --
 the release has current legacy report files and a finstats-owned `data` symlink to
 the public JSON directory. Run offline Python tests and public delivery first.
 
+Routine deployments use `deploy/release.sh` (run as finstats), which automates the
+backup, build, switch and pruning above; see [releases](releases.md). Preview
+pruning with `deploy/release.sh --prune-only --dry-run`.
+
 Install `deploy/systemd/finstats-publish.service` and `.timer`, precreating both
 writable directories with finstats ownership. Verify the units with systemd-analyze,
 start the service and inspect the public generation. Only after its success,
