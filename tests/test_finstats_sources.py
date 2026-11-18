@@ -561,3 +561,55 @@ def test_boe_mortgage_interior_blank_stays_missing_never_zero():
     body = fixture('mortgage_2y_fixed_75').replace(b'31 Mar 2026,IUMBV34,4.45', b'31 Mar 2026,IUMBV34,')
     point = {p.period: p for p in parse('mortgage_2y_fixed_75', body, date(2026, 11, 18)).observations}['2026-03']
     assert point.value is None and point.status == 'missing'
+
+
+def test_cpi_index_is_the_d7bt_index_level_from_the_qualified_json_endpoint():
+    data = parse('cpi_index', fixture('cpi_index'), CPI_TODAY)
+    definition = data.definition
+    assert fixture_file('cpi_index') == 'cpi_index_d7bt_mm23.json'
+    assert definition.metric_id == 'uk.cpi.index_2015_100'
+    assert (definition.series, definition.dataset) == ('D7BT', 'MM23')
+    assert definition.unit == 'index_2015_100'
+    assert definition.comparison == 'level'
+    assert definition.download_url == 'https://www.ons.gov.uk/economy/inflationandpriceindices/timeseries/d7bt/mm23/data'
+    assert public_definition('cpi_index')['geography'] == 'United Kingdom'
+    assert data.published_date == '2026-10-21'
+    assert data.next_release == '2026-11-18'
+    assert data.observations[0].period == '2016-01'
+    assert (data.observations[-1].period, data.observations[-1].value) == ('2026-09', '144.1')
+    assert all(o.status == 'observed' and o.reference is None for o in data.observations)
+    periods = [o.period for o in data.observations]
+    assert len(periods) == len(set(periods)) == 129  # contiguous recorded months, none invented
+
+
+def test_cpi_index_fixture_bytes_and_receipt_remain_the_recorded_excerpt():
+    receipts = json.loads((FIXTURES / 'receipts.json').read_text())
+    receipt = receipts['cpi_index_d7bt_mm23.json']
+    assert hashlib.sha256(fixture('cpi_index')).hexdigest() == receipt['sha256']
+    assert receipt['url'].startswith(DEFINITIONS['cpi_index'].source_url + '/previous/')
+
+
+@pytest.mark.parametrize('old,new', [
+    (b'"cdid": "D7BT"', b'"cdid": "D7G7"'),
+    (b'"title": "CPI INDEX 00: ALL ITEMS 2015=100"', b'"title": "CPI ANNUAL RATE 00: ALL ITEMS 2015=100"'),
+    (b'"unit": "Index, base year = 100"', b'"unit": "%"'),
+    (b'"keyNote": "Index, 2015 = 100"', b'"keyNote": "Index, 2005 = 100"'),
+    (b'"uri": "/economy/inflationandpriceindices/timeseries/d7bt/mm23"',
+     b'"uri": "/economy/inflationandpriceindices/timeseries/d7bt/mm23/previous/v133"'),
+    (b'"value": "144.1"', b'"value": ".."'),
+    (b'"value": "144.1"', b'"value": ""'),
+])
+def test_cpi_index_rejects_wrong_identity_unit_base_and_unknown_tokens(old, new):
+    body = fixture('cpi_index')
+    assert old in body
+    with pytest.raises(ValidationError):
+        parse('cpi_index', body.replace(old, new, 1), CPI_TODAY)
+
+
+def test_cpi_index_keeps_missing_months_as_gaps_never_zero():
+    payload = json.loads(fixture('cpi_index').decode())
+    payload['months'] = [m for m in payload['months'] if m['date'] != '2026 JUN']
+    data = parse('cpi_index', json.dumps(payload).encode(), CPI_TODAY)
+    periods = [o.period for o in data.observations]
+    assert '2026-06' not in periods and '2026-05' in periods and '2026-07' in periods
+    assert all(o.value not in (None, '0', '0.0') for o in data.observations)

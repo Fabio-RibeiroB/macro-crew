@@ -170,6 +170,15 @@ DEFINITIONS = {
         'https://www.ofgem.gov.uk/your-energy-supply/your-energy-bill/energy-price-cap-unit-rates-and-standing-charges',
         'https://www.ofgem.gov.uk/your-energy-supply/your-energy-bill/energy-price-cap-unit-rates-and-standing-charges',
         unit='GBP_per_year'),
+    # ONS CPI index level (not the annual rate): the deflator for FinStats'
+    # real-terms house price calculation. Same MM23 release and JSON endpoint as CPI.
+    'cpi_index': Definition(
+        'uk.cpi.index_2015_100', 'D7BT', 'MM23',
+        'CPI INDEX 00: ALL ITEMS 2015=100',
+        'monthly', 'not_seasonally_adjusted', 'level',
+        ONS + '/economy/inflationandpriceindices/timeseries/d7bt/mm23',
+        ONS + '/economy/inflationandpriceindices/timeseries/d7bt/mm23/data',
+        unit='index_2015_100'),
 }
 
 # Optional metric members: registered public-definition fields the writer is
@@ -190,6 +199,7 @@ OPTIONAL_METRICS = {
         'consumption_source_sha256': OFGEM_TDCV_SOURCE_SHA256,
         'unit': 'GBP_per_year'},
     'cpi': {'geography': 'United Kingdom'},
+    'cpi_index': {'geography': 'United Kingdom'},
     'regular_pay_nominal_growth': {'geography': 'Great Britain', 'window_months': 3},
     'regular_pay_real_growth': {'geography': 'Great Britain', 'window_months': 3, 'deflator': 'CPIH'},
     'unemployment': {'geography': 'United Kingdom', 'age_group': '16 and over', 'window_months': 3},
@@ -203,7 +213,7 @@ OPTIONAL_METRICS = {
 
 # Keys whose official endpoint is the structured ONS JSON timeseries response
 # rather than the CSV generator. Recorded-fixture naming follows the same split.
-JSON_TIMESERIES = {'cpi', 'regular_pay_nominal_growth', 'regular_pay_real_growth', 'unemployment'}
+JSON_TIMESERIES = {'cpi', 'cpi_index', 'regular_pay_nominal_growth', 'regular_pay_real_growth', 'unemployment'}
 
 
 def public_definition(key):
@@ -478,9 +488,12 @@ def parse_ons_json(definition, body, today):
                             ('datasetId', definition.dataset)]:
         if description.get(field) != expected:
             raise ValidationError(f'Unexpected {field}')
-    expected_unit = '' if definition.series == 'A2FA' else '%'
+    expected_unit = ('' if definition.series == 'A2FA' else
+                     'Index, base year = 100' if definition.series == 'D7BT' else '%')
     if description.get('unit') != expected_unit or description.get('preUnit') not in ('', None):
         raise ValidationError('Unexpected unit')
+    if definition.series == 'D7BT' and description.get('keyNote', '').strip() != 'Index, 2015 = 100':
+        raise ValidationError('Unexpected CPI index base year')
     if definition.series == 'MGSX':
         if (description.get('monthLabelStyle') != 'three month average' or
                 description.get('keyNote', '').strip() != 'UK: Aged 16 and over'):

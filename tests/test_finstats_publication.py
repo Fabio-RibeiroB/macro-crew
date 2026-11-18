@@ -613,3 +613,33 @@ def test_mortgage_rates_publish_monthly_with_full_history_and_source_evidence(tm
         assert len(metric['history']) == 382 and metric['history'][0]['period'] == '1995-01'
         assert metric['source_download_url'] == metric['definition']['download_url']
         assert len(metric['source_sha256']) == 64
+
+
+def test_cpi_index_failure_never_blocks_other_metrics_and_stays_unavailable(tmp_path):
+    def broken(key):
+        if key == 'cpi_index':
+            raise TimeoutError('temporary outage')
+        return fixture_transport(key)
+    result = collect(tmp_path, transport=broken, clock=lambda: CPI_WHEN)
+    assert result['failed_metrics'] == ['cpi_index']
+    data = read_generation(tmp_path)
+    member = data['metrics']['cpi_index']
+    assert member['latest'] is None and member['history'] == []
+    assert member['validation_status'] == 'unavailable'
+    assert member['definition']['unit'] == 'index_2015_100'
+    assert member['definition']['geography'] == 'United Kingdom'
+    assert data['metrics']['house_price_level']['latest']['value'] == '273037'
+    assert data['metrics']['cpi']['latest']['value'] == '3.5'
+
+
+def test_cpi_index_publishes_full_history_with_source_evidence(tmp_path):
+    result = collect(tmp_path, transport=fixture_transport, clock=lambda: CPI_WHEN)
+    assert not result['failed_metrics']
+    member = read_generation(tmp_path)['metrics']['cpi_index']
+    assert (member['latest']['period'], member['latest']['value']) == ('2026-09', '144.1')
+    assert member['latest'] == member['history'][-1]
+    assert len(member['history']) == 129
+    assert member['validation_status'] == 'verified'
+    assert member['snapshot_evidence_kind'] == 'official_download'
+    assert member['source_download_url'].endswith('/timeseries/d7bt/mm23/data')
+    assert member['source_published_date'] == '2026-10-21'

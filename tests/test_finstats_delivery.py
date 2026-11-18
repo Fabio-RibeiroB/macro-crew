@@ -272,7 +272,7 @@ def test_delivery_publishes_cpi_headline_with_core_metrics_retained(tmp_path):
         'gilt_5y', 'gilt_10y', 'gilt_20y',
         'mortgage_2y_fixed_75', 'mortgage_5y_fixed_75',
         'house_price_level', 'house_price_growth', 'petrol_price', 'diesel_price',
-        'household_energy'}
+        'household_energy', 'cpi_index'}
     cpi = data['metrics']['cpi']
     assert cpi['validation_status'] == 'verified'
     assert cpi['snapshot_evidence_kind'] == 'official_download'
