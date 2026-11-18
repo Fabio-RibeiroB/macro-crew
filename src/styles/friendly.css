@@ -906,6 +906,10 @@
 .fs-menu-button {
   display: none;
 }
+/* Footer pages that the mobile menu also lists (About). Desktop shows them only in the footer. */
+.fs-header nav a.fs-nav-menu-only {
+  display: none;
+}
 .fs-stat-count-1,
 .fs-chart-count-1 {
   grid-template-columns: minmax(0, 760px);
@@ -1018,6 +1022,9 @@
   }
   .fs-header nav a[aria-current="page"] {
     box-shadow: inset 3px 0 0 var(--fs-accent);
+  }
+  .fs-header nav a.fs-nav-menu-only {
+    display: block;
   }
   .fs-reading-grid {
     grid-template-columns: 1fr;
