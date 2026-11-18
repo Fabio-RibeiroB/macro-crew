@@ -440,38 +440,41 @@
 .fs-chart-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px;
+  gap: 36px 20px;
 }
 /* Charts: plain, no card. One accent line, rules for structure (ADR 0001). */
-.fs-chart-head {
-  margin-bottom: 4px;
+.fs-chart {
+  padding-top: 12px;
 }
-.fs-chart-toolbar {
+.fs-chart-head {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
   flex-wrap: wrap;
-  gap: 8px 12px;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px 16px;
+  margin-bottom: 12px;
+}
+.fs-chart-heading {
+  flex: 1 1 240px;
+  min-width: 0;
 }
 .fs-chart-title {
-  font-weight: 700;
-  font-size: 15px;
+  font-weight: 650;
+  font-size: 17.5px;
   line-height: 1.3;
+  letter-spacing: -0.01em;
 }
-.fs-chart-readout {
+.fs-chart-sub {
+  margin-top: 4px;
   font-size: 14px;
-  font-weight: 600;
-  margin-top: 6px;
-  font-variant-numeric: tabular-nums;
+  line-height: 1.45;
+  color: var(--fs-muted);
+}
+.fs-chart-upd {
+  white-space: nowrap;
 }
 .fs-chart-body {
   padding: 4px 0 0;
-}
-.fs-chart-updated {
-  margin-top: 2px;
-  color: var(--fs-muted);
-  font-size: 12px;
-  line-height: 1.5;
 }
 .fs-chart-gap-note {
   display: flex;
@@ -579,13 +582,19 @@
   text-align: left;
   white-space: nowrap;
 }
-@media (max-width: 400px) {
-  .fs-chart-toolbar {
-    flex-wrap: wrap;
+@media (max-width: 560px) {
+  .fs-range {
+    width: 100%;
   }
   .fs-range button {
-    padding: 6px 8px;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 44px;
+    padding: 6px 4px;
   }
+}
+.fs-chart-head-legend {
+  margin-bottom: 4px;
 }
 .fs-policy-grid {
   display: grid;
@@ -1480,21 +1489,46 @@
 .fs-statusbar {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 4px 16px;
-  font-size: 13px;
-  color: var(--fs-muted);
+  align-items: center;
+  gap: 0 10px;
+  padding-top: 16px;
 }
-.fs-statusbar a {
+.fs-updated {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 4px 12px 4px 10px;
+  border: 1px solid var(--fs-line-strong);
+  border-radius: 999px;
+  background: var(--fs-soft);
+  color: var(--fs-ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+.fs-updated svg {
+  flex: none;
   color: var(--fs-accent);
+}
+.fs-root .fs-statusbar-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 2px;
+  color: var(--fs-accent);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .fs-statusbar .fs-text-button {
   font-size: 13.5px;
 }
 .fs-block {
   border-top: 3px solid var(--fs-accent);
-  margin-top: 48px;
+  margin-top: 64px;
   scroll-margin-top: 68px;
 }
 /* Every second block sits on a faint band so neighbouring sections read as separate. */
@@ -1502,28 +1536,30 @@
   background: var(--fs-band);
   margin-left: -16px;
   margin-right: -16px;
-  padding: 0 16px 8px;
+  padding: 0 16px 12px;
 }
 .fs-root .fs-block > h2 {
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 800;
   line-height: 1.2;
   letter-spacing: -0.015em;
-  padding: 16px 0 10px;
+  padding: 22px 0 10px;
 }
+/* Type scale for a subject page: measure 28, row subheading 19, sub-figure 15.5,
+   body 16, detail 14, notes 13. Rows are separated by a rule and 32px each side. */
 .fs-row {
   display: grid;
-  grid-template-columns: 132px minmax(0, 1fr);
-  gap: 8px 28px;
-  padding: 20px 0;
+  grid-template-columns: 170px minmax(0, 1fr);
+  gap: 12px 28px;
+  padding: 32px 0;
   border-top: 1px solid var(--fs-line-strong);
   scroll-margin-top: 68px;
 }
 .fs-root .fs-row-label {
-  font: 700 14px/1.4 var(--font-body);
-  letter-spacing: 0;
-  color: var(--fs-muted);
-  padding-top: 3px;
+  font: 650 19px/1.3 var(--font-body);
+  letter-spacing: -0.01em;
+  color: var(--fs-ink);
+  padding-top: 1px;
 }
 .fs-row-cell {
   min-width: 0;
@@ -1550,7 +1586,7 @@
 }
 .fs-kv {
   display: grid;
-  grid-template-columns: repeat(4, max-content);
+  grid-template-columns: repeat(4, minmax(0, max-content));
   gap: 6px 32px;
   font-variant-numeric: tabular-nums;
 }
@@ -1695,8 +1731,8 @@
 @media (max-width: 760px) {
   .fs-row {
     grid-template-columns: minmax(0, 1fr);
-    gap: 2px;
-    padding: 14px 0;
+    gap: 14px;
+    padding: 28px 0;
   }
   .fs-root .fs-row-label {
     padding-top: 0;
@@ -1764,7 +1800,7 @@
 /* Prices page: a labelled sub-figure inside a block row, and petrol and diesel side
    by side as two separate figures (never blended). */
 .fs-fig-name {
-  font: 700 14.5px/1.3 var(--font-body);
+  font: 700 15.5px/1.3 var(--font-body);
   margin: 0 0 6px;
 }
 .fs-fig-name + .fs-fig-measure {

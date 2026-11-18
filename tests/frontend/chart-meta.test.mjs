@@ -24,13 +24,13 @@ const monthly = (values, start = [2025, 1]) =>
 test("the official release date drives the label, ahead of the retrieval time", () => {
   const updated = chartUpdated({ source_published_date: "2026-11-14", retrieved_at: "2026-11-16T07:00:00Z" });
   assert.equal(updated.kind, "published");
-  assert.equal(updated.label, "Data last updated 14 Nov 2026");
+  assert.equal(updated.label, "Updated 14 Nov 2026");
 });
 
 test("without a release date the retrieval date is used and labelled as retrieval", () => {
   const updated = chartUpdated({ source_published_date: null, retrieved_at: "2026-11-15T23:30:00Z" });
   assert.equal(updated.kind, "retrieved");
-  assert.equal(updated.label, "Data retrieved 15 Nov 2026");
+  assert.equal(updated.label, "Retrieved 15 Nov 2026");
 });
 
 test("no usable date gives no label, and the last check is never used", () => {
@@ -54,9 +54,9 @@ test("gap spans group consecutive missing values and never treat them as zero", 
 test("the chart shows the date when supplied and nothing when it is not", async () => {
   const data = monthly([1, 2, 3]);
   const withDate = await render({ data, updated: chartUpdated({ source_published_date: "2026-11-14" }) });
-  assert.match(withDate, /<time dateTime="2026-11-14">Data last updated 14 Nov 2026<\/time>/);
+  assert.match(withDate, /<time dateTime="2026-11-14">Updated 14 Nov 2026<\/time>/);
   const without = await render({ data, updated: chartUpdated({}) });
-  assert.doesNotMatch(without, /last updated|Data retrieved|fs-chart-updated/);
+  assert.doesNotMatch(without, /Updated \d|Retrieved|<time/);
 });
 
 test("the gap note appears only when the visible range contains a gap", async () => {

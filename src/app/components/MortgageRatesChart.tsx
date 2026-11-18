@@ -93,38 +93,45 @@ export function MortgageRatesChart({ rows, series, updated }: { rows: Row[]; ser
   return (
     <div className="fs-chart">
       <div className="fs-chart-head">
-        <div className="fs-chart-toolbar">
+        <div className="fs-chart-heading">
           <p className="fs-chart-title">Quoted mortgage rates and Bank Rate</p>
-          <div
-            className="fs-range"
-            role="radiogroup"
-            aria-label="Historical range for mortgage rates"
-            aria-describedby={selection.notice ? noteId : undefined}
-            onKeyDown={onRangeKeyDown}
-          >
-            {CHART_RANGES.map((range) => {
-              const checked = selectedRange === range.id;
-              return (
-                <button
-                  key={range.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={checked}
-                  aria-label={`${range.label}, ${range.name}`}
-                  data-range={range.id}
-                  tabIndex={checked ? 0 : -1}
-                  onClick={() => setSelectedRange(range.id)}
-                >
-                  {range.label}
-                </button>
-              );
-            })}
-          </div>
+          <p className="fs-chart-sub">
+            <span>Percent per year, monthly. Mortgage rates are averages of quoted rates, not offers.</span>
+            {updated?.label && (
+              <>
+                <span aria-hidden="true" className="fs-chart-sep"> · </span>
+                <span className="fs-chart-upd"><time dateTime={updated.date}>{updated.label}</time></span>
+              </>
+            )}
+          </p>
         </div>
-        <p className="fs-chart-readout">Percent per year, monthly. Mortgage rates are averages of quoted rates, not offers.</p>
-        {updated?.label && (
-          <p className="fs-chart-updated"><time dateTime={updated.date}>{updated.label}</time></p>
-        )}
+        <div
+          className="fs-range"
+          role="radiogroup"
+          aria-label="Historical range for mortgage rates"
+          aria-describedby={selection.notice ? noteId : undefined}
+          onKeyDown={onRangeKeyDown}
+        >
+          {CHART_RANGES.map((range) => {
+            const checked = selectedRange === range.id;
+            return (
+              <button
+                key={range.id}
+                type="button"
+                role="radio"
+                aria-checked={checked}
+                aria-label={`${range.label}, ${range.name}`}
+                data-range={range.id}
+                tabIndex={checked ? 0 : -1}
+                onClick={() => setSelectedRange(range.id)}
+              >
+                {range.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div className="fs-chart-head-legend">
         <ul className="fs-mortgage-legend" aria-label="Chart key">
           {series.map((line) => (
             <li key={line.key}><Swatch id={line.key} />{line.name}</li>

@@ -1,19 +1,40 @@
-/* MoreDetail: one quiet, consistent disclosure for technical detail (ADR 0004). */
+/* MoreDetail: one contained disclosure box for technical detail (ADR 0004).
+   Closed it is a full-width bordered bar; open it is the same box on a soft tinted
+   surface, the summary as its header with a rule under it and the content padded
+   inside. Native <details>, so it works by tap, keyboard and screen reader. */
 .fs-more {
-  margin: 0;
+  margin: 16px 0 0;
+  max-width: 760px;
+  border: 1px solid var(--fs-line-strong);
+  border-radius: 10px;
+  background: var(--fs-paper);
+  color: var(--fs-ink);
+}
+.fs-more:first-child {
+  margin-top: 0;
+}
+.fs-more[open] {
+  background: var(--fs-soft);
+  border-color: color-mix(in srgb, var(--fs-accent) 45%, var(--fs-line-strong));
 }
 .fs-more > summary {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  min-height: 32px;
-  max-width: 100%;
+  gap: 10px;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 10px 14px;
   cursor: pointer;
   list-style: none;
-  color: var(--fs-muted);
-  font-size: 13.5px;
+  color: var(--fs-ink);
+  font-size: 15px;
+  font-weight: 600;
   line-height: 1.4;
-  border-radius: 4px;
+  border-radius: 9px;
+}
+.fs-more[open] > summary {
+  border-bottom: 1px solid var(--fs-line-strong);
+  border-radius: 9px 9px 0 0;
 }
 .fs-more > summary::-webkit-details-marker {
   display: none;
@@ -21,40 +42,42 @@
 .fs-more > summary::marker {
   content: "";
 }
-.fs-more > summary:hover,
-.fs-more > summary:focus-visible {
+.fs-more > summary:hover {
+  background: var(--fs-hover);
+}
+.fs-root .fs-more > summary:focus-visible {
+  outline-offset: 2px;
+}
+.fs-more-q {
+  flex: none;
   color: var(--fs-accent);
 }
-.fs-more > summary:hover .fs-more-label {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.fs-more-q,
 .fs-more-chev {
   flex: none;
+  margin-left: auto;
+  color: var(--fs-muted);
 }
 .fs-more-label {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.fs-more-chev {
-  margin-left: 2px;
-}
 .fs-more[open] > summary .fs-more-chev {
   transform: rotate(180deg);
 }
 .fs-more-body {
-  margin-top: 6px;
-  font-size: 13.5px;
+  padding: 14px 16px 16px;
+  font-size: 14.5px;
+  line-height: 1.55;
   color: var(--fs-muted);
 }
-.fs-more-body .fs-src > div {
-  font-size: 13.5px;
+.fs-more-body > :first-child {
+  margin-top: 0;
 }
-@media (max-width: 760px) {
-  .fs-more > summary {
-    min-height: 44px;
-  }
+.fs-more-body > :last-child {
+  margin-bottom: 0;
+}
+.fs-more-body .fs-src > div {
+  font-size: 14.5px;
 }
 @media (prefers-reduced-motion: no-preference) {
   .fs-more-chev {
@@ -75,6 +98,11 @@
   }
 }
 @media print {
+  .fs-more {
+    border-color: #888;
+    background: none;
+    break-inside: avoid;
+  }
   .fs-more > summary {
     min-height: 0;
     color: inherit;

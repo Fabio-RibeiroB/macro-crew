@@ -3,6 +3,7 @@ import { chartUpdated } from "../data/chartMeta.mjs";
 import { chartPoints, previousReading } from "../data/verified.mjs";
 import { NOT_AVAILABLE, changeDirection, dayLabel, decimalDifference, monthLabel } from "../data/overview.mjs";
 import { checkedAt } from "../data/format.mjs";
+import { UpdatedChip } from "./UpdatedChip";
 import { PageContents } from "./PageContents";
 import { OfficialLink } from "./OfficialLink";
 import { Lines } from "./IndicatorTable";
@@ -126,11 +127,7 @@ export function GovernmentPage({ data, loading, error, refresh, topics, Historic
   return (
     <>
       <div className="fs-container fs-economy fs-government" id="figures">
-        <div className="fs-statusbar">
-          <p>
-            {data ? <>Figures last updated {checkedAt(data.published_at)}. We check official sources every 30 minutes and this page updates itself. <a href="/sources">How we check the data</a></> : "Official figures"}
-          </p>
-        </div>
+        <UpdatedChip value={data?.published_at} />
         {error && (
           <div className="fs-alert" role="status">
             {error}{" "}

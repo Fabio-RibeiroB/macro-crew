@@ -3,6 +3,7 @@ import { chartUpdated, inflationTargetLine } from "../data/chartMeta.mjs";
 import { chartPoints, formatPeriod } from "../data/verified.mjs";
 import { changeDirection, comparableEnergyPrevious, decimalDifference, overviewRows } from "../data/overview.mjs";
 import { checkedAt } from "../data/format.mjs";
+import { UpdatedChip } from "./UpdatedChip";
 import { Delta, Lines } from "./IndicatorTable";
 import { PageContents } from "./PageContents";
 import { OfficialLink } from "./OfficialLink";
@@ -94,11 +95,7 @@ export function PricesPage({ data, loading, error, refresh, topics, HistoricalTr
 
   return (
     <div className="fs-container fs-economy fs-prices" id="figures">
-      <div className="fs-statusbar">
-        <p>
-          {data ? <>Figures last updated {checkedAt(data.published_at)}. We check official sources every 30 minutes and this page updates itself. <a href="/sources">How we check the data</a></> : "Official figures"}
-        </p>
-      </div>
+      <UpdatedChip value={data?.published_at} />
       {error && (
         <div className="fs-alert" role="status">
           {error}{" "}

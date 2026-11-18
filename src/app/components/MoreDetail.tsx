@@ -1,4 +1,4 @@
-// Quiet inline disclosure for technical detail (ADR 0004). Native <details>, so it
+// Contained disclosure box for technical detail (ADR 0004). Native <details>, so it
 // works by tap, keyboard and screen reader without script, and its content is in
 // the server-rendered HTML.
 import { useEffect } from "react";

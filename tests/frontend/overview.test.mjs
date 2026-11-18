@@ -88,7 +88,8 @@ test("the overview is a table with no Unit column, a plain heading and a change 
     assert.match(markup, /class="fs-def"/, "each row carries an inline definition");
     assert.match(markup, /<a class="fs-ledger-link" href="\/[a-z-]+#[a-z-]+"/);
   }
-  assert.doesNotMatch(html, /<svg[^>]*sparkline|<polyline|recharts/i);
+  // The update chip's clock icon is a polyline; everything else on the overview must be chart-free.
+  assert.doesNotMatch(html.replace(/<p class="fs-updated">[\s\S]*?<\/p>/, ""), /<svg[^>]*sparkline|<polyline|recharts/i);
 });
 
 test("change arrows are always paired with text and a sign", async () => {
