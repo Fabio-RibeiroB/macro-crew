@@ -58,6 +58,32 @@ export function summaryParts(text) {
   return { lead, points };
 }
 
+import { shortDate, shortDay } from "./format.mjs";
+
+/**
+ * When the AI wrote this summary: the report's own `generated_at` when it has a usable
+ * one, otherwise the file-level time (`metadata.generated_at`). Null when neither is
+ * known, so no date is ever invented.
+ */
+export function aiWrittenAt(report, fileTime = null) {
+  for (const value of [report?.generated_at, fileTime]) {
+    if (shortDate(value)) return value;
+  }
+  return null;
+}
+
+/** "AI summary written 15 Nov 2026", or "AI summary date not recorded". */
+export function aiWrittenLabel(report, fileTime = null) {
+  const date = shortDate(aiWrittenAt(report, fileTime));
+  return date ? `AI summary written ${date}` : "AI summary date not recorded";
+}
+
+/** "AI · 15 Nov" for the overview line, or null when no time is known. */
+export function aiWrittenShort(report, fileTime = null) {
+  const day = shortDay(aiWrittenAt(report, fileTime));
+  return day ? `AI · ${day}` : null;
+}
+
 const MONTH_YEAR = { month: "long", year: "numeric", timeZone: "UTC" };
 
 /** The publication's name without a date: "Monetary Policy Summary and minutes". */

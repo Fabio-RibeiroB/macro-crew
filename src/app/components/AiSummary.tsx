@@ -6,7 +6,7 @@
 import "../../styles/ai-summary.css";
 import { formatPeriod } from "../data/verified.mjs";
 import { aiFailureNotice } from "../data/aiStatus.mjs";
-import { publicationName, publicationTitle, summaryParts } from "../data/aiSummary.mjs";
+import { aiWrittenLabel, publicationName, publicationTitle, summaryParts } from "../data/aiSummary.mjs";
 import { OfficialLink } from "./OfficialLink";
 
 export function AiCommentary({ reports, reportTime, aiStatus = null }: any) {
@@ -24,6 +24,7 @@ export function AiCommentary({ reports, reportTime, aiStatus = null }: any) {
             </div>
             <p className="fs-ai-meta">
               {report.report_date ? <>Bank of England report dated {formatPeriod(report.report_date)}</> : "Bank of England report, date not supplied"}
+              {" · "}{aiWrittenLabel(report, reportTime)}
             </p>
             <p className="fs-aisum-lead"><strong>{lead}</strong></p>
             {points.length > 0 && (
