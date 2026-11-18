@@ -39,17 +39,13 @@
   color: var(--fs-accent);
 }
 @media (max-width: 720px) {
-  /* One scrollable row, bleeding to the screen edges so a cut-off chip hints at more. */
+  /* Every section stays visible: the label sits above and the links wrap, so no section is hidden off-screen. */
   .fs-contents {
-    margin-left: -20px;
-    margin-right: -20px;
-    padding: 0 20px 4px;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: thin;
+    flex-wrap: wrap;
+    gap: 8px;
   }
-  .fs-contents-list {
-    flex-wrap: nowrap;
+  .fs-root .fs-contents-label {
+    flex-basis: 100%;
   }
   .fs-contents-list a {
     min-height: 44px;
