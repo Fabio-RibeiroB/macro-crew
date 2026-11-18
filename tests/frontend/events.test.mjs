@@ -251,6 +251,6 @@ test("Government route renders a qualified fiscal date linked to the canonical d
     assert.match(html, /Autumn Budget/);
     assert.match(html, /href="https:\/\/www\.gov\.uk\/government\/publications\/chancellor-letter-to-the-treasury-select-committee-tsc-budget-2026-date"/);
     assert.ok(html.indexOf("Autumn Budget") > html.indexOf("Public sector net debt"));
-    assert.ok(html.indexOf("Autumn Budget") > html.indexOf("Start with who is affected"));
+    assert.ok(html.indexOf("Autumn Budget") > html.indexOf("How to read Budget announcements"));
   } finally { await server.close(); }
 });

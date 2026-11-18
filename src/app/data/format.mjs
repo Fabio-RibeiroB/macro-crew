@@ -23,3 +23,20 @@ export function checkedBrief(value) {
       })
     : "not yet checked";
 }
+
+const hasInstant = (value) =>
+  typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value) && !Number.isNaN(Date.parse(value));
+
+/** "15 Nov 2026" in UK time, or null when the value is not a usable timestamp. */
+export function shortDate(value) {
+  return hasInstant(value)
+    ? new Date(value).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" })
+    : null;
+}
+
+/** "15 Nov" in UK time (no year), or null when the value is not a usable timestamp. */
+export function shortDay(value) {
+  return hasInstant(value)
+    ? new Date(value).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" })
+    : null;
+}

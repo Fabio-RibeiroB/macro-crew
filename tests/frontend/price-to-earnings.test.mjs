@@ -200,3 +200,13 @@ test("the ratio chart opens on the whole annual history with exact two-decimal v
     assert.match(page, /House price to earnings ratio, England and Wales/);
   } finally { await server.close(); }
 });
+
+test("the ratio's What it means keeps a short answer and moves the method into a MoreDetail (ADR 0004)", async () => {
+  const block = section(await renderHousing(housingData()), "price-to-earnings");
+  const cell = />What it means<\/h3><div[^>]*>([\s\S]*?)<\/div><\/div><div class="fs-row"/.exec(block)[1];
+  assert.match(cell, /<details class="fs-more">/);
+  const visible = textOf(cell.replace(/<details[\s\S]*?<\/details>/g, ""));
+  assert.match(visible, /England and Wales/);
+  assert.doesNotMatch(visible, /median|provisional/);
+  assert.match(textOf(cell), /not comparable with the UK House Price Index average price above/);
+});

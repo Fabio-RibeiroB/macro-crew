@@ -145,7 +145,7 @@ test("every page renders its own heading, navigation and missing-data content", 
         {
           assert.match(html, /Public sector net debt/);
           assert.match(html, /not available here yet/);
-          assert.ok(html.indexOf("Public sector net debt") < html.indexOf("Start with who is affected"));
+          assert.ok(html.indexOf("Public sector net debt") < html.indexOf("How to read Budget announcements"));
           assert.match(html, /Next release dates/);
         }
       if (page.id === "overview") {

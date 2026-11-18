@@ -792,6 +792,11 @@ Implementation slices (one issue and one focused PR each):
    `MoreDetail`; replace the stale list of published datasets with a link to
    Sources. Make it findable: in the mobile menu as well as the footer.
 
+6. AI summary date stamp (owner request 18 November 2026): every AI summary
+   shows visibly when the AI wrote it ("AI summary written 15 Nov 2026") next
+   to the date of the publication it summarises; the overview MPC line shows
+   the same short date. A summary with no known generation time says so.
+
 **Acceptance:** each page verified live at 360px and desktop, light and dark;
 disclosures open by tap and keyboard; no figure changes; tests green.
 

@@ -82,6 +82,12 @@
   font-size: 15px;
   line-height: 1.45;
 }
+.fs-mpc-line .fs-mpc-date {
+  margin-left: 4px;
+  font-size: 13px;
+  color: var(--fs-muted);
+  white-space: nowrap;
+}
 .fs-mpc-line .fs-link {
   font-size: 14px;
   white-space: nowrap;

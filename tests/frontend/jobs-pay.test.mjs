@@ -31,6 +31,13 @@ test("each Jobs & Pay measure reads Key figure, What it means, Chart, Sources in
   assert.ok(html.indexOf('id="wages"') < html.indexOf('id="unemployment"'));
   // No empty AI row, and no AI-labelled box inside a measure.
   assert.doesNotMatch(html, /fs-ai-box/);
+  // Technical wording sits in a "How it's measured" disclosure inside each What it means row (ADR 0004).
+  for (const id of ["wages", "unemployment"]) {
+    const block = section(html, id);
+    const means = block.slice(block.search(/<h3 class="fs-row-label"[^>]*>What it means/), block.search(/<h3 class="fs-row-label"[^>]*>Chart/));
+    assert.match(means, /<details class="fs-more"><summary>[\s\S]*How it&#x27;s measured[\s\S]*<\/summary>/, id);
+    assert.doesNotMatch(means, /<details[^>]* open/, id);
+  }
 });
 
 test("Jobs & Pay figures carry units, windows and the after-inflation context", async () => {
