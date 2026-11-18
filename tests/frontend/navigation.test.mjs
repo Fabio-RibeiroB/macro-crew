@@ -160,8 +160,13 @@ test("every page renders its own heading, navigation and missing-data content", 
         assert.match(main, /helps people in the UK understand the economic numbers that affect their money/);
         assert.match(main, /official figures and explains them in plain English/);
         assert.match(main, /Anyone\. You do not need to know any economics/);
-        for (const point of [/Official sources only/, /Nothing is made up or filled in/, /missing, not as a guess or a zero/, /calculations are labelled/, /summaries only/, /The numbers never come from AI/])
+        for (const point of [/How we try to get it right/, /We use official sources/, /We don’t fill gaps/, /We label our own sums/, /AI only writes summaries/, /can be wrong/])
           assert.match(main, point);
+        // Honest about the site's early stage, with a way to report problems; no absolute promises.
+        assert.match(main, /<h2>Early days<\/h2>/);
+        assert.match(main, /there will be bugs/);
+        assert.match(main, /href="https:\/\/github\.com\/Fabio-RibeiroB\/macro-crew\/issues"/);
+        assert.doesNotMatch(main, /Why you can trust it|Nothing is made up|never come from AI/);
         assert.match(main, /not a government website and does not produce official statistics/);
         assert.match(main, /Nothing here is financial advice/);
         assert.match(main, /<a class="fs-link" href="\/sources">How we check the data<\/a>/);

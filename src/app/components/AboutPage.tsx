@@ -17,24 +17,27 @@ export function AboutPage() {
       <h2>Who it is for</h2>
       <p>Anyone. You do not need to know any economics to use it.</p>
 
-      <h2>Why you can trust it</h2>
+      <h2>How we try to get it right</h2>
       <ul>
         <li>
-          <strong>Official sources only.</strong> Every figure names the official source it comes from.
+          <strong>We use official sources.</strong> Each figure names where it comes from, so you can check it.
         </li>
         <li>
-          <strong>Nothing is made up or filled in.</strong> If a figure is missing, it shows as missing, not as a guess
-          or a zero.
+          <strong>We don’t fill gaps.</strong> If a figure is missing, we aim to show it as missing rather than guess.
         </li>
         <li>
-          <strong>Our own calculations are labelled.</strong> When FinStats works something out, such as a change since
-          the previous period, it says so.
+          <strong>We label our own sums.</strong> When FinStats works something out, it should say so.
         </li>
         <li>
-          <strong>AI is used for summaries only.</strong> The only AI text is a short, clearly labelled summary of Bank
-          of England publications. The numbers never come from AI.
+          <strong>AI only writes summaries.</strong> AI text is labelled and can be wrong; the numbers don’t come from AI.
         </li>
       </ul>
+      <h2>Early days</h2>
+      <p>
+        FinStats UK is new and still being built. Figures can be late, AI summaries can fail or get things wrong, and
+        there will be bugs. Check the official source before relying on a number. Spotted a problem?{" "}
+        <a className="fs-link" href="https://github.com/Fabio-RibeiroB/macro-crew/issues">Report it on GitHub</a>.
+      </p>
       <p>
         <a className="fs-link" href="/sources">How we check the data</a>
         {" · "}
