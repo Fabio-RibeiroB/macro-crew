@@ -99,7 +99,7 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
         <Row label="Chart" labelId="rent-chart-label">
           {charts([
             [rent, { title: rent?.definition?.title, label: "Annual rent growth", unit: "%", unitDescription: "percent" }],
-            [rentLevel, { title: rentLevel?.definition?.title, label: "Average monthly rent (ONS PIPR, mix-adjusted)", unit: "£", unitDescription: "pounds per month" }],
+            [rentLevel, { title: "Average monthly private rent (ONS PIPR, mix-adjusted)", label: "Average monthly rent (ONS PIPR, mix-adjusted)", unit: "£", unitDescription: "pounds per month" }],
           ])}
         </Row>
         <Row label="Sources" labelId="rent-sources-label">
