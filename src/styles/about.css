@@ -1,0 +1,27 @@
+/* About page: one readable column. */
+.fs-about {
+  max-width: 68ch;
+}
+.fs-about h2 {
+  margin: 28px 0 8px;
+}
+.fs-about h2:first-child {
+  margin-top: 0;
+}
+.fs-about p {
+  margin: 0 0 14px;
+}
+.fs-about ul {
+  list-style: disc;
+  padding-left: 22px;
+  margin: 0 0 16px;
+}
+.fs-about li {
+  margin: 0 0 10px;
+}
+.fs-about .fs-more {
+  margin-top: 24px;
+}
+.fs-about .fs-more-body p {
+  font-size: 15px;
+}

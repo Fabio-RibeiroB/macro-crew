@@ -69,10 +69,13 @@ export const PAGES = [
     id: "about",
     path: "/about",
     label: "About",
-    title: "About",
+    title: "About FinStats UK",
     description:
-      "FinStats UK gives UK residents a clear view of the economy, using official statistics and plain-English context.",
+      "Why FinStats UK exists: to help people in the UK understand the economic numbers that affect their money, using official figures explained in plain English.",
     place: "footer",
+    // Also listed in the mobile menu. Desktop keeps the main navigation to subject
+    // pages; About stays in the footer there.
+    menu: true,
   },
   {
     id: "sources",
@@ -99,6 +102,8 @@ export const SITE = {
 
 export const NAV_PAGES = PAGES.filter((page) => page.place === "nav");
 export const FOOTER_PAGES = PAGES.filter((page) => page.place === "footer");
+/** Footer pages that the collapsed (mobile) menu also lists. Hidden by CSS on desktop. */
+export const MENU_ONLY_PAGES = PAGES.filter((page) => page.menu);
 
 /** Future subject routes from the UI spec. They have no page yet. */
 export const UNPUBLISHED_PATHS = [

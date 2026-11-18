@@ -5,6 +5,7 @@ import {
   PAGES,
   NAV_PAGES,
   FOOTER_PAGES,
+  MENU_ONLY_PAGES,
   UNPUBLISHED_PATHS,
   documentTitle,
   resolvePage,
@@ -26,6 +27,11 @@ test("plain-English pages have stable direct URLs and unique navigation identiti
       ["/about", "About"],
       ["/sources", "Sources"],
     ],
+  );
+  // About is also in the collapsed menu; the desktop main nav stays on subject pages.
+  assert.deepEqual(
+    MENU_ONLY_PAGES.map((p) => p.path),
+    ["/about"],
   );
   assert.deepEqual(
     PAGES.map((p) => p.path),
@@ -114,7 +120,12 @@ test("every page renders its own heading, navigation and missing-data content", 
       )[0];
       assert.deepEqual(
         [...header.matchAll(/href="([^"]+)"/g)].map((match) => match[1]),
-        NAV_PAGES.map((item) => item.path),
+        [...NAV_PAGES, ...MENU_ONLY_PAGES].map((item) => item.path),
+      );
+      // Menu-only links are hidden by CSS on desktop; subject links never carry the class.
+      assert.deepEqual(
+        [...header.matchAll(/<a [^>]*class="fs-nav-menu-only"[^>]*href="([^"]+)"|<a [^>]*href="([^"]+)"[^>]*class="fs-nav-menu-only"/g)].map((m) => m[1] || m[2]),
+        MENU_ONLY_PAGES.map((item) => item.path),
       );
       assert.deepEqual(
         [...footer.matchAll(/href="([^"]+)"/g)].map((match) => match[1]),
@@ -144,13 +155,24 @@ test("every page renders its own heading, navigation and missing-data content", 
         assert.doesNotMatch(html, /Earlier AI report summaries/);
       }
       if (page.id === "about") {
-        assert.match(html, /Office for National Statistics/);
-        assert.match(html, /Bank of England/);
-        assert.match(html, /labelled as commentary/);
-        assert.match(html, /not a government website/);
-        assert.match(html, /does not produce official statistics/);
-        assert.match(html, /UK-wide/);
-        assert.doesNotMatch(html, /independent|endorsed|unbiased|official partner/i);
+        const main = html.match(/<main[\s\S]*<\/main>/)[0];
+        assert.match(main, /<h1>About FinStats UK<\/h1>/);
+        assert.match(main, /helps people in the UK understand the economic numbers that affect their money/);
+        assert.match(main, /official figures and explains them in plain English/);
+        assert.match(main, /Anyone\. You do not need to know any economics/);
+        for (const point of [/Official sources only/, /Nothing is made up or filled in/, /missing, not as a guess or a zero/, /calculations are labelled/, /summaries only/, /The numbers never come from AI/])
+          assert.match(main, point);
+        assert.match(main, /not a government website and does not produce official statistics/);
+        assert.match(main, /Nothing here is financial advice/);
+        assert.match(main, /<a class="fs-link" href="\/sources">How we check the data<\/a>/);
+        assert.match(main, /<a class="fs-link" href="\/economy#ai-summary">Read the AI summary<\/a>/);
+        // Longer detail sits in the shared disclosure; the stale dataset inventory is gone.
+        assert.match(main, /<details class="fs-more"><summary>[\s\S]*More about how it works/);
+        assert.doesNotMatch(main, /What is published now|CPIH|Bank Rate|UK HPI|Ofgem/);
+        assert.match(main, /an independent project run by <a class="fs-link" href="https:\/\/github\.com\/Fabio-RibeiroB">Fabio-RibeiroB on GitHub<\/a>/);
+        assert.match(main, /not\s+affiliated with the ONS, the Bank of England or the government/);
+        assert.match(main, /<a class="fs-link" href="https:\/\/github\.com\/Fabio-RibeiroB\/macro-crew">code is open<\/a>/);
+        assert.doesNotMatch(main, /endorsed|unbiased|official partner|mailto:/i);
       }
     }
     for (const [path, html] of rendered) {

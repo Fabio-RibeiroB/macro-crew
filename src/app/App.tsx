@@ -32,6 +32,7 @@ import {
 import {
   NAV_PAGES,
   FOOTER_PAGES,
+  MENU_ONLY_PAGES,
   documentTitle,
   resolvePage,
 } from "./data/pages.mjs";
@@ -56,6 +57,7 @@ import { JobsPayPage } from "./components/JobsPayPage";
 import { HousingPage } from "./components/HousingPage";
 import { GovernmentPage } from "./components/GovernmentPage";
 import { PricesPage } from "./components/PricesPage";
+import { AboutPage } from "./components/AboutPage";
 import { checkedAt } from "./data/format.mjs";
 import { EventList } from "./components/EventList";
 import { FiguresTicker } from "./components/FiguresTicker";
@@ -537,56 +539,6 @@ function Publications({ reports, reportTime }: any) {
   );
 }
 
-function About() {
-  return (
-    <section className="fs-container fs-section fs-reading-grid">
-      <article>
-        <h2>What is published now</h2>
-        <p>
-          The verified figures are UK-wide: CPI and CPIH from the Office for
-          National Statistics, Bank Rate from the Bank of England, and monthly
-          real GDP from the Office for National Statistics. Each figure shows
-          its reference period, unit and source. A time when finstats UK
-          checked a feed is not a new official release.
-        </p>
-        <p>
-          Wages and unemployment are published from verified official series.
-          UK private-rent growth and average monthly rent are also published.
-          UK average house prices are published from the HM Land Registry UK HPI.
-          Household energy bills and road fuel prices are published from
-          official Ofgem and government feeds. If a statistic covers a smaller area than the UK,
-          such as Great Britain, that geography is named with the figure.
-        </p>
-        <h2>Official figures and AI summaries</h2>
-        <p>
-          The numbers come from the named official series. Some pages also keep
-          earlier summaries produced with AI. Those summaries are labelled as
-          commentary. They are separate from the verified figures, they are not
-          official statistics, and they are not forecasts produced by this
-          site.
-        </p>
-        <p>
-          <a className="fs-link" href="/economy#ai-summary">Read the AI summary</a>
-        </p>
-        <p>
-          <a className="fs-link" href="/sources">
-            Sources and methodology
-          </a>
-        </p>
-      </article>
-      <aside className="fs-context-card">
-        <h3>Scope and limits</h3>
-        <p>
-          This is a public website that republishes official statistics with
-          attribution. It is not a government website, and it does not produce
-          official statistics.
-        </p>
-        <p>Nothing here is individual financial advice.</p>
-      </aside>
-    </section>
-  );
-}
-
 function Sources() {
   return (
     <section className="fs-container fs-section fs-reading-grid">
@@ -892,10 +844,11 @@ export default function App({
             aria-label="Main navigation"
             hidden={narrow && !menuOpen}
           >
-            {NAV_PAGES.map((item) => (
+            {[...NAV_PAGES, ...MENU_ONLY_PAGES].map((item) => (
               <a
                 key={item.id}
                 href={item.path}
+                className={MENU_ONLY_PAGES.includes(item) ? "fs-nav-menu-only" : undefined}
                 aria-current={page.id === item.id ? "page" : undefined}
                 onClick={() => {
                   // Hide the menu only when the document stays put. Hiding the
@@ -996,11 +949,10 @@ export default function App({
         )}
         {page.id === "about" && (
           <>
-            <PageHeading title="About">
-              finstats UK gives residents a clear view of the UK economy, using
-              official statistics and plain-English context.
+            <PageHeading title={page.title}>
+              Official UK economic figures, explained in plain English.
             </PageHeading>
-            <About />
+            <AboutPage />
           </>
         )}
         {page.id === "sources" && (
