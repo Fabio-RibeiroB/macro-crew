@@ -932,7 +932,7 @@ export default function App({
       <main id="main-content" tabIndex={-1}>
         {page.id === "overview" && (
           <>
-            <MpcLine reports={reports} />
+            <MpcLine reports={reports} reportTime={reportTime} />
             <Overview {...stats} />
             <EventList {...eventProps} limit={5} compact />
             <section className="fs-container fs-section">
