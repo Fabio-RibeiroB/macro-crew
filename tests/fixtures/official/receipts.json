@@ -119,5 +119,17 @@
     "evidence_kind": "recorded_fixture",
     "sha256": "3c52d666ba3623d668d6cf7bce60491ed3aa77db3522c2345bb30c6934508450",
     "source_published_date": null
+  },
+  "cpi_index_d7bt_mm23.json": {
+    "url": "https://www.ons.gov.uk/economy/inflationandpriceindices/timeseries/d7bt/mm23/previous/v133/data",
+    "retrieved_at": "2026-11-18T13:48:33.255305+00:00",
+    "sha256": "d06177ad16111e868a86a825fcdfca4e1e04ee1c3e35bfc7bcd25f86b09d4320",
+    "content_type": "application/json;charset=utf-8",
+    "trimmed": true,
+    "original": {
+      "sha256": "baa79e9c8649371e971d4f6ed55b8603720c384017ec76a220e3d24651f0965d",
+      "bytes": 126327
+    },
+    "trim_note": "Exact recorded values from the archived ONS version v133 of D7BT/MM23, which was the live series from the 21 October 2026 release (latest 2026 SEP = 144.1) until the 18 November 2026 release. Retained: months from 2016 JAN to 2026 SEP, contiguous, matching the UK HPI fixture window; last 12 quarterly points; last 8 previous versions; years and description in full. The only edit is that the top-level uri was rewritten from the archived /previous/v133 path to the live series path so the fixture binds to the qualified live endpoint contract. The hash field covers the retained excerpt."
   }
 }

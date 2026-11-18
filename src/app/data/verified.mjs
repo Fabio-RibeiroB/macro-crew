@@ -60,6 +60,22 @@ export const OPTIONAL_METRICS = {
     download_url:
       "https://www.ons.gov.uk/economy/inflationandpriceindices/timeseries/d7g7/mm23/data",
   },
+  cpi_index: {
+    metric_id: "uk.cpi.index_2015_100",
+    series: "D7BT",
+    dataset: "MM23",
+    title: "CPI INDEX 00: ALL ITEMS 2015=100",
+    frequency: "monthly",
+    comparison: "level",
+    adjustment: "not_seasonally_adjusted",
+    unit: "index_2015_100",
+    version: 1,
+    geography: "United Kingdom",
+    source_url:
+      "https://www.ons.gov.uk/economy/inflationandpriceindices/timeseries/d7bt/mm23",
+    download_url:
+      "https://www.ons.gov.uk/economy/inflationandpriceindices/timeseries/d7bt/mm23/data",
+  },
   regular_pay_nominal_growth: {
     metric_id: "uk.regular_pay.nominal_annual_growth",
     series: "KAI9",

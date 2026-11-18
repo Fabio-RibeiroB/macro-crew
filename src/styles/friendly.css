@@ -1749,6 +1749,10 @@
 .fs-housing-second {
   margin-top: 12px;
 }
+.fs-housing-real,
+.fs-housing-real-note {
+  margin-top: 24px;
+}
 
 /* Prices page: a labelled sub-figure inside a block row, and petrol and diesel side
    by side as two separate figures (never blended). */
