@@ -4,6 +4,7 @@ import {
   CRAWL_STORAGE_KEY,
   DEFAULT_CRAWL_SETTINGS,
   REDUCED_MOTION_QUERY,
+  SPEED_FACTORS,
   SPEED_LABELS,
   collapsedFigures,
   motionState,
@@ -50,6 +51,10 @@ function prefersReducedMotion() {
   return window.matchMedia(REDUCED_MOTION_QUERY).matches;
 }
 
+function canSetPlaybackRate() {
+  return typeof Element !== "undefined" && typeof Element.prototype.getAnimations === "function";
+}
+
 /** Settings remembered on this device. Storage can be missing, blocked or full: defaults then. */
 function readSettings(): Settings {
   try {
@@ -93,6 +98,7 @@ export function FiguresTicker({
   const [reduced, setReduced] = useState(prefersReducedMotion);
   const [duration, setDuration] = useState<number | null>(null);
   const list = useRef<HTMLUListElement>(null);
+  const track = useRef<HTMLDivElement>(null);
   const { collapsed, paused, speed } = settings;
 
   const change = (patch: Partial<Settings>) => {
@@ -111,16 +117,30 @@ export function FiguresTicker({
   }, []);
 
   const scrolling = !collapsed && items.length > 0;
+  // Speed is applied as the animation's playback rate, so a change keeps the strip where
+  // it is instead of jumping. Without the Web Animations API, fall back to the duration.
+  const rateControl = canSetPlaybackRate();
+  const durationSpeed = rateControl ? "normal" : speed;
   useEffect(() => {
     const element = list.current;
     if (!element) return;
-    const measure = () => setDuration(tickerDuration(element.scrollWidth, speed));
+    const measure = () => setDuration(tickerDuration(element.scrollWidth, durationSpeed));
     measure();
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(measure);
     observer.observe(element);
     return () => observer.disconnect();
-  }, [items.length, reduced, scrolling, speed]);
+  }, [items.length, reduced, scrolling, durationSpeed]);
+
+  const motion = collapsed ? "static" : motionState({ reducedMotion: reduced, paused });
+  useEffect(() => {
+    if (!rateControl || motion === "static") return;
+    const rate = SPEED_FACTORS[speed] ?? 1;
+    for (const animation of track.current?.getAnimations() ?? []) {
+      if (typeof animation.updatePlaybackRate === "function") animation.updatePlaybackRate(rate);
+      else animation.playbackRate = rate;
+    }
+  }, [rateControl, motion, speed, duration, items.length]);
 
   if (!data && loading) {
     return (
@@ -132,7 +152,7 @@ export function FiguresTicker({
   // A failed first load leaves nothing honest to scroll; the page shows its own error.
   if (items.length === 0) return null;
 
-  const state = collapsed ? "static" : motionState({ reducedMotion: reduced, paused });
+  const state = motion;
   const showControls = !collapsed && state !== "static";
   const Chevron = collapsed ? ChevronRight : ChevronDown;
   return (
@@ -165,6 +185,7 @@ export function FiguresTicker({
       ) : (
         <div className="fs-ticker-viewport" id={BODY_ID}>
           <div
+            ref={track}
             className="fs-ticker-track"
             style={duration ? ({ "--fs-ticker-duration": `${duration}s` } as React.CSSProperties) : undefined}
           >
