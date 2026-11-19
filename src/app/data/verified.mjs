@@ -566,7 +566,7 @@ function piprDownloadUrl(value) {
     const url = new URL(value);
     return url.protocol === "https:" && url.hostname === "www.ons.gov.uk" &&
       /^\/file$/.test(url.pathname) &&
-      /^uri=(?:%2F|\/)economy(?:%2F|\/)inflationandpriceindices(?:%2F|\/)datasets(?:%2F|\/)priceindexofprivaterentsukmonthlypricestatistics(?:%2F|\/)[0-9]{1,2}[a-z]+[0-9]{4}(?:%2F|\/)priceindexofprivaterentsukmonthlypricestatistics\.xlsx$/.test(url.search.slice(1));
+      /^uri=(?:%2F|\/)economy(?:%2F|\/)inflationandpriceindices(?:%2F|\/)datasets(?:%2F|\/)priceindexofprivaterentsukmonthlypricestatistics(?:%2F|\/)[0-9]{1,2}[a-z]+[0-9]{4}(?:%2F|\/)priceindexofprivaterentsukmonthlypricestatistics[0-9]*\.xlsx$/.test(url.search.slice(1));
   } catch { return false; }
 }
 function onsAffordabilityUrl(value) {
