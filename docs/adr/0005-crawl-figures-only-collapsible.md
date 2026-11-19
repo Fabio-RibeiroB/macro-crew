@@ -51,3 +51,25 @@ and the whole bar is the button. Speed is applied as the animation's playback
 rate rather than by changing the loop duration, so a change does not make the
 strip jump; only the figures, never the controls, hold the crawl still on hover
 or focus (PR #181).
+
+## Amendment, 19 November 2026 (context)
+
+Owner feedback: "Inflation: 3.6%, up from 3.5%" does not say whether it is a
+monthly or a yearly change, and no item said which period it describes, so an
+older figure could read as current. Every crawl item now names its comparison
+basis and reference period, only from what the verified metric provides. Rates
+of change carry a basis word and period after the label: "Inflation (yearly,
+Sep)", "GDP growth (monthly, Aug)", "Pay growth (yearly, Jun–Aug)". Levels carry
+only the period: "Unemployment (Jun–Aug)", "Energy price cap (Oct–Dec)", "House
+prices (Aug)", "Petrol (week of 19 Oct)"; Bank Rate is the current rate and has
+none. "Yearly" means a 12-month change and "monthly" a month-on-month change; one
+table in `src/app/data/ticker.mjs` maps each measure to its basis, and a test
+checks it against each metric's registered comparison. Labour windows keep the
+full three months. A period the data does not supply is left out, never guessed.
+Fuel says "week of" because the figure is the Monday sample, as on the Prices
+page, not a week ending. The change wording "up from 3.5%" becomes a direction
+arrow plus the earlier value: "3.6% ↑ (prev. 3.5%)", with → when unchanged. The
+arrow is not colour alone (ADR 0002): the visible text is hidden from assistive
+technology and replaced by one spoken phrase, "Inflation, yearly, September:
+3.6%, up from 3.5%". Only where no earlier value exists does the item give the
+size of the move ("↑ £891") instead of inventing one.

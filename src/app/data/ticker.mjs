@@ -1,11 +1,14 @@
-// News-style crawl items (ADR 0003, narrowed by ADR 0005). Pure functions over the same
-// verified snapshot as the overview table: figures and changes come straight from
-// `overviewRows`, so the crawl can never disagree with the table. Each figure reads as a
-// short plain-English phrase ("Inflation: 3.5%, up from 3.1%"). Missing values are
-// skipped, never shown as zero. The crawl carries official figures only: no AI text and
-// no MPC item (the overview already shows the MPC line). Also here: the pure helpers for
-// the collapsed summary, the speed setting and the remembered per-device settings.
+// News-style crawl items (ADR 0003, narrowed by ADR 0005 and its 19 Nov amendment). Pure
+// functions over the same verified snapshot as the overview table: figures and changes come
+// straight from `overviewRows`, so the crawl can never disagree with the table. Each figure
+// reads as a short phrase that says what it compares and when it is from:
+// "Inflation (yearly, Oct): 3.6% ↑ (prev. 3.5%)". Missing values are skipped, never shown
+// as zero, and a period that is not in the data is left out, never guessed. The crawl
+// carries official figures only: no AI text and no MPC item (the overview already shows
+// the MPC line). Also here: the pure helpers for the collapsed summary, the speed setting
+// and the remembered per-device settings.
 import { overviewRows } from "./overview.mjs";
+import { referenceWindow } from "./verified.mjs";
 
 export const TICKER_PX_PER_SECOND = 50;
 export const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
@@ -21,6 +24,80 @@ const LABELS = {
   gdp: "GDP growth",
 };
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS_LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+// Each period reads as { short, spoken }: "Oct" / "October", "Jul–Sep" / "July to September".
+const monthIndex = (value) => {
+  const found = /^\d{4}-(\d{2})(?:-\d{2})?$/.exec(String(value ?? ""));
+  const index = found ? Number(found[1]) - 1 : -1;
+  return index >= 0 && index < 12 ? index : null;
+};
+const monthPeriod = (value) => {
+  const index = monthIndex(value);
+  return index === null ? null : { short: MONTHS[index], spoken: MONTHS_LONG[index] };
+};
+const windowPeriod = (start, end) => {
+  const from = monthIndex(start);
+  const to = monthIndex(end);
+  if (from === null || to === null) return null;
+  if (from === to) return { short: MONTHS[to], spoken: MONTHS_LONG[to] };
+  return { short: `${MONTHS[from]}–${MONTHS[to]}`, spoken: `${MONTHS_LONG[from]} to ${MONTHS_LONG[to]}` };
+};
+const weekPeriod = (value) => {
+  const found = /^\d{4}-\d{2}-(\d{2})$/.exec(String(value ?? ""));
+  const index = found ? monthIndex(value) : null;
+  if (index === null) return null;
+  const day = Number(found[1]);
+  return { short: `week of ${day} ${MONTHS[index]}`, spoken: `week of ${day} ${MONTHS_LONG[index]}` };
+};
+function rollingPeriod(metric) {
+  const window = referenceWindow(metric?.latest);
+  return window ? windowPeriod(window.start_month, window.end_month) : null;
+}
+
+// The one place that says what each crawl figure compares and which period it names.
+// basis: "yearly" for a 12-month change, "monthly" for a month-on-month change, null for a
+// level (a level carries only its period, never a basis word). It matches each metric's
+// registered `comparison` (year_on_year, month_on_month, level); a test enforces that.
+// period: read from the metric's own reference (a rolling window, the cap's effective
+// dates) or its period; no usable period gives null and the context shows without it.
+// Bank Rate is the current rate, so it has none.
+export const CRAWL_CONTEXT = {
+  inflation: { basis: "yearly", period: (metric) => monthPeriod(metric?.latest?.period) },
+  "bank-rate": { basis: null, period: () => null },
+  wages: { basis: "yearly", period: rollingPeriod },
+  unemployment: { basis: null, period: rollingPeriod },
+  rent: { basis: "yearly", period: (metric) => monthPeriod(metric?.latest?.period) },
+  "house-prices": { basis: null, period: (metric) => monthPeriod(metric?.latest?.period) },
+  energy: {
+    basis: null,
+    period: (metric) => {
+      const reference = metric?.latest?.reference;
+      return windowPeriod(reference?.effective_start, reference?.effective_end);
+    },
+  },
+  fuel: { basis: null, period: (metric) => weekPeriod(metric?.latest?.period) },
+  gdp: { basis: "monthly", period: (metric) => monthPeriod(metric?.latest?.period) },
+};
+
+/** The verified metric behind one crawl line (fuel has one metric per tag). */
+const metricFor = (row, line, metrics) => (line.tag ? metrics[`${line.tag}_price`] : metrics[row.kind]);
+
+/** Basis, period and their visible "(yearly, Oct)" and spoken "yearly, October" forms. */
+function contextOf(rowId, metric) {
+  const entry = CRAWL_CONTEXT[rowId];
+  const basis = entry?.basis ?? null;
+  const period = entry?.period(metric) ?? null;
+  const visible = [basis, period?.short].filter(Boolean);
+  const spoken = [basis, period?.spoken].filter(Boolean);
+  return {
+    basis,
+    period: period?.short ?? null,
+    context: visible.length ? `(${visible.join(", ")})` : null,
+    spokenContext: spoken.length ? spoken.join(", ") : null,
+  };
+}
+
 const labelFor = (row, line) => {
   if (line.tag) return TAG_LABELS[line.tag] ?? line.tag;
   const label = LABELS[row.id];
@@ -33,24 +110,27 @@ function valueOf(row, line) {
   return line.text.replace(/\/year$/, " a year");
 }
 
+const ARROWS = { up: "↑", down: "↓", flat: "→" };
+
 /**
- * Change phrase and its direction. Percentage-point changes name the earlier value
- * ("up from 3.1%"); money and pence changes give the size ("up £891"). No comparable
+ * Direction and the comparison behind it. Direction is an arrow (never colour alone) and
+ * a spoken word. The earlier value is named when the verified history has one
+ * ("(prev. 3.5%)", spoken "up from 3.5%"); only when it does not does the item give the
+ * size of the move ("£891", "0.2 points"), never an invented earlier value. No comparable
  * change gives null, so the item shows just the figure.
  */
-function changeOf(line, previous) {
+export function changeOf(line, previous) {
   if (!line || line.missing || line.sub) return null;
-  if (line.direction === "flat") return { dir: "flat", text: "unchanged" };
-  if (line.direction !== "up" && line.direction !== "down") return null;
-  const size = line.text.replace(/^[+−-]\s*/, "").trim().replace(/\/year$/, " a year");
-  const phrase = line.direction;
-  if (/ pp$/.test(line.text)) {
-    return {
-      dir: phrase,
-      text: previous && !previous.missing ? `${phrase} from ${previous.text}` : `${phrase} ${size.replace(/ pp$/, " points")}`,
-    };
+  const dir = line.direction;
+  if (dir !== "up" && dir !== "down" && dir !== "flat") return null;
+  const arrow = ARROWS[dir];
+  const before = previous && !previous.missing ? previous.text.replace(/\/year$/, " a year") : null;
+  if (before) {
+    return { dir, arrow, detail: `(prev. ${before})`, spoken: dir === "flat" ? "unchanged" : `${dir} from ${before}` };
   }
-  return { dir: phrase, text: `${phrase} ${size}` };
+  if (dir === "flat") return { dir, arrow, detail: null, spoken: "unchanged" };
+  const size = line.text.replace(/^[+−-]\s*/, "").trim().replace(/\/year$/, " a year").replace(/ pp$/, " points");
+  return { dir, arrow, detail: size, spoken: `${dir} ${size}` };
 }
 
 /**
@@ -69,6 +149,7 @@ export function tickerItems(data, hrefs = {}) {
         id: line.tag ? `${row.id}-${line.tag}` : row.id,
         kind: row.kind,
         label: labelFor(row, line),
+        ...contextOf(row.id, metricFor(row, line, data.metrics)),
         value: valueOf(row, line),
         change: changeOf(changes[index], previous[index]),
         href: hrefs[row.kind] ?? null,
@@ -78,10 +159,20 @@ export function tickerItems(data, hrefs = {}) {
   return items;
 }
 
-/** Plain-text reading of an item, as a screen reader gets it. */
+/** Visible plain text of an item: "Inflation (yearly, Oct): 3.6% ↑ (prev. 3.5%)". */
 export function itemText(item) {
-  const head = `${item.label}: ${item.value}`;
-  return item.change ? `${head}, ${item.change.text}` : head;
+  const head = `${item.label}${item.context ? ` ${item.context}` : ""}: ${item.value}`;
+  if (!item.change) return head;
+  return `${head} ${item.change.arrow}${item.change.detail ? ` ${item.change.detail}` : ""}`;
+}
+
+/**
+ * What a screen reader gets in place of the visible symbols and abbreviations:
+ * "Inflation, yearly, October: 3.6%, up from 3.5%".
+ */
+export function spokenText(item) {
+  const head = `${item.label}${item.spokenContext ? `, ${item.spokenContext}` : ""}: ${item.value}`;
+  return item.change ? `${head}, ${item.change.spoken}` : head;
 }
 
 /** "running" scrolls, "paused" holds position, "static" is a plain scrollable strip. */

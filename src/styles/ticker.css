@@ -156,8 +156,15 @@
 .fs-ticker-value {
   font-weight: 700;
 }
+.fs-ticker-context {
+  font-weight: 500;
+}
 .fs-ticker-change {
   font-weight: 700;
+}
+.fs-ticker-prev {
+  font-weight: 500;
+  color: var(--fs-muted);
 }
 .fs-ticker-item[data-dir="up"] .fs-ticker-change {
   color: var(--fs-up);
