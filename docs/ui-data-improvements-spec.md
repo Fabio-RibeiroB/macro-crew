@@ -959,6 +959,13 @@ Implementation slices (one issue and one focused PR each):
    Network failures to a source are reported as "could not check", never as a
    pass.
 
+4. One bad figure must not blank the site (proposed after the 19 November
+   outage, owner approval pending): when a single metric fails the browser's
+   provenance checks, only that metric shows as unavailable and the rest of
+   the verified generation is displayed; a damaged manifest or checksum still
+   rejects everything. The daily cross-check also reads the live site through
+   the site's own reader, so a rejected figure is reported.
+
 **Later, owner decision needed:** a Claude Code GitHub action could read that
 issue and open a draft fix PR. It would need the owner's Claude token as a
 repository secret and counts as AI use. It would never merge by itself: the
