@@ -933,10 +933,18 @@ Implementation slices (one issue and one focused PR each):
 1. Rents fix: pick the newest dated ONS rents edition, accept a numeric
    suffix in its file name, never fall back to an older edition, and fail
    loudly when none is found.
-2. Freshness: each metric gets an expected update rhythm (frequency plus the
-   usual publication delay). When the latest reference period is later than
-   that, the figure is still shown with a plain "update overdue" note on its
-   card and on Sources, and the collector no longer reports it as "ok".
+2. Freshness: reuse the existing `release_status` ("delayed"), keeping it
+   separate from `collection_status`, reference age and collector health
+   (architecture assessment, freshness policy). Where no official release
+   date is known, each metric gets a maximum publication delay: the newest
+   period should be published within that many days after the period ends
+   (for example monthly ONS rents: the month after next, about 50 days).
+   Deadline = end of the period after the latest shown one + that delay, end
+   of that London date. After the deadline, `release_status` becomes
+   "delayed" and the figure stays visible with a plain "update overdue" note
+   on its card and on Sources. A successful collection stays "ok"; a
+   months-old Bank Rate is not overdue because it has no publication delay
+   rule (it changes only when the MPC decides).
 3. Daily cross-check: a scheduled GitHub Actions job (standard library only)
    reads the live site and fetches each latest figure, its period and recent
    history from the publisher by a different route where one exists (for
