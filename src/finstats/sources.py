@@ -1144,6 +1144,31 @@ def recorded_hpi_release_evidence(source_url, source_published_date, retrieved_a
     }
 
 
+PIPR_WORKBOOK_LINK = re.compile(
+    r'/file\?uri=(?:%2F|/)economy(?:%2F|/)inflationandpriceindices(?:%2F|/)datasets(?:%2F|/)'
+    r'priceindexofprivaterentsukmonthlypricestatistics(?:%2F|/)'
+    r'(?P<day>[0-9]{1,2})(?P<month>[a-z]+)(?P<year>[0-9]{4})(?:%2F|/)'
+    r'priceindexofprivaterentsukmonthlypricestatistics(?P<suffix>[0-9]*)\.xlsx')
+
+
+def select_pipr_workbook_href(hrefs):
+    """Newest dated ONS PIPR edition link; ignore anything else (including /current/)."""
+    editions = []
+    for href in hrefs:
+        match = PIPR_WORKBOOK_LINK.fullmatch(href)
+        month = MONTHS.get(match['month'][:3].upper()) if match else None
+        if not match or month is None or calendar.month_name[month].lower() != match['month']:
+            continue
+        try:
+            edition = date(int(match['year']), month, int(match['day']))
+        except ValueError:
+            continue
+        editions.append((edition, int(match['suffix'] or 0), href))
+    if not editions:
+        raise ValidationError('Current ONS PIPR workbook link unavailable')
+    return max(editions)[2]
+
+
 def fetch(key: str) -> bytes:
     """One bounded request. Retry scheduling belongs to the caller, not the parser."""
     if key == PRICE_TO_EARNINGS:
@@ -1230,16 +1255,7 @@ def fetch(key: str) -> bytes:
                     self.hrefs.extend(value for name, value in attrs if name == 'href')
         links = Links()
         links.feed(page.decode('utf-8', 'strict'))
-        sep = r'(?:%2F|/)'
-        pattern = re.compile(r'^/file\?uri=' + sep + r'economy' + sep +
-            r'inflationandpriceindices' + sep + r'datasets' + sep +
-            r'priceindexofprivaterentsukmonthlypricestatistics' + sep +
-            r'[0-9]{1,2}[a-z]+[0-9]{4}' + sep +
-            r'priceindexofprivaterentsukmonthlypricestatistics\.xlsx$')
-        matches = [ONS + href for href in links.hrefs if pattern.fullmatch(href)]
-        if not matches:
-            raise ValidationError('Current ONS PIPR workbook link unavailable')
-        url = matches[0]
+        url = ONS + select_pipr_workbook_href(links.hrefs)
         request = Request(url, headers={
             'User-Agent': 'FinStats/2.0 (+https://github.com/Fabio-RibeiroB/macro-crew)'})
         with urlopen(request, timeout=60) as response:
