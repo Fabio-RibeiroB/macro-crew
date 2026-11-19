@@ -63,23 +63,28 @@
 .fs-root .fs-ticker button:focus-visible {
   outline-offset: -3px;
 }
-/* Folded: a static bar with the two headline figures. */
-.fs-ticker-summary {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 0 18px;
-  margin: 0;
-  padding: 0 14px;
-  white-space: nowrap;
-  overflow: hidden;
+/* Folded: the crawl is gone; a slim full-width bar brings it back. The whole bar is the
+   button, so it stays an easy target at this height. */
+.fs-ticker[data-collapsed="true"] {
+  --fs-ticker-height: 30px;
 }
-.fs-ticker-headline + .fs-ticker-headline::before {
-  content: "·";
-  content: "·" / "";
-  margin-right: 18px;
+.fs-ticker[data-collapsed="true"] .fs-ticker-fold {
+  flex: 1;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 0 14px;
+  border-right: 0;
   color: var(--fs-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.fs-ticker[data-collapsed="true"] .fs-ticker-fold-text {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+  clip-path: none;
 }
 .fs-ticker-viewport {
   flex: 1;
@@ -218,12 +223,5 @@
     clip: rect(0 0 0 0);
     clip-path: inset(50%);
     white-space: nowrap;
-  }
-  .fs-ticker-summary {
-    gap: 0 12px;
-    padding: 0 10px;
-  }
-  .fs-ticker-headline + .fs-ticker-headline::before {
-    margin-right: 12px;
   }
 }

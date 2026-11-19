@@ -6,7 +6,6 @@ import {
   REDUCED_MOTION_QUERY,
   SPEED_FACTORS,
   SPEED_LABELS,
-  collapsedFigures,
   motionState,
   nextSpeed,
   parseCrawlSettings,
@@ -75,8 +74,8 @@ function writeSettings(settings: Settings) {
 
 /**
  * A crawl below the site header (ADR 0003, narrowed by ADR 0005): short plain-English
- * official figures, numbers only. A "Figures" button folds it to a static bar with the
- * two headline figures. Pause and a three-step speed button sit at the right; collapsed,
+ * official figures, numbers only. A "Figures" button folds it away to a slim
+ * "Show latest figures" bar. Pause and a three-step speed button sit at the right; collapsed,
  * paused and speed are remembered on this device. The first list is the real, focusable
  * list; the second only makes the loop seamless and is hidden from assistive technology
  * and the tab order. With reduced motion the strip is static and scrolls horizontally
@@ -167,22 +166,14 @@ export function FiguresTicker({
         type="button"
         className="fs-ticker-fold"
         aria-expanded={!collapsed}
-        aria-controls={BODY_ID}
+        aria-controls={collapsed ? undefined : BODY_ID}
         title={collapsed ? "Show the scrolling figures" : "Hide the scrolling figures"}
         onClick={() => change({ collapsed: !collapsed })}
       >
-        <span className="fs-ticker-fold-text">Figures</span>
+        <span className="fs-ticker-fold-text">{collapsed ? "Show latest figures" : "Figures"}</span>
         <Chevron size={16} aria-hidden="true" />
       </button>
-      {collapsed ? (
-        <p className="fs-ticker-summary" id={BODY_ID}>
-          {collapsedFigures(items).map((figure) => (
-            <span className="fs-ticker-headline" key={figure.id}>
-              <span className="fs-ticker-label">{figure.label}</span> <span className="fs-ticker-value">{figure.value}</span>
-            </span>
-          ))}
-        </p>
-      ) : (
+      {collapsed ? null : (
         <div className="fs-ticker-viewport" id={BODY_ID}>
           <div
             ref={track}

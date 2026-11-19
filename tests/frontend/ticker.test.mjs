@@ -7,8 +7,6 @@ import { overviewRows } from "../../src/app/data/overview.mjs";
 import {
   CRAWL_STORAGE_KEY,
   DEFAULT_CRAWL_SETTINGS,
-  collapsedFigures,
-  collapsedSummary,
   itemText,
   motionState,
   nextSpeed,
@@ -123,21 +121,6 @@ test("speed scales the loop duration around the Normal reading speed", () => {
   assert.equal(tickerDuration(2500, "normal", 100), 25, "a custom reading speed still applies");
 });
 
-test("collapsed summary is Inflation then Bank Rate from the crawl's own items", () => {
-  const items = tickerItems(fullFixture(), HREFS);
-  const byKey = byId(items);
-  assert.equal(collapsedSummary(items), `Inflation ${byKey.inflation.value} · Bank Rate ${byKey["bank-rate"].value}`);
-  assert.deepEqual(collapsedFigures(items).map((figure) => figure.id), ["inflation", "bank-rate"]);
-  // A missing figure is left out, never invented.
-  const noRate = items.filter((item) => item.id !== "bank-rate");
-  assert.equal(collapsedSummary(noRate), `Inflation ${byKey.inflation.value}`);
-  const noInflation = items.filter((item) => item.id !== "inflation");
-  assert.equal(collapsedSummary(noInflation), `Bank Rate ${byKey["bank-rate"].value}`);
-  assert.equal(collapsedSummary([]), "");
-  assert.equal(collapsedSummary(null), "");
-  assert.equal(collapsedSummary(items.filter((item) => item.id !== "inflation" && item.id !== "bank-rate")), "");
-});
-
 test("remembered settings parse from bad or missing storage into defaults", () => {
   const defaults = { collapsed: false, paused: false, speed: "normal" };
   for (const raw of [null, undefined, "", "not json", "{", "[]", "null", "7", '"x"', {}, 42]) {
@@ -221,10 +204,10 @@ test("markup: remembered settings restore collapsed, paused and speed", async ()
   const collapsed = await renderTicker(base, { storage: savedSettings('{"collapsed":true,"paused":false,"speed":"fast"}') });
   assert.match(collapsed, /data-collapsed="true"/);
   assert.match(collapsed, /aria-expanded="false"/);
-  const summary = collapsed.match(/<p class="fs-ticker-summary" id="fs-ticker-body">([\s\S]*?)<\/p>/);
-  assert.ok(summary, "the folded bar is the controlled element");
-  assert.equal(textOfMarkup(summary[1]), collapsedSummary(tickerItems(base.data, HREFS)).replace(" · ", " "));
-  assert.match(textOfMarkup(summary[1]), /^Inflation 3\.5% Bank Rate \S+%$/);
+  // Folded means gone: no figures at all, just the bar that brings them back.
+  assert.match(collapsed, /<button[^>]*class="fs-ticker-fold"[^>]*><span class="fs-ticker-fold-text">Show latest figures<\/span><svg/);
+  assert.doesNotMatch(collapsed, /fs-ticker-body|aria-controls/, "nothing to control while folded");
+  assert.doesNotMatch(collapsed, /Inflation|Bank Rate|%/, "no figures while folded");
   assert.doesNotMatch(collapsed, /<ul|<li|fs-ticker-controls|Scrolling speed|Pause scrolling/, "folded: static, no crawl, no motion controls");
   assert.match(collapsed, /data-motion="static"/);
   const paused = await renderTicker(base, { storage: savedSettings('{"paused":true,"speed":"slow"}') });
@@ -254,15 +237,6 @@ test("markup: a throwing, missing or corrupt store still renders the open defaul
     assert.doesNotMatch(html, /data-collapsed/, name);
     assert.match(html, /Scrolling speed: normal/, name);
   }
-});
-
-test("markup: folded bar leaves out a missing headline figure and invents nothing", async () => {
-  const data = fullFixture();
-  delete data.metrics.bank_rate;
-  const html = await renderTicker({ ...base, data }, { storage: savedSettings('{"collapsed":true}') });
-  const text = textOfMarkup(html.match(/<p class="fs-ticker-summary"[^>]*>([\s\S]*?)<\/p>/)[1]);
-  assert.match(text, /^Inflation 3\.5%$/);
-  assert.doesNotMatch(text, /Bank Rate|0\.00|0%/);
 });
 
 test("markup: reduced motion renders one static list, the fold button and no pause or speed", async () => {
