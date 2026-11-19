@@ -41,3 +41,13 @@ motion above every page, which is tiring on a phone.
   bar is the way to give the figures the whole line.
 - A reader who folds the crawl keeps it folded on later visits on that device;
   clearing site data resets it.
+
+## Amendment, 19 November 2026
+
+Owner feedback: a folded bar that still shows Inflation and Bank Rate does not
+feel collapsed; it is just a shorter crawl. Folded now means gone. The strip
+shrinks to a slim (30 px) full-width "Show latest figures" bar with no figures,
+and the whole bar is the button. Speed is applied as the animation's playback
+rate rather than by changing the loop duration, so a change does not make the
+strip jump; only the figures, never the controls, hold the crawl still on hover
+or focus (PR #181).

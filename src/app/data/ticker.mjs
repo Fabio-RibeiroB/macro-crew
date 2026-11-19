@@ -113,25 +113,6 @@ export function tickerDuration(listWidthPx, speed = "normal", pxPerSecond = TICK
 }
 
 /**
- * The two headline figures for the collapsed bar, taken from the crawl's own items
- * (never invented): Inflation then Bank Rate, skipping whichever is missing.
- */
-export function collapsedFigures(items) {
-  const list = Array.isArray(items) ? items : [];
-  return ["inflation", "bank-rate"]
-    .map((id) => list.find((item) => item.id === id))
-    .filter(Boolean)
-    .map((item) => ({ id: item.id, label: item.label, value: item.value }));
-}
-
-/** "Inflation 3.5% · Bank Rate 4.00%", or "" when neither is available. */
-export function collapsedSummary(items) {
-  return collapsedFigures(items)
-    .map((figure) => `${figure.label} ${figure.value}`)
-    .join(" · ");
-}
-
-/**
  * Settings read back from storage text. Missing, unparseable or wrongly typed parts fall
  * back to the defaults one by one, so bad storage never breaks the strip.
  */
