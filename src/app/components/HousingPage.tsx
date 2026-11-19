@@ -130,10 +130,12 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
                 median. Mix-adjusted means it reflects a typical mix of homes, so a month with more expensive sales
                 doesn't push it up on its own. The change on a year earlier is shown beside it.
               </p>
-              <p>
-                The house price to earnings ratio below uses the median price paid in England and Wales, which is a
-                different measure, so the two £ figures should not be compared directly.
-              </p>
+              {showRatio && (
+                <p>
+                  The house price to earnings ratio below uses the median price paid in England and Wales, which is a
+                  different measure, so the two £ figures should not be compared directly.
+                </p>
+              )}
               <p>The national average covers the United Kingdom. The latest estimates are provisional and may be revised.</p>
               {real && (
                 <p>
@@ -161,6 +163,7 @@ export function HousingPage({ data, loading, error, refresh, HistoricalTrendCard
                   unit="£"
                   unitDescription={`pounds in ${baseMonthLabel(real.base)} prices`}
                   data={real.points}
+                  derived
                 />
               </div>
             </Suspense>

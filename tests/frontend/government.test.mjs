@@ -149,3 +149,19 @@ test("2 decimal display rounds half away from zero and never shows a real change
   assert.match(gilts, /Up \+1\.0 bp/);
   assert.match(gilts, /5-year 5\.00% 5\.01% .* Down −1\.0 bp/);
 });
+
+test("basis-point changes round exact half-tenths away from zero, not down through a float", async () => {
+  const data = fixture();
+  const set = (key, latest, previous) => {
+    const metric = data.metrics[key];
+    metric.latest = { ...metric.latest, value: latest };
+    metric.history = [...metric.history.slice(0, -1), { ...metric.history.at(-1), value: previous }, { ...metric.latest, value: latest }];
+  };
+  set("gilt_10y", "5.3151", "5.3136"); // +0.15 bp
+  set("gilt_5y", "5.0035", "5.0050");  // -0.15 bp
+  set("gilt_20y", "5.6704", "5.6700"); // +0.04 bp keeps two decimals, never zero
+  const gilts = textOf(section(await renderGovernment(data), "gilt-yields"));
+  assert.match(gilts, /Up \+0\.2 bp/);
+  assert.match(gilts, /Down −0\.2 bp/);
+  assert.match(gilts, /Up \+0\.04 bp/);
+});

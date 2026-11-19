@@ -158,7 +158,7 @@ json_escape() {
 }
 
 write_receipt() {
-  local file="$1" commit="$2" precommit="$3" rel="$4" prev="$5" backup="$6" ts="$7"
+  local file="$1" commit="$2" precommit="$3" rel="$4" prev="$5" backup="$6" ts="$7" checkout="${8:-unknown}"
   ( umask 077
     {
       printf '{\n'
@@ -167,10 +167,29 @@ write_receipt() {
       printf '  "release_dir": "%s",\n' "$(json_escape "$rel")"
       printf '  "previous_dist_target": "%s",\n' "$(json_escape "$prev")"
       printf '  "backup_dir": "%s",\n' "$(json_escape "$backup")"
+      printf '  "checkout_updated": "%s",\n' "$(json_escape "$checkout")"
       printf '  "timestamp": "%s"\n' "$(json_escape "$ts")"
       printf '}\n'
     } > "$file" )
   chmod 600 "$file"
+}
+
+# Detach the production checkout at origin/main. A dirty checkout can hold
+# intentionally modified tracked report JSON, so a failed checkout is only a
+# warning: never force it and never discard local changes. Sets CHECKOUT_UPDATED
+# to yes, no (checkout failed) or skipped (HEAD is not an ancestor of origin/main).
+CHECKOUT_UPDATED=unknown
+update_checkout() {
+  if ! git merge-base --is-ancestor HEAD origin/main; then
+    warn "checkout HEAD is not an ancestor of origin/main; left unchanged"
+    CHECKOUT_UPDATED=skipped
+  elif git checkout -q --detach origin/main; then
+    CHECKOUT_UPDATED=yes
+  else
+    warn "could not update the checkout to origin/main (local changes?); left unchanged"
+    CHECKOUT_UPDATED=no
+  fi
+  return 0
 }
 
 # Run a command, keeping its output in a log. Show the tail on success and
@@ -254,13 +273,9 @@ deploy() {
   cd "$SITE"
   ln -sfn "$REL" dist.new && mv -T dist.new dist
   SWITCHED=1
-  if git merge-base --is-ancestor HEAD origin/main; then
-    git checkout -q --detach origin/main
-  else
-    warn "checkout HEAD is not an ancestor of origin/main; left unchanged"
-  fi
+  update_checkout
 
-  write_receipt "$backup/receipt.json" "$commit" "$(cat "$backup/precommit.txt")" "$REL" "$live_target" "$backup" "$ts"
+  write_receipt "$backup/receipt.json" "$commit" "$(cat "$backup/precommit.txt")" "$REL" "$live_target" "$backup" "$ts" "$CHECKOUT_UPDATED"
 
   prune_all "$(readlink -f -- "$SITE/dist")" "$live_target" 0 "$ts"
   summary "$(readlink -f -- "$SITE/dist")" 0

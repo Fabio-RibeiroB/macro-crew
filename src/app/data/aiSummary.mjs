@@ -6,7 +6,7 @@
 // without the stop.
 const ABBREVIATIONS = new Set([
   "mr", "mrs", "ms", "dr", "prof", "sir", "st", "mt", "jr", "sr", "gen", "gov", "sen", "rep", "hon", "rev",
-  "vs", "etc", "inc", "ltd", "corp", "approx", "est", "fig", "figs", "vol", "dept", "cf",
+  "vs", "etc", "inc", "ltd", "corp", "approx", "est", "fig", "figs", "vol", "dept", "cf", "no",
   "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec",
 ]);
 // "e.g", "i.e", "U.K", "p.m": letters separated by stops (the final stop is the one tested).
@@ -96,6 +96,7 @@ export function publicationTitle(report) {
 }
 
 export const MPC_LINE_MAX = 160;
+const MPC_HEADLINE_WORDS = 20;
 
 /** Shortens text to at most `max` characters at a word boundary, ending with an ellipsis. */
 export function truncateCleanly(text, max = MPC_LINE_MAX) {
@@ -116,7 +117,9 @@ export function mpcLine(reports, { max = MPC_LINE_MAX } = {}) {
   const report = (Array.isArray(reports) ? reports : []).find((item) => item?.key === "monetary_policy_report");
   if (!report) return null;
   const headline = typeof report.headline === "string" ? report.headline.replace(/\s+/g, " ").trim() : "";
-  if (headline && headline.length <= max) return { text: headline, source: "headline" };
+  // A headline is one short sentence: a multi-sentence or wordy one is unusable, so the summary's first sentence is used.
+  const oneLine = headline && headline.length <= max && splitSentences(headline).length === 1 && headline.split(" ").length <= MPC_HEADLINE_WORDS;
+  if (oneLine) return { text: headline, source: "headline" };
   const first = splitSentences(report.summary)[0];
   if (!first) return null;
   return { text: truncateCleanly(first, max), source: "summary" };

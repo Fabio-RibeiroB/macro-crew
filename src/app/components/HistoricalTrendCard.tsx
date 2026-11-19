@@ -46,6 +46,8 @@ interface HistoricalTrendCardProps {
   updated?: { kind: string; date: string; label: string } | null;
   /** Range selected on first render; annual series start on "All" so the history is visible. */
   defaultRange?: string;
+  /** Points are a FinStats calculation, not official observations: the exact-values table must not call them revised. */
+  derived?: boolean;
 }
 
 function formatAxisDate(dateStr: string) {
@@ -74,11 +76,11 @@ function exactValue(value: number | null | undefined, unit: string) {
   return `${value}${unit}`;
 }
 
-function revisionText(point: TrendPoint) {
+function revisionText(point: TrendPoint, derived = false) {
   if (point.revision) return point.revision;
   if (point.value === null || point.value === undefined || point.status === "missing")
     return "Not applicable";
-  return "Latest revised value";
+  return derived ? "FinStats calculation" : "Latest revised value";
 }
 
 function CustomTooltip({ active, payload, label, unit }: CustomTooltipProps) {
@@ -119,6 +121,7 @@ export function HistoricalTrendCard({
   curve = "linear",
   updated,
   defaultRange = DEFAULT_CHART_RANGE,
+  derived = false,
 }: HistoricalTrendCardProps) {
   const [selectedRange, setSelectedRange] = useState(defaultRange);
   const noteId = useId();
@@ -335,14 +338,14 @@ export function HistoricalTrendCard({
               <table>
                 <caption>
                   {title}. Exact values in {unitDescription}.
-                  Latest revised values for each reference period.
+                  {derived ? "FinStats calculation for each month." : "Latest revised values for each reference period."}
                   {selection.notice ? ` ${selection.notice}` : ""}
                 </caption>
                 <thead>
                   <tr>
                   <th scope="col">Reference period</th>
                     <th scope="col">Value</th>
-                    <th scope="col">Revision</th>
+                    <th scope="col">{derived ? "Basis" : "Revision"}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -354,7 +357,7 @@ export function HistoricalTrendCard({
                           ? `${formatPeriod(point.reference.start_month)} to ${formatPeriod(point.reference.end_month)}`
                           : formatPeriod(period)}</td>
                         <td>{exactValue(point.value, unit)}</td>
-                        <td>{revisionText(point)}</td>
+                        <td>{revisionText(point, derived)}</td>
                       </tr>
                     );
                   })}

@@ -59,3 +59,14 @@ test("MpcLine renders the AI-labelled line with a link to the AI summary, and no
     assert.doesNotMatch(renderToStaticMarkup(createElement(App, { pathname: "/" })), /fs-mpc-line/);
   } finally { await server.close(); }
 });
+
+test("a multi-sentence or over-20-word headline is unusable even when short enough in characters", () => {
+  const first = { text: "The committee held Bank Rate at 3.5% on 19 March.", source: "summary" };
+  assert.deepEqual(mpcLine([{ ...base, headline: "Rates held. Inflation stays high." }]), first);
+  const twenty = Array.from({ length: 20 }, () => "a").join(" ");
+  const twentyOne = `${twenty} a`;
+  assert.deepEqual(mpcLine([{ ...base, headline: `${twenty}.` }]), { text: `${twenty}.`, source: "headline" });
+  assert.deepEqual(mpcLine([{ ...base, headline: `${twentyOne}.` }]), first);
+  // Decimals and abbreviations are not sentence breaks.
+  assert.equal(mpcLine([{ ...base, headline: "Bank Rate held at 3.5% as Report No. 1 warns." }]).source, "headline");
+});

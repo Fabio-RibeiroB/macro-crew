@@ -378,3 +378,27 @@ def test_delivery_refuses_a_workbook_url_outside_the_reviewed_dataset(tmp_path):
 def test_registered_definition_set_includes_the_ratio_exactly_once():
     assert list(DEFINITIONS).count(KEY) == 1
     assert DEFINITIONS[KEY].frequency == 'annual'
+
+
+def _unsupported_compression(body):
+    """Re-label every ZIP member as an unsupported method (99) so reads raise NotImplementedError."""
+    stored = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(body)) as source, zipfile.ZipFile(stored, 'w', zipfile.ZIP_STORED) as out:
+        for info in source.infolist():
+            out.writestr(info.filename, source.read(info.filename))
+    data = bytearray(stored.getvalue())
+    for signature, offset in ((b'PK\x03\x04', 8), (b'PK\x01\x02', 10)):
+        at = data.find(signature)
+        while at != -1:
+            data[at + offset:at + offset + 2] = (99).to_bytes(2, 'little')
+            at = data.find(signature, at + 4)
+    return bytes(data)
+
+
+def test_unsupported_zip_compression_is_a_validation_error_not_an_escape():
+    for key, body, today in (
+        (KEY, build(), TODAY),
+        ('private_rent_growth', fixture('private_rent_growth'), date(2026, 10, 21)),
+    ):
+        with pytest.raises(ValidationError):
+            parse(key, _unsupported_compression(body), today)

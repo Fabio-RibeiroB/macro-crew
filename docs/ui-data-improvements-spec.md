@@ -118,7 +118,9 @@ Calendar**. Combining labour indicators reduces top-level navigation while keepi
 distinct Wages and Unemployment sections directly accessible. This supersedes
 the earlier separate-page decision. Use intuitive everyday language;
 ampersands are acceptable when they improve readability, not prohibited by rule.
-About and Sources belong in the footer.
+About and Sources belong in the footer. About is also an item in the mobile menu
+only (`menu: true` in `src/app/data/pages.mjs`), so it is findable on a phone;
+the desktop bar keeps the seven links and Sources stays footer-only.
 Collapse navigation when it cannot fit; do not compress seven links into unreadable
 text. Retain accessible menu state, dismissal, focus and current-page indication.
 
@@ -134,7 +136,8 @@ Routes and homepage destinations:
 - Economy: `/economy`; Bank Rate targets `#interest-rates`, GDP targets `#gdp`.
 - Government: retain `/government-budget`; Public Debt targets `#public-debt`,
   gilt yield targets `#gilt-yields`.
-- Calendar: `/calendar`. Footer: `/about` and existing `/sources`.
+- Calendar: `/calendar`. Footer: `/about` and existing `/sources`; `/about` is
+  also listed in the mobile menu.
 
 These are grouped subject pages, not nine separate metric pages. Each relevant
 section leads with its figure and chart, then concise explanatory text, upcoming
@@ -772,6 +775,9 @@ Implementation slices (one issue and one focused PR each):
 Backlog: rent as a share of income (ONS private rental affordability); a modelled
 monthly repayment as a share of pay (needs reviewed assumptions).
 
+**Acceptance:** sources qualified and recorded; definitions, units, geography and
+reference periods shown; verified live; no change to existing figures.
+
 ### M12 — Simpler pages (approved 18 November 2026)
 
 **Demonstration:** subject pages are short and plain on mobile: one or two
@@ -804,9 +810,6 @@ Implementation slices (one issue and one focused PR each):
 
 **Acceptance:** each page verified live at 360px and desktop, light and dark;
 disclosures open by tap and keyboard; no figure changes; tests green.
-
-**Acceptance:** sources qualified and recorded; definitions, units, geography and
-reference periods shown; verified live; no change to existing figures.
 
 ## 12. Release acceptance
 
@@ -901,9 +904,12 @@ Implementation slices (one issue and one focused PR each):
    one clear chart title and one subtitle line instead of three small lines;
    the status line as a compact "Last updated 18 Nov, 17:01" chip with a clock
    icon and a "How we check" link, on every page.
-2. Inflation explainer (pilot): "What 3.6% means" worked example from the
-   latest CPI: £100 of shopping a year ago now costs £103.60, beside the 2%
-   target (£102), drawn with icons and bars and labelled as a FinStats
+2. Inflation explainer (pilot): "What <rate> means" worked example calculated
+   from the current CPI reading and naming its month (the rate and months come
+   from the latest verified figure, never a fixed 3.6%; nothing is shown
+   without them): £100 of shopping in the same month a year earlier now costs
+   £100 plus the rate (for example £103.60 at 3.6%), beside the 2% target
+   (£102), drawn with icons and bars and labelled as a FinStats
    illustration; inside "How it's measured", a three-step diagram (basket of
    everyday items → prices collected monthly → compared with a year earlier).
    Other measures follow only if the owner likes the pilot.
