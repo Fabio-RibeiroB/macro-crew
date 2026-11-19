@@ -241,3 +241,29 @@ test("release names only go up, never reuse a number freed by pruning", { skip }
     rmSync(h, { recursive: true, force: true });
   }
 });
+
+test("a checkout blocked by local changes is a warning, never forced, and is recorded", { skip }, () => {
+  const { base, work } = repo();
+  try {
+    // tracked file modified locally (like generated report JSON) and changed upstream
+    writeFileSync(join(work, "a"), "2");
+    git(work, "commit", "-qam", "upstream change");
+    git(work, "push", "-q", "origin", "main");
+    git(work, "checkout", "-q", "HEAD~1");
+    git(work, "fetch", "-q");
+    writeFileSync(join(work, "a"), "local report edit");
+    const run1 = (fn) => spawnSync("bash", ["-c", `source "${RELEASE}"; ${fn}; echo "result=$CHECKOUT_UPDATED"; write_receipt "${join(base, "r.json")}" c1 c0 /r /p /b ts "$CHECKOUT_UPDATED"`],
+      { cwd: work, encoding: "utf8", env: { ...process.env, FINSTATS_HOME: base } });
+    const r = run1("update_checkout");
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stderr, /could not update the checkout/);
+    assert.match(r.stdout, /result=no/);
+    assert.equal(readFileSync(join(work, "a"), "utf8"), "local report edit");
+    assert.equal(JSON.parse(readFileSync(join(base, "r.json"), "utf8")).checkout_updated, "no");
+    // clean checkout updates
+    git(work, "checkout", "--", "a");
+    const ok = run1("update_checkout");
+    assert.match(ok.stdout, /result=yes/);
+    assert.equal(readFileSync(join(work, "a"), "utf8"), "2");
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});

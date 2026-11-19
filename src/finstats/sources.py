@@ -556,7 +556,7 @@ def parse_pipr(metric_key, body, today):
     except ValidationError:
         raise
     except (ET.ParseError, KeyError, IndexError, AttributeError, TypeError,
-            ValueError, OverflowError, OSError, zipfile.BadZipFile,
+            ValueError, OverflowError, OSError, zipfile.BadZipFile, NotImplementedError,
             zlib.error) as exc:
         raise ValidationError('Malformed PIPR workbook structure') from exc
 
@@ -584,7 +584,8 @@ def _parse_pipr(metric_key, body, today):
                    for item in shared_root.findall('m:si', ns)]
     except ValidationError:
         raise
-    except (KeyError, OSError, zipfile.BadZipFile, ET.ParseError, IndexError) as exc:
+    except (KeyError, OSError, zipfile.BadZipFile, ET.ParseError, IndexError,
+            NotImplementedError) as exc:
         raise ValidationError('Invalid PIPR workbook') from exc
     def values(row):
         result = {}
@@ -863,7 +864,7 @@ def parse_price_to_earnings(body, today):
     except ValidationError:
         raise
     except (ET.ParseError, KeyError, IndexError, AttributeError, TypeError,
-            ValueError, OverflowError, OSError, zipfile.BadZipFile, zlib.error) as exc:
+            ValueError, OverflowError, OSError, zipfile.BadZipFile, zlib.error, NotImplementedError) as exc:
         raise ValidationError('Malformed ONS affordability workbook structure') from exc
 
 

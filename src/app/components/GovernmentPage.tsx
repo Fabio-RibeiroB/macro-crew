@@ -48,13 +48,25 @@ function yieldChangeLine(current: string, previous: string) {
   const difference = decimalDifference(current, previous);
   const direction = changeDirection(difference);
   if (direction === "flat") return { text: "No change", direction };
-  const bp = Math.abs(Number(basisPoints(difference).replace(MINUS, "-")));
-  const shown = bp >= 0.05 ? bp.toFixed(1) : bp.toFixed(2);
+  const bp = basisPoints(difference).replace(/^[+−-]/, "");
+  const tenths = roundDecimal(bp, 1);
+  const shown = tenths === "0.0" ? roundDecimal(bp, 2) : tenths;
   return { text: `${direction === "down" ? MINUS : "+"}${shown} bp`, direction };
 }
 type Format = { value: (value: string) => string; change: (current: string, previous: string) => { text: string; direction: string } };
 const PLAIN: Format = { value: percent, change: changeLine };
 const YIELD: Format = { value: yieldPercent, change: yieldChangeLine };
+
+/**
+ * Round a non-negative decimal string half-up to `places` decimals without going
+ * through a binary float, so 0.15 gives 0.2 (Number.toFixed would give 0.1).
+ */
+function roundDecimal(value: string, places: number) {
+  const [whole, fraction = ""] = value.split(".");
+  const digits = BigInt(`${whole || "0"}${fraction.padEnd(places + 1, "0").slice(0, places + 1)}`);
+  const rounded = ((digits + 5n) / 10n).toString().padStart(places + 1, "0");
+  return `${rounded.slice(0, -places)}.${rounded.slice(-places)}`;
+}
 
 /** Move the decimal point two places right: percentage points to basis points. */
 function basisPoints(difference: string) {

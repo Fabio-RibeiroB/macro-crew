@@ -72,6 +72,7 @@ test("AI summary text is only split and laid out, never changed", async () => {
 
   // Simple and multi-sentence text.
   assert.deepEqual(splitSentences("Rates held. Inflation fell! Will it last? Maybe."), ["Rates held.", "Inflation fell!", "Will it last?", "Maybe."]);
+  assert.deepEqual(splitSentences("Report No. 1 found rates steady. Then it ended."), ["Report No. 1 found rates steady.", "Then it ended."]);
   assert.deepEqual(summaryParts("One. Two. Three."), { lead: "One.", points: ["Two.", "Three."] });
   assert.deepEqual(summaryParts("Only one sentence."), { lead: "Only one sentence.", points: [] });
   assert.deepEqual(summaryParts(""), { lead: "", points: [] });
