@@ -38,15 +38,15 @@ test("figure items name their basis, period and earlier value", () => {
   const data = fullFixture();
   const rows = Object.fromEntries(overviewRows(data).map((row) => [row.id, row]));
   const items = byId(tickerItems(data, HREFS));
-  assert.equal(itemText(items.inflation), "Inflation (yearly, Sep): 3.5% ↑ (prev. 3.1%)");
-  assert.equal(itemText(items.wages), "Pay growth (yearly, Jun–Aug): 3.7% ↑ (prev. 3.6%)");
-  assert.equal(itemText(items.unemployment), "Unemployment (Jun–Aug): 4.7% ↓ (prev. 4.9%)");
-  assert.equal(itemText(items.rent), "Rent growth (yearly, Sep): 3.8% → (prev. 3.8%)");
-  assert.equal(itemText(items["house-prices"]), "House prices (Aug): £273,037 ↑ (prev. £272,146)");
-  assert.equal(itemText(items.energy), "Energy price cap (Oct–Dec): £1,723 a year");
-  assert.equal(itemText(items["fuel-petrol"]), "Petrol (week of 19 Oct): 174.57p a litre ↓ (prev. 175.28p)");
-  assert.equal(itemText(items["fuel-diesel"]), "Diesel (week of 19 Oct): 199.33p a litre ↓ (prev. 200.04p)");
-  assert.equal(itemText(items.gdp), "GDP growth (monthly, Aug): +0.1% ↓ (prev. +0.4%)");
+  assert.equal(itemText(items.inflation), "Inflation (yearly, Sep 2026): 3.5% ↑ (prev. 3.1%)");
+  assert.equal(itemText(items.wages), "Pay growth (yearly, Jun–Aug 2026): 3.7% ↑ (prev. 3.6%)");
+  assert.equal(itemText(items.unemployment), "Unemployment (Jun–Aug 2026): 4.7% ↓ (prev. 4.9%)");
+  assert.equal(itemText(items.rent), "Rent growth (yearly, Sep 2026): 3.8% → (prev. 3.8%)");
+  assert.equal(itemText(items["house-prices"]), "House prices (Aug 2026): £273,037 ↑ (prev. £272,146)");
+  assert.equal(itemText(items.energy), "Energy price cap (Oct–Dec 2026): £1,723 a year");
+  assert.equal(itemText(items["fuel-petrol"]), "Petrol (week of 19 Oct 2026): 174.57p a litre ↓ (prev. 175.28p)");
+  assert.equal(itemText(items["fuel-diesel"]), "Diesel (week of 19 Oct 2026): 199.33p a litre ↓ (prev. 200.04p)");
+  assert.equal(itemText(items.gdp), "GDP growth (monthly, Aug 2026): +0.1% ↓ (prev. +0.4%)");
   assert.equal(itemText(items["bank-rate"]), "Bank Rate: 3.75%", "current rate: no period, no basis");
   assert.equal(items.energy.label, "Energy price cap");
   assert.equal(items.energy.value, "£1,723 a year");
@@ -78,10 +78,10 @@ test("every item says when it is from; rates of change also say what they compar
     "fuel-diesel": null,
     gdp: "monthly",
   });
-  assert.equal(items.inflation.period, "Sep");
-  assert.equal(items.wages.period, "Jun–Aug", "the full three-month window, with an en dash");
-  assert.equal(items.energy.period, "Oct–Dec");
-  assert.equal(items["fuel-petrol"].period, "week of 19 Oct");
+  assert.equal(items.inflation.period, "Sep 2026");
+  assert.equal(items.wages.period, "Jun–Aug 2026", "the full three-month window, with an en dash");
+  assert.equal(items.energy.period, "Oct–Dec 2026");
+  assert.equal(items["fuel-petrol"].period, "week of 19 Oct 2026");
   assert.equal(items["bank-rate"].period, null);
   for (const item of Object.values(items)) {
     if (item.id !== "bank-rate") assert.ok(item.period, `${item.id} has a period`);
@@ -115,7 +115,7 @@ test("a period the data does not provide is left out, never guessed", () => {
   assert.equal(spokenText(items.gdp), "GDP growth, monthly: +0.1%");
   assert.equal(items["fuel-petrol"].period, null);
   assert.equal(itemText(items["fuel-petrol"]).split(":")[0], "Petrol");
-  assert.equal(items["fuel-diesel"].period, "week of 19 Oct", "the sibling keeps its own period");
+  assert.equal(items["fuel-diesel"].period, "week of 19 Oct 2026", "the sibling keeps its own period");
 });
 
 test("direction is an arrow and a spoken word; the earlier value is named, or only the size", () => {
@@ -136,12 +136,12 @@ test("direction is an arrow and a spoken word; the earlier value is named, or on
 
 test("spoken text reads naturally: no arrows, brackets, abbreviations or dashes", () => {
   const items = byId(tickerItems(fullFixture(), HREFS));
-  assert.equal(spokenText(items.inflation), "Inflation, yearly, September: 3.5%, up from 3.1%");
-  assert.equal(spokenText(items.wages), "Pay growth, yearly, June to August: 3.7%, up from 3.6%");
-  assert.equal(spokenText(items.unemployment), "Unemployment, June to August: 4.7%, down from 4.9%");
-  assert.equal(spokenText(items.rent), "Rent growth, yearly, September: 3.8%, unchanged");
-  assert.equal(spokenText(items.energy), "Energy price cap, October to December: £1,723 a year");
-  assert.equal(spokenText(items["fuel-petrol"]), "Petrol, week of 19 October: 174.57p a litre, down from 175.28p");
+  assert.equal(spokenText(items.inflation), "Inflation, yearly, September 2026: 3.5%, up from 3.1%");
+  assert.equal(spokenText(items.wages), "Pay growth, yearly, June to August 2026: 3.7%, up from 3.6%");
+  assert.equal(spokenText(items.unemployment), "Unemployment, June to August 2026: 4.7%, down from 4.9%");
+  assert.equal(spokenText(items.rent), "Rent growth, yearly, September 2026: 3.8%, unchanged");
+  assert.equal(spokenText(items.energy), "Energy price cap, October to December 2026: £1,723 a year");
+  assert.equal(spokenText(items["fuel-petrol"]), "Petrol, week of 19 October 2026: 174.57p a litre, down from 175.28p");
   assert.equal(spokenText(items["bank-rate"]), "Bank Rate: 3.75%");
   for (const item of Object.values(items)) assert.doesNotMatch(spokenText(item), /[↑↓→–()]|prev\.|\b(Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/, item.id);
 });
@@ -150,7 +150,7 @@ test("a figure with no comparable earlier reading shows just the figure", () => 
   const data = fullFixture();
   data.metrics.cpi = { ...data.metrics.cpi, history: [data.metrics.cpi.history.at(-1)] };
   const inflation = byId(tickerItems(data, HREFS)).inflation;
-  assert.equal(itemText(inflation), "Inflation (yearly, Sep): 3.5%", "basis and period stay without a comparison");
+  assert.equal(itemText(inflation), "Inflation (yearly, Sep 2026): 3.5%", "basis and period stay without a comparison");
   assert.equal(inflation.change, null);
 });
 
@@ -275,7 +275,7 @@ test("markup: one real list, a hidden unfocusable duplicate, figures only", asyn
   assert.equal((lists[1][2].match(/tabindex="-1"/g) ?? []).length, links, "duplicate links are out of the tab order");
   assert.match(html, /<section class="fs-ticker"[^>]*aria-label="Latest figures"[^>]*data-motion="running"/);
   const text = textOfMarkup(lists[0][2]);
-  assert.match(text, /^Inflation \(yearly, Sep\) : 3\.5% ↑ \(prev\. 3\.1%\)/, "numbers first, with basis and period");
+  assert.match(text, /^Inflation \(yearly, Sep 2026\) : 3\.5% ↑ \(prev\. 3\.1%\)/, "numbers first, with basis and period");
   assert.doesNotMatch(html, /MPC|fs-ai-tag|Ignored/);
   assert.doesNotMatch(html, /[▲▼]/);
 });
@@ -284,12 +284,12 @@ test("markup: the arrow is hidden decoration, a spoken phrase carries the direct
   const html = await renderTicker(base);
   const first = html.match(/<li class="fs-ticker-item" data-dir="up"><a href="\/prices#figures">([\s\S]*?)<\/a><\/li>/)[1];
   // Everything visible is aria-hidden, so the arrow, brackets and "prev." are never read out.
-  assert.match(first, /^<span aria-hidden="true"><span class="fs-ticker-label">Inflation <span class="fs-ticker-context">\(yearly, Sep\)<\/span>:<\/span> <span class="fs-ticker-value">3\.5%<\/span> <span class="fs-ticker-change">↑<\/span> <span class="fs-ticker-prev">\(prev\. 3\.1%\)<\/span><\/span>/);
-  assert.match(first, /<span class="fs-sr">Inflation, yearly, September: 3\.5%, up from 3\.1%<\/span>$/);
+  assert.match(first, /^<span aria-hidden="true"><span class="fs-ticker-label">Inflation <span class="fs-ticker-context">\(yearly, Sep 2026\)<\/span>:<\/span> <span class="fs-ticker-value">3\.5%<\/span> <span class="fs-ticker-change">↑<\/span> <span class="fs-ticker-prev">\(prev\. 3\.1%\)<\/span><\/span>/);
+  assert.match(first, /<span class="fs-sr">Inflation, yearly, September 2026: 3\.5%, up from 3\.1%<\/span>$/);
   // A level with no comparison has no arrow and no basis word.
   const energy = html.match(/<li class="fs-ticker-item" data-dir="flat"><a href="\/prices#household-energy">([\s\S]*?)<\/a>/)[1];
   assert.doesNotMatch(energy, /fs-ticker-change|yearly|monthly/);
-  assert.match(energy, /Energy price cap <span class="fs-ticker-context">\(Oct–Dec\)<\/span>/);
+  assert.match(energy, /Energy price cap <span class="fs-ticker-context">\(Oct–Dec 2026\)<\/span>/);
 });
 
 test("the crawl strip layout is unchanged: items stay one nowrap line in the 44px strip", () => {
@@ -394,4 +394,11 @@ test("tapping pause or speed never freezes the crawl: only the figures hold it s
   assert.doesNotMatch(css, /\.fs-ticker:focus-within\s+\.fs-ticker-track/);
   assert.match(css, /@media \(hover: hover\)\s*\{\s*\.fs-ticker-viewport:hover \.fs-ticker-track/);
   assert.match(css, /\.fs-ticker-viewport:focus-within \.fs-ticker-track/);
+});
+
+test("periods always name their year, and a window across New Year names both", () => {
+  const cap = (start, end) => CRAWL_CONTEXT.energy.period({ latest: { reference: { effective_start: start, effective_end: end } } });
+  assert.deepEqual(cap("2026-11-01", "2027-01-31"), { short: "Nov 2026–Jan 2027", spoken: "November 2026 to January 2027" });
+  assert.deepEqual(cap("2026-10-01", "2026-12-31"), { short: "Oct–Dec 2026", spoken: "October to December 2026" });
+  assert.deepEqual(CRAWL_CONTEXT.gdp.period({ latest: { period: "2025-09" } }), { short: "Sep 2025", spoken: "September 2025" });
 });

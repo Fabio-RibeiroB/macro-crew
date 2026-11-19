@@ -26,29 +26,45 @@ const LABELS = {
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const MONTHS_LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-// Each period reads as { short, spoken }: "Oct" / "October", "Jul–Sep" / "July to September".
-const monthIndex = (value) => {
-  const found = /^\d{4}-(\d{2})(?:-\d{2})?$/.exec(String(value ?? ""));
-  const index = found ? Number(found[1]) - 1 : -1;
-  return index >= 0 && index < 12 ? index : null;
+// Each period reads as { short, spoken } and always names its year, so an old reading or
+// a window across New Year never reads as current: "Oct 2026" / "October 2026",
+// "Jul–Sep 2026" / "July to September 2026", "Nov 2025–Jan 2026".
+const monthOf = (value) => {
+  const found = /^(\d{4})-(\d{2})(?:-\d{2})?$/.exec(String(value ?? ""));
+  const index = found ? Number(found[2]) - 1 : -1;
+  return index >= 0 && index < 12 ? { year: found[1], index } : null;
 };
 const monthPeriod = (value) => {
-  const index = monthIndex(value);
-  return index === null ? null : { short: MONTHS[index], spoken: MONTHS_LONG[index] };
+  const month = monthOf(value);
+  return month === null
+    ? null
+    : { short: `${MONTHS[month.index]} ${month.year}`, spoken: `${MONTHS_LONG[month.index]} ${month.year}` };
 };
 const windowPeriod = (start, end) => {
-  const from = monthIndex(start);
-  const to = monthIndex(end);
+  const from = monthOf(start);
+  const to = monthOf(end);
   if (from === null || to === null) return null;
-  if (from === to) return { short: MONTHS[to], spoken: MONTHS_LONG[to] };
-  return { short: `${MONTHS[from]}–${MONTHS[to]}`, spoken: `${MONTHS_LONG[from]} to ${MONTHS_LONG[to]}` };
+  if (from.year === to.year && from.index === to.index) return monthPeriod(end);
+  if (from.year === to.year) {
+    return {
+      short: `${MONTHS[from.index]}–${MONTHS[to.index]} ${to.year}`,
+      spoken: `${MONTHS_LONG[from.index]} to ${MONTHS_LONG[to.index]} ${to.year}`,
+    };
+  }
+  return {
+    short: `${MONTHS[from.index]} ${from.year}–${MONTHS[to.index]} ${to.year}`,
+    spoken: `${MONTHS_LONG[from.index]} ${from.year} to ${MONTHS_LONG[to.index]} ${to.year}`,
+  };
 };
 const weekPeriod = (value) => {
   const found = /^\d{4}-\d{2}-(\d{2})$/.exec(String(value ?? ""));
-  const index = found ? monthIndex(value) : null;
-  if (index === null) return null;
+  const month = found ? monthOf(value) : null;
+  if (month === null) return null;
   const day = Number(found[1]);
-  return { short: `week of ${day} ${MONTHS[index]}`, spoken: `week of ${day} ${MONTHS_LONG[index]}` };
+  return {
+    short: `week of ${day} ${MONTHS[month.index]} ${month.year}`,
+    spoken: `week of ${day} ${MONTHS_LONG[month.index]} ${month.year}`,
+  };
 };
 function rollingPeriod(metric) {
   const window = referenceWindow(metric?.latest);
