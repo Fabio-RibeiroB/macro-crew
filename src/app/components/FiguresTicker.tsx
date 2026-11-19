@@ -10,6 +10,7 @@ import {
   nextSpeed,
   parseCrawlSettings,
   serializeCrawlSettings,
+  spokenText,
   tickerDuration,
   tickerItems,
 } from "../data/ticker.mjs";
@@ -20,16 +21,40 @@ type Settings = { collapsed: boolean; paused: boolean; speed: "slow" | "normal" 
 
 const BODY_ID = "fs-ticker-body";
 
+/**
+ * The visible text is hidden from assistive technology and replaced by one spoken phrase
+ * ("Inflation, yearly, October: 3.6%, up from 3.5%"), so arrows, brackets, abbreviations
+ * and en dashes are never read out. Direction is the arrow, never colour alone.
+ */
 function TickerItem({ item, copy }: { item: Item; copy: boolean }) {
   const body = (
     <>
-      <span className="fs-ticker-label">{item.label}:</span>{" "}
-      <span className="fs-ticker-value">{item.value}</span>
-      {item.change && (
-        <>
-          , <span className="fs-ticker-change">{item.change.text}</span>
-        </>
-      )}
+      <span aria-hidden="true">
+        <span className="fs-ticker-label">
+          {item.label}
+          {item.context && (
+            <>
+              {" "}
+              <span className="fs-ticker-context">{item.context}</span>
+            </>
+          )}
+          :
+        </span>{" "}
+        <span className="fs-ticker-value">{item.value}</span>
+        {item.change && (
+          <>
+            {" "}
+            <span className="fs-ticker-change">{item.change.arrow}</span>
+            {item.change.detail && (
+              <>
+                {" "}
+                <span className="fs-ticker-prev">{item.change.detail}</span>
+              </>
+            )}
+          </>
+        )}
+      </span>
+      <span className="fs-sr">{spokenText(item)}</span>
     </>
   );
   return (
