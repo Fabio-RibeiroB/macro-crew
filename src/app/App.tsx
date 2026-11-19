@@ -874,7 +874,7 @@ export default function App({
           </button>
         </div>
       </header>
-      <FiguresTicker data={data} loading={loading} error={error} hrefs={tickerHrefs} reports={reports} />
+      <FiguresTicker data={data} loading={loading} error={error} hrefs={tickerHrefs} />
       <main id="main-content" tabIndex={-1}>
         {page.id === "overview" && (
           <>

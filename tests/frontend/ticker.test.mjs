@@ -1,16 +1,19 @@
-// ADR 0003 news-style crawl: figure items come from the overview rows of the same
-// verified snapshot; the MPC item is the tagged AI headline, with a factual fallback
-// from official Bank Rate observations when there is no report.
+// ADR 0003 news-style crawl, narrowed by ADR 0005: official figures only (no MPC or AI
+// item), a collapsible strip with a speed setting, and settings remembered per device.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { overviewRows } from "../../src/app/data/overview.mjs";
 import {
-  MPC_DECISION_WINDOW_DAYS,
+  CRAWL_STORAGE_KEY,
+  DEFAULT_CRAWL_SETTINGS,
+  collapsedFigures,
+  collapsedSummary,
   itemText,
   motionState,
-  mpcAiItem,
-  mpcItem,
+  nextSpeed,
+  parseCrawlSettings,
+  serializeCrawlSettings,
   tickerDuration,
   tickerItems,
 } from "../../src/app/data/ticker.mjs";
@@ -27,30 +30,7 @@ const HREFS = {
   petrol_price: "/prices#petrol-diesel",
   gdp: "/economy#gdp",
 };
-const REPORTS = [{ key: "monetary_policy_report", headline: "The Bank held rates and flagged slower inflation ahead.", summary: "Ignored when a headline exists." }];
 const byId = (items) => Object.fromEntries(items.map((item) => [item.id, item]));
-
-/** Weekday dates from `start`, one per day, so the series has no unobserved weekday. */
-function dailySeries(start, values) {
-  const out = [];
-  const date = new Date(`${start}T00:00:00Z`);
-  for (const value of values) {
-    out.push({ period: date.toISOString().slice(0, 10), status: "observed", value });
-    do date.setUTCDate(date.getUTCDate() + 1);
-    while ([0, 6].includes(date.getUTCDay()));
-  }
-  return out;
-}
-/** Bank Rate holding `before` for `pre` days, then `after` for `post` days. */
-function bankRate(before, after, post, pre = 30) {
-  const history = dailySeries("2026-01-05", [...Array(pre).fill(before), ...Array(post).fill(after)]);
-  return { latest: history.at(-1), history, collection_status: "ok" };
-}
-const withBankRate = (metric) => {
-  const data = fullFixture();
-  data.metrics.bank_rate = metric;
-  return data;
-};
 
 test("figure items read as plain English from the overview rows", () => {
   const data = fullFixture();
@@ -84,7 +64,7 @@ test("a figure with no comparable earlier reading shows just the figure", () => 
 });
 
 test("every item links to its subject page and the strip never shows zero for a gap", () => {
-  const items = tickerItems(fullFixture(), HREFS, REPORTS);
+  const items = tickerItems(fullFixture(), HREFS);
   assert.ok(items.length >= 9);
   for (const item of items) assert.match(item.href, /^\/[a-z-]+#/, item.id);
   const data = fullFixture();
@@ -97,44 +77,21 @@ test("every item links to its subject page and the strip never shows zero for a 
   assert.equal(gaps["fuel-petrol"], undefined);
   assert.ok(gaps["fuel-diesel"], "an available sibling stays");
   for (const item of Object.values(gaps)) assert.doesNotMatch(item.value, /^0(\.0+)?(%|p)?$|Not available/);
-  assert.deepEqual(tickerItems(null, HREFS, REPORTS), []);
-  assert.deepEqual(tickerItems({ metrics: {} }, HREFS).filter((item) => item.id !== "mpc"), []);
+  assert.deepEqual(tickerItems(null, HREFS), []);
+  assert.deepEqual(tickerItems({ metrics: {} }, HREFS), []);
 });
 
-test("MPC item: the AI headline comes first, tagged and linked to the AI summary", () => {
-  const items = tickerItems(withBankRate(bankRate("3.75", "4.00", 10)), HREFS, REPORTS);
-  assert.equal(items[0].id, "mpc");
-  assert.equal(items[0].ai, true);
-  assert.equal(items[0].href, "/economy#ai-summary");
-  assert.equal(itemText(items[0]), "MPC: AI The Bank held rates and flagged slower inflation ahead.");
-  assert.equal(items.filter((item) => item.id === "mpc").length, 1);
-  // Without a headline the first summary sentence is used, as on the overview line.
-  const summaryOnly = tickerItems(fullFixture(), HREFS, [{ key: "monetary_policy_report", summary: "Rates held. Other detail." }]);
-  assert.equal(summaryOnly[0].value, "Rates held.");
-});
-
-test("MPC fallback: factual Bank Rate wording without the AI tag", () => {
-  for (const reports of [null, [], [{ key: "other" }]]) {
-    const raised = tickerItems(withBankRate(bankRate("3.75", "4.00", 10)), HREFS, reports);
-    assert.equal(raised[0].id, "mpc");
-    assert.equal(raised[0].ai, false);
-    assert.match(itemText(raised[0]), /^MPC: raised Bank Rate to 4\.00% on \d{1,2} \w{3}$/);
-    assert.equal(raised[0].href, HREFS.bank_rate);
-  }
-  const cut = tickerItems(withBankRate(bankRate("4.00", "3.75", 10)), HREFS)[0];
-  assert.match(itemText(cut), /^MPC: cut Bank Rate to 3\.75% on \d{1,2} \w{3}$/);
-  const held = tickerItems(withBankRate(bankRate("4.00", "3.75", MPC_DECISION_WINDOW_DAYS + 20)), HREFS)[0];
-  assert.equal(itemText(held), "MPC: held Bank Rate at 3.75%");
-});
-
-test("MPC fallback is omitted when Bank Rate cannot evidence a decision", () => {
-  const flat = dailySeries("2026-01-05", Array(40).fill("3.75"));
-  assert.equal(mpcItem({ latest: flat.at(-1), history: flat }, "3.75%"), null);
-  assert.equal(mpcItem({ latest: null, history: [] }, "3.75%"), null);
-  assert.equal(mpcItem(null, "3.75%"), null);
-  assert.equal(byId(tickerItems(withBankRate({ latest: null, history: [] }), HREFS)).mpc, undefined);
-  // The AI headline does not need the Bank Rate series.
-  assert.ok(byId(tickerItems(withBankRate({ latest: null, history: [] }), HREFS, REPORTS)).mpc);
+test("numbers first: no MPC or AI item, Bank Rate is an ordinary figure", () => {
+  const items = tickerItems(fullFixture(), HREFS);
+  assert.equal(items[0].id, "inflation");
+  assert.equal(items.some((item) => item.id === "mpc" || item.kind === "mpc" || item.ai), false);
+  for (const item of items) assert.doesNotMatch(itemText(item), /MPC|\bAI\b/, item.id);
+  const rate = byId(items)["bank-rate"];
+  assert.equal(rate.label, "Bank Rate");
+  assert.equal(rate.href, HREFS.bank_rate);
+  assert.match(itemText(rate), /^Bank Rate: \d+\.\d+%/);
+  // Reports are no longer an input; a third argument changes nothing.
+  assert.deepEqual(tickerItems(fullFixture(), HREFS, [{ key: "monetary_policy_report", headline: "x." }]), items);
 });
 
 test("motion state and loop speed", () => {
@@ -148,13 +105,74 @@ test("motion state and loop speed", () => {
   assert.equal(tickerDuration(NaN), 90);
 });
 
-async function renderTicker(props, { reduced = false } = {}) {
+test("the speed button cycles Slow, Normal, Fast, then Slow again", () => {
+  assert.equal(nextSpeed("slow"), "normal");
+  assert.equal(nextSpeed("normal"), "fast");
+  assert.equal(nextSpeed("fast"), "slow");
+  assert.equal(nextSpeed("bogus"), "fast", "unknown counts as Normal");
+  assert.equal(nextSpeed(undefined), "fast");
+});
+
+test("speed scales the loop duration around the Normal reading speed", () => {
+  assert.equal(tickerDuration(2500, "normal"), 50);
+  assert.equal(tickerDuration(2500, "slow"), 100);
+  assert.equal(tickerDuration(2500, "fast"), 25);
+  assert.equal(tickerDuration(2500, "bogus"), 50);
+  assert.equal(tickerDuration(100, "slow"), 40, "the 20 s floor is a Normal floor");
+  assert.equal(tickerDuration(0, "fast"), 45);
+  assert.equal(tickerDuration(2500, "normal", 100), 25, "a custom reading speed still applies");
+});
+
+test("collapsed summary is Inflation then Bank Rate from the crawl's own items", () => {
+  const items = tickerItems(fullFixture(), HREFS);
+  const byKey = byId(items);
+  assert.equal(collapsedSummary(items), `Inflation ${byKey.inflation.value} · Bank Rate ${byKey["bank-rate"].value}`);
+  assert.deepEqual(collapsedFigures(items).map((figure) => figure.id), ["inflation", "bank-rate"]);
+  // A missing figure is left out, never invented.
+  const noRate = items.filter((item) => item.id !== "bank-rate");
+  assert.equal(collapsedSummary(noRate), `Inflation ${byKey.inflation.value}`);
+  const noInflation = items.filter((item) => item.id !== "inflation");
+  assert.equal(collapsedSummary(noInflation), `Bank Rate ${byKey["bank-rate"].value}`);
+  assert.equal(collapsedSummary([]), "");
+  assert.equal(collapsedSummary(null), "");
+  assert.equal(collapsedSummary(items.filter((item) => item.id !== "inflation" && item.id !== "bank-rate")), "");
+});
+
+test("remembered settings parse from bad or missing storage into defaults", () => {
+  const defaults = { collapsed: false, paused: false, speed: "normal" };
+  for (const raw of [null, undefined, "", "not json", "{", "[]", "null", "7", '"x"', {}, 42]) {
+    assert.deepEqual(parseCrawlSettings(raw), defaults, String(raw));
+  }
+  assert.deepEqual(parseCrawlSettings('{"collapsed":true,"paused":true,"speed":"fast"}'), { collapsed: true, paused: true, speed: "fast" });
+  // Each field is validated on its own.
+  assert.deepEqual(parseCrawlSettings('{"collapsed":"yes","paused":true,"speed":"warp"}'), { collapsed: false, paused: true, speed: "normal" });
+  assert.deepEqual(parseCrawlSettings('{"collapsed":true,"extra":1}'), { collapsed: true, paused: false, speed: "normal" });
+  // Defaults are never shared or mutated.
+  parseCrawlSettings('{"collapsed":true}').collapsed = false;
+  assert.deepEqual(DEFAULT_CRAWL_SETTINGS, defaults);
+  assert.equal(CRAWL_STORAGE_KEY, "finstats.crawl");
+});
+
+test("settings round-trip through storage text and drop unknown fields", () => {
+  const settings = { collapsed: true, paused: false, speed: "slow" };
+  assert.deepEqual(parseCrawlSettings(serializeCrawlSettings(settings)), settings);
+  assert.deepEqual(JSON.parse(serializeCrawlSettings({ ...settings, secret: "x", speed: "warp" })), { collapsed: true, paused: false, speed: "normal" });
+});
+
+async function renderTicker(props, { reduced = false, storage } = {}) {
   const { createServer } = await import("vite");
   const { createElement } = await import("react");
   const { renderToStaticMarkup } = await import("react-dom/server");
   const server = await createServer({ server: { middlewareMode: true, hmr: false, ws: false }, appType: "custom" });
   const previous = globalThis.window;
-  if (reduced) globalThis.window = { matchMedia: (query) => ({ matches: query.includes("reduce") }) };
+  if (reduced || storage) {
+    globalThis.window = {
+      matchMedia: (query) => ({ matches: reduced && query.includes("reduce") }),
+      get localStorage() {
+        return storage();
+      },
+    };
+  }
   try {
     const { FiguresTicker } = await server.ssrLoadModule("/src/app/components/FiguresTicker.tsx");
     return renderToStaticMarkup(createElement(FiguresTicker, props));
@@ -165,9 +183,11 @@ async function renderTicker(props, { reduced = false } = {}) {
   }
 }
 const textOfMarkup = (markup) => markup.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+const base = { data: fullFixture(), loading: false, error: null, hrefs: HREFS };
+const savedSettings = (value) => () => ({ getItem: (key) => (key === "finstats.crawl" ? value : null) });
 
-test("markup: one real list, a hidden unfocusable duplicate, a pause button", async () => {
-  const html = await renderTicker({ data: withBankRate(bankRate("3.75", "4.00", 10)), loading: false, error: null, hrefs: HREFS, reports: REPORTS });
+test("markup: one real list, a hidden unfocusable duplicate, figures only", async () => {
+  const html = await renderTicker({ ...base, reports: [{ key: "monetary_policy_report", headline: "Ignored." }] });
   const lists = [...html.matchAll(/<ul class="fs-ticker-list"([^>]*)>([\s\S]*?)<\/ul>/g)];
   assert.equal(lists.length, 2);
   assert.doesNotMatch(lists[0][1], /aria-hidden/);
@@ -177,29 +197,81 @@ test("markup: one real list, a hidden unfocusable duplicate, a pause button", as
   assert.ok(!/tabindex="-1"/.test(lists[0][2]));
   const links = (lists[1][2].match(/<a /g) ?? []).length;
   assert.equal((lists[1][2].match(/tabindex="-1"/g) ?? []).length, links, "duplicate links are out of the tab order");
-  assert.match(html, /<section class="fs-ticker"[^>]*aria-label="Latest figures and MPC headline"[^>]*data-motion="running"/);
-  assert.match(html, /<button[^>]*aria-pressed="false"[^>]*aria-label="Pause scrolling figures"/);
+  assert.match(html, /<section class="fs-ticker"[^>]*aria-label="Latest figures"[^>]*data-motion="running"/);
   const text = textOfMarkup(lists[0][2]);
-  assert.match(text, /^MPC: AI The Bank held rates and flagged slower inflation ahead\. Inflation: 3\.5% , up from 3\.1%/);
-  assert.match(lists[0][2], /<span class="fs-ai-tag"[^>]*>AI<\/span>/);
-  assert.match(lists[0][2], /href="\/economy#ai-summary"/);
-  // Direction is carried by words as well as colour; no arrows.
+  assert.match(text, /^Inflation: 3\.5% , up from 3\.1%/, "numbers first");
+  assert.doesNotMatch(html, /MPC|fs-ai-tag|Ignored/);
   assert.match(lists[0][2], /<span class="fs-ticker-change">up from 3\.1%<\/span>/);
   assert.doesNotMatch(html, /[▲▼]/);
 });
 
-test("markup: a missing report shows the factual MPC item with no AI tag", async () => {
-  const html = await renderTicker({ data: withBankRate(bankRate("3.75", "4.00", 10)), loading: false, error: null, hrefs: HREFS, reports: [] });
-  assert.doesNotMatch(html, /fs-ai-tag/);
-  assert.match(textOfMarkup(html), /MPC: raised Bank Rate to 4\.00% on/);
-  assert.match(html, /href="\/economy#interest-rates"/);
+test("markup: the Figures button, pause and speed controls are labelled and 44px-targeted", async () => {
+  const html = await renderTicker(base);
+  assert.match(html, /<button[^>]*class="fs-ticker-fold"[^>]*aria-expanded="true"[^>]*aria-controls="fs-ticker-body"[^>]*><span class="fs-ticker-fold-text">Figures<\/span><svg/);
+  assert.match(html, /id="fs-ticker-body"/, "the controlled element exists");
+  assert.match(html, /<button[^>]*aria-label="Scrolling speed: normal \(1×\)\. Change speed"[^>]*>1×<\/button>/);
+  assert.match(html, /<button[^>]*aria-pressed="false"[^>]*aria-label="Pause scrolling figures"/);
+  assert.doesNotMatch(html, /close|dismiss/i, "no close button");
+  const css = readFileSync(new URL("../../src/styles/ticker.css", import.meta.url), "utf8");
+  assert.match(css, /--fs-ticker-height: 44px/);
+  assert.match(css, /min-width: 44px/);
 });
 
-test("markup: reduced motion renders one static list and no pause button", async () => {
-  const html = await renderTicker({ data: fullFixture(), loading: false, error: null, hrefs: HREFS }, { reduced: true });
+test("markup: remembered settings restore collapsed, paused and speed", async () => {
+  const collapsed = await renderTicker(base, { storage: savedSettings('{"collapsed":true,"paused":false,"speed":"fast"}') });
+  assert.match(collapsed, /data-collapsed="true"/);
+  assert.match(collapsed, /aria-expanded="false"/);
+  const summary = collapsed.match(/<p class="fs-ticker-summary" id="fs-ticker-body">([\s\S]*?)<\/p>/);
+  assert.ok(summary, "the folded bar is the controlled element");
+  assert.equal(textOfMarkup(summary[1]), collapsedSummary(tickerItems(base.data, HREFS)).replace(" · ", " "));
+  assert.match(textOfMarkup(summary[1]), /^Inflation 3\.5% Bank Rate \S+%$/);
+  assert.doesNotMatch(collapsed, /<ul|<li|fs-ticker-controls|Scrolling speed|Pause scrolling/, "folded: static, no crawl, no motion controls");
+  assert.match(collapsed, /data-motion="static"/);
+  const paused = await renderTicker(base, { storage: savedSettings('{"paused":true,"speed":"slow"}') });
+  assert.match(paused, /data-motion="paused"/);
+  assert.match(paused, /aria-pressed="true"/);
+  assert.match(paused, /Scrolling speed: slow \(0\.5×\)[^>]*>0\.5×</);
+});
+
+test("markup: a throwing, missing or corrupt store still renders the open default", async () => {
+  const stores = {
+    throwing: () => {
+      throw new Error("blocked");
+    },
+    "throwing getItem": () => ({
+      getItem: () => {
+        throw new Error("denied");
+      },
+    }),
+    empty: savedSettings(null),
+    corrupt: savedSettings("{nope"),
+    wrongTypes: savedSettings('{"collapsed":"true","speed":9}'),
+  };
+  for (const [name, storage] of Object.entries(stores)) {
+    const html = await renderTicker(base, { storage });
+    assert.match(html, /data-motion="running"/, name);
+    assert.match(html, /aria-expanded="true"/, name);
+    assert.doesNotMatch(html, /data-collapsed/, name);
+    assert.match(html, /Scrolling speed: normal/, name);
+  }
+});
+
+test("markup: folded bar leaves out a missing headline figure and invents nothing", async () => {
+  const data = fullFixture();
+  delete data.metrics.bank_rate;
+  const html = await renderTicker({ ...base, data }, { storage: savedSettings('{"collapsed":true}') });
+  const text = textOfMarkup(html.match(/<p class="fs-ticker-summary"[^>]*>([\s\S]*?)<\/p>/)[1]);
+  assert.match(text, /^Inflation 3\.5%$/);
+  assert.doesNotMatch(text, /Bank Rate|0\.00|0%/);
+});
+
+test("markup: reduced motion renders one static list, the fold button and no pause or speed", async () => {
+  const html = await renderTicker(base, { reduced: true });
   assert.match(html, /data-motion="static"/);
   assert.equal((html.match(/<ul /g) ?? []).length, 1);
-  assert.doesNotMatch(html, /<button/);
+  assert.equal((html.match(/<button/g) ?? []).length, 1);
+  assert.match(html, /class="fs-ticker-fold"/);
+  assert.doesNotMatch(html, /Pause scrolling|Scrolling speed|fs-ticker-controls/);
   assert.doesNotMatch(html, /aria-hidden="true"><li|<ul[^>]*aria-hidden/);
 });
 
@@ -221,18 +293,10 @@ test("the ticker is mounted once below the header on every page, outside the sti
   assert.match(css, /prefers-reduced-motion: reduce/);
 });
 
-test("the MPC headline report loads on every page and is passed to the crawl", () => {
+test("the crawl takes no AI reports: the home page's MPC line is the only MPC text", () => {
   const app = readFileSync(new URL("../../src/app/App.tsx", import.meta.url), "utf8");
-  assert.doesNotMatch(app, /page\.id !== "economy" && page\.id !== "overview"/);
-  assert.match(app, /<FiguresTicker [^>]*reports=\{reports\}/);
-});
-
-test("the crawl shows the AI summary's first sentence whole, never cut off", () => {
-  const sentence =
-    "The November 2026 Monetary Policy Report highlights a decision by the Bank of England's Monetary Policy Committee to increase the Bank Rate to 4% in response to rising inflation caused by elevated global energy prices related to the ongoing Middle Eastern conflict.";
-  const item = mpcAiItem([{ key: "monetary_policy_report", summary: `${sentence} The Committee noted more.` }]);
-  assert.equal(item.value, sentence);
-  assert.doesNotMatch(item.value, /…$/);
-  const tooLong = `${"word ".repeat(80).trim()}.`;
-  assert.equal(mpcAiItem([{ key: "monetary_policy_report", summary: tooLong }]), null);
+  assert.doesNotMatch(app, /<FiguresTicker [^>]*reports=/);
+  assert.match(app, /<MpcLine reports=/);
+  const component = readFileSync(new URL("../../src/app/components/FiguresTicker.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(component, /reports|mpc|fs-ai-tag/i);
 });

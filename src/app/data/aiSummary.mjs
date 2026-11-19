@@ -96,8 +96,6 @@ export function publicationTitle(report) {
 }
 
 export const MPC_LINE_MAX = 160;
-/** The crawl scrolls, so it can carry a whole sentence up to this length. */
-export const MPC_CRAWL_MAX = 320;
 
 /** Shortens text to at most `max` characters at a word boundary, ending with an ellipsis. */
 export function truncateCleanly(text, max = MPC_LINE_MAX) {
@@ -112,17 +110,15 @@ export function truncateCleanly(text, max = MPC_LINE_MAX) {
 /**
  * The one-line MPC summary for the overview: the report's optional AI `headline`, or
  * the first sentence of its summary when there is none (or it is unusable). Returns
- * null when there is no Monetary Policy report, so the line is hidden. With
- * `{ whole: true }` (the crawl) a sentence is never cut: one longer than `max` gives null.
+ * null when there is no Monetary Policy report, so the line is hidden.
  */
-export function mpcLine(reports, { max = MPC_LINE_MAX, whole = false } = {}) {
+export function mpcLine(reports, { max = MPC_LINE_MAX } = {}) {
   const report = (Array.isArray(reports) ? reports : []).find((item) => item?.key === "monetary_policy_report");
   if (!report) return null;
   const headline = typeof report.headline === "string" ? report.headline.replace(/\s+/g, " ").trim() : "";
   if (headline && headline.length <= max) return { text: headline, source: "headline" };
   const first = splitSentences(report.summary)[0];
   if (!first) return null;
-  if (whole) return first.length <= max ? { text: first, source: "summary" } : null;
   return { text: truncateCleanly(first, max), source: "summary" };
 }
 

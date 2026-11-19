@@ -1,23 +1,14 @@
-// News-style crawl items (ADR 0003, superseding ADR 0002 decision 3). Pure functions over
-// the same verified snapshot as the overview table: figures and changes come straight
-// from `overviewRows`, so the crawl can never disagree with the table. Each figure reads
-// as a short plain-English phrase ("Inflation: 3.5%, up from 3.1%"). Missing values are
-// skipped, never shown as zero. The first item is "MPC:" with the one-line AI headline
-// (`mpcLine`), tagged AI and never a number source; without a report it falls back to
-// factual wording from the official Bank Rate series.
-import { MPC_CRAWL_MAX, mpcLine } from "./aiSummary.mjs";
-import { dayLabel, overviewRows } from "./overview.mjs";
-import { lastRateChange } from "./verified.mjs";
+// News-style crawl items (ADR 0003, narrowed by ADR 0005). Pure functions over the same
+// verified snapshot as the overview table: figures and changes come straight from
+// `overviewRows`, so the crawl can never disagree with the table. Each figure reads as a
+// short plain-English phrase ("Inflation: 3.5%, up from 3.1%"). Missing values are
+// skipped, never shown as zero. The crawl carries official figures only: no AI text and
+// no MPC item (the overview already shows the MPC line). Also here: the pure helpers for
+// the collapsed summary, the speed setting and the remembered per-device settings.
+import { overviewRows } from "./overview.mjs";
 
 export const TICKER_PX_PER_SECOND = 50;
-/**
- * A rate change this recent (days before the latest reading) is reported as the latest
- * decision. MPC meetings are at least 42 days apart (2026 schedule), so a shorter window
- * can never report a later hold as "raised" or "cut".
- */
-export const MPC_DECISION_WINDOW_DAYS = 35;
 export const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
-export const AI_SUMMARY_HREF = "/economy#ai-summary";
 const TAG_LABELS = { petrol: "Petrol", diesel: "Diesel" };
 const LABELS = {
   inflation: { cpi: "Inflation", cpih: "Inflation (CPIH)" },
@@ -62,45 +53,14 @@ function changeOf(line, previous) {
   return { dir: phrase, text: `${phrase} ${size}` };
 }
 
-const daysBetween = (from, to) =>
-  Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000);
-const shortDay = (period) => dayLabel(period).replace(/ \d{4}$/, "");
-
 /**
- * The AI one-line MPC headline, tagged AI and linked to the full AI summary. The crawl
- * only shows whole sentences; one too long to show whole gives null (factual fallback).
+ * Crawl items: the overview figures in order, numbers only. `hrefs` maps a metric kind to
+ * its subject page anchor. Without figures there is nothing to crawl.
  */
-export function mpcAiItem(reports) {
-  const line = mpcLine(reports, { max: MPC_CRAWL_MAX, whole: true });
-  if (!line) return null;
-  return { id: "mpc", kind: "mpc", label: "MPC", ai: true, value: line.text, change: null, href: AI_SUMMARY_HREF };
-}
-
-/** Factual MPC item from the official Bank Rate series, or null when it cannot be evidenced. */
-export function mpcItem(metric, rateText, href = null) {
-  if (!metric?.latest || metric.latest.value == null || !rateText) return null;
-  const change = lastRateChange(metric);
-  if (!change) return null;
-  const recent = daysBetween(change.period, metric.latest.period) <= MPC_DECISION_WINDOW_DAYS;
-  const value = recent
-    ? `${change.difference > 0 ? "raised" : "cut"} Bank Rate to ${rateText} on ${shortDay(change.period)}`
-    : `held Bank Rate at ${rateText}`;
-  return { id: "mpc", kind: "mpc", label: "MPC", ai: false, value, change: null, href };
-}
-
-/**
- * Crawl items: the MPC item first, then the overview figures in order. `hrefs` maps a
- * metric kind to its subject page anchor. Without figures there is nothing to crawl.
- */
-export function tickerItems(data, hrefs = {}, reports = null) {
+export function tickerItems(data, hrefs = {}) {
   if (!data?.metrics) return [];
-  const rows = overviewRows(data);
-  const bankRate = rows.find((row) => row.id === "bank-rate")?.latest[0];
-  const mpc =
-    mpcAiItem(reports) ??
-    mpcItem(data.metrics.bank_rate, bankRate && !bankRate.missing ? bankRate.text : null, hrefs.bank_rate ?? null);
-  const items = mpc ? [mpc] : [];
-  for (const row of rows) {
+  const items = [];
+  for (const row of overviewRows(data)) {
     const changes = row.change.filter((line) => !line.sub);
     const previous = row.previous.filter((line) => !line.sub);
     row.latest.forEach((line, index) => {
@@ -109,7 +69,6 @@ export function tickerItems(data, hrefs = {}, reports = null) {
         id: line.tag ? `${row.id}-${line.tag}` : row.id,
         kind: row.kind,
         label: labelFor(row, line),
-        ai: false,
         value: valueOf(row, line),
         change: changeOf(changes[index], previous[index]),
         href: hrefs[row.kind] ?? null,
@@ -121,7 +80,7 @@ export function tickerItems(data, hrefs = {}, reports = null) {
 
 /** Plain-text reading of an item, as a screen reader gets it. */
 export function itemText(item) {
-  const head = `${item.label}: ${item.ai ? "AI " : ""}${item.value}`;
+  const head = `${item.label}: ${item.value}`;
   return item.change ? `${head}, ${item.change.text}` : head;
 }
 
@@ -131,8 +90,68 @@ export function motionState({ reducedMotion = false, paused = false } = {}) {
   return paused ? "paused" : "running";
 }
 
-/** Seconds for one full loop at the reading speed; never faster than 20 s. */
-export function tickerDuration(listWidthPx, pxPerSecond = TICKER_PX_PER_SECOND) {
-  if (!Number.isFinite(listWidthPx) || listWidthPx <= 0) return 90;
-  return Math.max(20, Math.round(listWidthPx / pxPerSecond));
+export const SPEEDS = ["slow", "normal", "fast"];
+export const SPEED_FACTORS = { slow: 0.5, normal: 1, fast: 2 };
+export const SPEED_LABELS = { slow: "0.5×", normal: "1×", fast: "2×" };
+export const DEFAULT_CRAWL_SETTINGS = Object.freeze({ collapsed: false, paused: false, speed: "normal" });
+export const CRAWL_STORAGE_KEY = "finstats.crawl";
+
+/** Slow, then Normal, then Fast, then back to Slow. Anything unknown counts as Normal. */
+export function nextSpeed(speed) {
+  const index = SPEEDS.indexOf(speed);
+  return SPEEDS[((index === -1 ? 1 : index) + 1) % SPEEDS.length];
+}
+
+/**
+ * Seconds for one full loop. Normal reads at TICKER_PX_PER_SECOND and never loops faster
+ * than 20 s; Slow takes twice as long and Fast half as long.
+ */
+export function tickerDuration(listWidthPx, speed = "normal", pxPerSecond = TICKER_PX_PER_SECOND) {
+  const factor = SPEED_FACTORS[speed] ?? 1;
+  const normal = !Number.isFinite(listWidthPx) || listWidthPx <= 0 ? 90 : Math.max(20, Math.round(listWidthPx / pxPerSecond));
+  return Math.round(normal / factor);
+}
+
+/**
+ * The two headline figures for the collapsed bar, taken from the crawl's own items
+ * (never invented): Inflation then Bank Rate, skipping whichever is missing.
+ */
+export function collapsedFigures(items) {
+  const list = Array.isArray(items) ? items : [];
+  return ["inflation", "bank-rate"]
+    .map((id) => list.find((item) => item.id === id))
+    .filter(Boolean)
+    .map((item) => ({ id: item.id, label: item.label, value: item.value }));
+}
+
+/** "Inflation 3.5% · Bank Rate 4.00%", or "" when neither is available. */
+export function collapsedSummary(items) {
+  return collapsedFigures(items)
+    .map((figure) => `${figure.label} ${figure.value}`)
+    .join(" · ");
+}
+
+/**
+ * Settings read back from storage text. Missing, unparseable or wrongly typed parts fall
+ * back to the defaults one by one, so bad storage never breaks the strip.
+ */
+export function parseCrawlSettings(raw) {
+  const settings = { ...DEFAULT_CRAWL_SETTINGS };
+  let parsed = null;
+  try {
+    parsed = typeof raw === "string" ? JSON.parse(raw) : null;
+  } catch {
+    parsed = null;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return settings;
+  if (typeof parsed.collapsed === "boolean") settings.collapsed = parsed.collapsed;
+  if (typeof parsed.paused === "boolean") settings.paused = parsed.paused;
+  if (SPEEDS.includes(parsed.speed)) settings.speed = parsed.speed;
+  return settings;
+}
+
+/** Storage text for settings: only the three known fields, each validated. */
+export function serializeCrawlSettings(settings) {
+  const { collapsed, paused, speed } = parseCrawlSettings(JSON.stringify(settings));
+  return JSON.stringify({ collapsed, paused, speed });
 }

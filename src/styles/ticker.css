@@ -1,9 +1,9 @@
-/* News-style crawl (ADR 0003, after ADR 0002). A quiet band under the header: it is not sticky, so
+/* News-style crawl (ADR 0003, after ADR 0002; folding and speed: ADR 0005). A quiet band under the header: it is not sticky, so
    anchor scroll offsets only ever need to clear the header. Colours come from the
    shared direction tokens; the strip has a fixed height so loading never shifts
    the page. */
 .fs-ticker {
-  --fs-ticker-height: 40px;
+  --fs-ticker-height: 44px;
   display: flex;
   align-items: center;
   height: var(--fs-ticker-height);
@@ -19,25 +19,67 @@
   justify-content: center;
   color: var(--fs-muted);
 }
+/* Controls are 44px tap targets; the dividers match the item dividers. */
+.fs-ticker-fold,
+.fs-ticker-speed,
 .fs-ticker-toggle {
   flex: none;
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  margin: 0 4px 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--fs-ticker-height);
+  min-width: 44px;
+  margin: 0;
   padding: 0;
-  border: 1px solid transparent;
-  border-radius: 6px;
+  border: 0;
   background: transparent;
   color: var(--fs-muted);
+  font: inherit;
   cursor: pointer;
 }
+.fs-ticker-fold {
+  gap: 2px;
+  padding: 0 10px 0 14px;
+  border-right: 1px solid var(--fs-line-strong);
+  color: var(--fs-ink);
+  font-weight: 700;
+}
+.fs-ticker-controls {
+  flex: none;
+  display: flex;
+  border-left: 1px solid var(--fs-line-strong);
+}
+.fs-ticker-speed {
+  font-size: 13px;
+  font-weight: 700;
+}
+.fs-ticker-fold:hover,
+.fs-ticker-speed:hover,
 .fs-ticker-toggle:hover,
 .fs-ticker-toggle[aria-pressed="true"] {
   background: var(--fs-hover);
-  border-color: var(--fs-line-strong);
   color: var(--fs-ink);
+}
+.fs-root .fs-ticker button:focus-visible {
+  outline-offset: -3px;
+}
+/* Folded: a static bar with the two headline figures. */
+.fs-ticker-summary {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0 18px;
+  margin: 0;
+  padding: 0 14px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.fs-ticker-headline + .fs-ticker-headline::before {
+  content: "·";
+  content: "·" / "";
+  margin-right: 18px;
+  color: var(--fs-muted);
 }
 .fs-ticker-viewport {
   flex: 1;
@@ -81,7 +123,7 @@
 .fs-root .fs-ticker-item > a,
 .fs-ticker-item > span {
   display: block;
-  padding: 11px 18px;
+  padding: 15px 18px;
   color: inherit;
   text-decoration: none;
 }
@@ -114,13 +156,6 @@
   color: var(--fs-muted);
   font-weight: 600;
 }
-/* The AI tag stays visible in the crawl so AI words are never mistaken for figures. */
-.fs-ticker .fs-ai-tag {
-  font-size: 11px;
-  line-height: 1.3;
-  padding: 1px 6px;
-  vertical-align: 1px;
-}
 
 /* No motion: a static strip that scrolls sideways by hand or keyboard. */
 .fs-ticker[data-motion="static"] .fs-ticker-viewport {
@@ -149,7 +184,7 @@
     min-width: 0;
   }
   .fs-ticker .fs-ticker-list[aria-hidden="true"],
-  .fs-ticker .fs-ticker-toggle {
+  .fs-ticker .fs-ticker-controls {
     display: none;
   }
 }
@@ -161,5 +196,26 @@
   .fs-ticker-item > span {
     padding-left: 14px;
     padding-right: 14px;
+  }
+  /* Keep the 44px targets but give the figures as much width as possible: on a phone
+     the fold button is just its chevron; "Figures" stays its accessible name. */
+  .fs-ticker-fold {
+    padding: 0;
+  }
+  .fs-ticker-fold-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .fs-ticker-summary {
+    gap: 0 12px;
+    padding: 0 10px;
+  }
+  .fs-ticker-headline + .fs-ticker-headline::before {
+    margin-right: 12px;
   }
 }
