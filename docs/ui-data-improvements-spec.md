@@ -938,7 +938,8 @@ Implementation slices (one issue and one focused PR each):
    (architecture assessment, freshness policy). Where no official release
    date is known, each metric gets a maximum publication delay: the newest
    period should be published within that many days after the period ends
-   (for example monthly ONS rents: the month after next, about 50 days).
+   (for example monthly ONS rents: October 2026 was published on
+   18 November, so a 25-day limit flags it a week late).
    Deadline = end of the period after the latest shown one + that delay, end
    of that London date. After the deadline, `release_status` becomes
    "delayed" and the figure stays visible with a plain "update overdue" note
