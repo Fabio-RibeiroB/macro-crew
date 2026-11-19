@@ -300,3 +300,12 @@ test("the crawl takes no AI reports: the home page's MPC line is the only MPC te
   const component = readFileSync(new URL("../../src/app/components/FiguresTicker.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(component, /reports|mpc|fs-ai-tag/i);
 });
+
+test("tapping pause or speed never freezes the crawl: only the figures hold it still", () => {
+  const css = readFileSync(new URL("../../src/styles/ticker.css", import.meta.url), "utf8");
+  // The whole strip (controls included) must not pause on hover or focus.
+  assert.doesNotMatch(css, /\.fs-ticker:hover\s+\.fs-ticker-track/);
+  assert.doesNotMatch(css, /\.fs-ticker:focus-within\s+\.fs-ticker-track/);
+  assert.match(css, /@media \(hover: hover\)\s*\{\s*\.fs-ticker-viewport:hover \.fs-ticker-track/);
+  assert.match(css, /\.fs-ticker-viewport:focus-within \.fs-ticker-track/);
+});
