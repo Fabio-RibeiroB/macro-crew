@@ -938,8 +938,11 @@ Implementation slices (one issue and one focused PR each):
    (architecture assessment, freshness policy). Where no official release
    date is known, each metric gets a maximum publication delay: the newest
    period should be published within that many days after the period ends
-   (for example monthly ONS rents: October 2026 was published on
-   18 November, so a 25-day limit flags it a week late).
+   (for example monthly ONS rents: October 2026 ended on 31 October and was
+   published on 18 November, 18 days later; with a 25-day limit, a figure
+   still missing after 25 November is flagged). Freshness catches a missing
+   update only after the limit; the daily cross-check (slice 3) catches a
+   mismatch the next day.
    Deadline = end of the period after the latest shown one + that delay, end
    of that London date. After the deadline, `release_status` becomes
    "delayed" and the figure stays visible with a plain "update overdue" note
