@@ -914,3 +914,63 @@ Implementation slices (one issue and one focused PR each):
    everyday items → prices collected monthly → compared with a year earlier).
    Other measures follow only if the owner likes the pilot.
 
+
+### M14 — Catching data drift (approved 19 November 2026)
+
+**Why:** a manual check on 19 November 2026 found 20 of 22 live figures
+matching their official sources. The two private-rents figures were a month
+behind: ONS renamed its workbook, the collector quietly used last month's
+edition and still reported "ok". Sources will keep changing in ways we can't
+predict, so instead of guessing each change we check the result: is each
+figure as recent as it should be, and does it match the source?
+
+**Demonstration:** an overdue figure says so on the site; a mismatch between
+the live site and an official source opens one GitHub issue for the owner.
+No AI, no secrets, no paid services, no server changes for the check itself.
+
+Implementation slices (one issue and one focused PR each):
+
+1. Rents fix: pick the newest dated ONS rents edition, accept a numeric
+   suffix in its file name, never fall back to an older edition, and fail
+   loudly when none is found.
+2. Freshness: reuse the existing `release_status` ("delayed"), keeping it
+   separate from `collection_status`, reference age and collector health
+   (architecture assessment, freshness policy). Where no official release
+   date is known, each metric gets a maximum publication delay: the newest
+   period should be published within that many days after the period ends
+   (for example monthly ONS rents: October 2026 ended on 31 October and was
+   published on 18 November, 18 days later; with a 25-day limit, a figure
+   still missing after 25 November is flagged). Freshness catches a missing
+   update only after the limit; the daily cross-check (slice 3) catches a
+   mismatch the next day.
+   Deadline = end of the period after the latest shown one + that delay, end
+   of that London date. After the deadline, `release_status` becomes
+   "delayed" and the figure stays visible with a plain "update overdue" note
+   on its card and on Sources. A successful collection stays "ok"; a
+   months-old Bank Rate is not overdue because it has no publication delay
+   rule (it changes only when the MPC decides).
+3. Daily cross-check: a scheduled GitHub Actions job (standard library only)
+   reads the live site and fetches each latest figure, its period and recent
+   history from the publisher by a different route where one exists (for
+   example ONS CSV versus JSON, the Bank of England database, the
+   government's fuel CSV, Land Registry CSV, Ofgem's page). On any mismatch or
+   overdue figure it opens one issue, or comments on the open one; it closes
+   that issue once everything matches again. A clean run sends nothing.
+   Network failures to a source are reported as "could not check", never as a
+   pass.
+
+4. One bad figure must not blank the site (proposed after the 19 November
+   outage, owner approval pending): when a single metric fails the browser's
+   provenance checks, only that metric shows as unavailable and the rest of
+   the verified generation is displayed; a damaged manifest or checksum still
+   rejects everything. The daily cross-check also reads the live site through
+   the site's own reader, so a rejected figure is reported.
+
+**Later, owner decision needed:** a Claude Code GitHub action could read that
+issue and open a draft fix PR. It would need the owner's Claude token as a
+repository secret and counts as AI use. It would never merge by itself: the
+fix goes through normal review, CI, and the cross-check.
+
+**Not included:** a second production collector, push or text alerts, a
+visitor-facing "last cross-checked" date, predicting each possible format
+change.
