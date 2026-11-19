@@ -9,6 +9,7 @@ import { filterChartRange } from "../../src/app/data/chartRange.mjs";
 import {
   loadVerified,
   parseManifest,
+  parseDataset,
   chartPoints,
   freshness,
   previousReading,
@@ -658,4 +659,17 @@ test("a produced generation with unavailable CPI stays a valid absence", async (
   assert.deepEqual(parsed.metrics.cpi.history, []);
   assert.equal(freshness(parsed.metrics.cpi).label, "Unavailable");
   assert.equal(parsed.metrics.cpih.latest.value, "3.3");
+});
+
+test("PIPR workbook URL accepts ONS numeric file suffix but not other suffixes", () => {
+  const data = JSON.parse(readFileSync(new URL("producer-pay-v1.json", WIRE), "utf8"));
+  const manifest = parseManifest(JSON.parse(readFileSync(new URL("producer-pay-v1.manifest.json", WIRE), "utf8")));
+  const base = "https://www.ons.gov.uk/file?uri=/economy/inflationandpriceindices/datasets/priceindexofprivaterentsukmonthlypricestatistics/18november2026/priceindexofprivaterentsukmonthlypricestatistics";
+  const withUrl = (suffix) => {
+    const copy = structuredClone(data);
+    for (const key of ["private_rent_growth", "private_rent_level"]) copy.metrics[key].source_download_url = base + suffix;
+    return copy;
+  };
+  assert.equal(parseDataset(withUrl("10.xlsx"), manifest).metrics.private_rent_growth.latest.value, "3.8");
+  assert.throws(() => parseDataset(withUrl("v2.xlsx"), manifest), /provenance/);
 });
