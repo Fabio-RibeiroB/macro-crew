@@ -197,9 +197,19 @@
     padding-left: 14px;
     padding-right: 14px;
   }
-  /* Keep the 44px targets but give the figures as much width as possible. */
+  /* Keep the 44px targets but give the figures as much width as possible: on a phone
+     the fold button is just its chevron; "Figures" stays its accessible name. */
   .fs-ticker-fold {
-    padding: 0 6px 0 10px;
+    padding: 0;
+  }
+  .fs-ticker-fold-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .fs-ticker-summary {
     gap: 0 12px;

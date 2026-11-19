@@ -151,7 +151,7 @@ export function FiguresTicker({
         title={collapsed ? "Show the scrolling figures" : "Hide the scrolling figures"}
         onClick={() => change({ collapsed: !collapsed })}
       >
-        Figures
+        <span className="fs-ticker-fold-text">Figures</span>
         <Chevron size={16} aria-hidden="true" />
       </button>
       {collapsed ? (

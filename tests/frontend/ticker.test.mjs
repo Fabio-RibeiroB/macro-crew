@@ -207,7 +207,7 @@ test("markup: one real list, a hidden unfocusable duplicate, figures only", asyn
 
 test("markup: the Figures button, pause and speed controls are labelled and 44px-targeted", async () => {
   const html = await renderTicker(base);
-  assert.match(html, /<button[^>]*class="fs-ticker-fold"[^>]*aria-expanded="true"[^>]*aria-controls="fs-ticker-body"[^>]*>Figures<svg/);
+  assert.match(html, /<button[^>]*class="fs-ticker-fold"[^>]*aria-expanded="true"[^>]*aria-controls="fs-ticker-body"[^>]*><span class="fs-ticker-fold-text">Figures<\/span><svg/);
   assert.match(html, /id="fs-ticker-body"/, "the controlled element exists");
   assert.match(html, /<button[^>]*aria-label="Scrolling speed: normal \(1×\)\. Change speed"[^>]*>1×<\/button>/);
   assert.match(html, /<button[^>]*aria-pressed="false"[^>]*aria-label="Pause scrolling figures"/);
