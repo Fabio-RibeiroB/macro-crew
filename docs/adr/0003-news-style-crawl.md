@@ -1,3 +1,5 @@
+Superseded in part by ADR 0005 (the MPC-first item).
+
 # ADR 0003: A news-style crawl with an AI MPC headline
 
 Status: accepted, 18 November 2026. Supersedes decision 3 of ADR 0002 (the

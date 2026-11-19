@@ -737,6 +737,11 @@ Implementation slices (one issue and one focused PR each):
    a news crawl of short plain-English items ("Inflation: 3.5%, up from 3.1%")
    and "MPC:" with the AI one-line headline, tagged "AI" and linked to the full
    summary, falling back to factual Bank Rate wording when there is no report.
+9. Figures-only, collapsible crawl (ADR 0005, approved 19 November 2026): the
+   crawl drops the MPC item and shows official figures only. A "Figures" button
+   folds it to a static bar with Inflation and Bank Rate; a speed button
+   (0.5x, 1x, 2x) sits beside pause. Collapsed, paused and speed are remembered
+   on the device.
 
 **Acceptance:** each slice verified live on desktop and at 360px, light and dark;
 the ticker also with reduced motion. All tests green; no statistical change.
