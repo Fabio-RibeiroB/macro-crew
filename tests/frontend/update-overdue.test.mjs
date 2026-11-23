@@ -27,7 +27,7 @@ test("freshness reports an overdue update when release_status is delayed and col
   assert.equal(metric.latest.value != null, true, "the last verified figure is kept");
 });
 
-test("awaiting, unknown and unavailable are not overdue; collector trouble keeps its own wording", () => {
+test("awaiting, unknown and unavailable are not overdue; collector trouble and stale checks keep their own wording", () => {
   for (const release_status of ["awaiting_next_release", "unknown"]) {
     const metric = rent({ release_status, next_release_date: null });
     assert.deepEqual(freshness(metric, NOW), { label: "Checked against official data", kind: "ok" });
@@ -37,6 +37,13 @@ test("awaiting, unknown and unavailable are not overdue; collector trouble keeps
     freshness(rent({ collection_status: "degraded", release_status: "delayed" }), NOW).label,
     "Update delayed · showing last verified figure",
   );
+  // A stale collector check must not be hidden behind a publisher-overdue label.
+  const stale = rent({
+    collection_status: "ok",
+    release_status: "delayed",
+    last_successful_check_at: "2026-11-24T08:00:00Z",
+  });
+  assert.deepEqual(freshness(stale, NOW), { label: "Last check over a day ago", kind: "warning" });
 });
 
 test("a passed official next release date is overdue by the London date", () => {
@@ -48,6 +55,7 @@ test("a passed official next release date is overdue by the London date", () => 
 test("cards and Sources show the note and keep the verified value visible", async () => {
   await withServer(async ({ server, createElement, renderToStaticMarkup }) => {
     const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
+    const { FiguresTicker } = await server.ssrLoadModule("/src/app/components/FiguresTicker.tsx");
     const data = fullFixture();
     // Recorded next-release dates are in the past by now; only rents may be overdue here.
     for (const metric of Object.values(data.metrics)) {
@@ -71,6 +79,9 @@ test("cards and Sources show the note and keep the verified value visible", asyn
     assert.match(text, /Update overdue · showing last verified figure/);
     assert.match(html, /class="fs-overdue" role="status">Update overdue · showing last verified figure</);
     assert.match(text, new RegExp(`${Number(value)}`));
+    // Ticker never renders per-figure overdue warnings.
+    const tickerHtml = renderToStaticMarkup(createElement(FiguresTicker, { data }));
+    assert.doesNotMatch(textOf(tickerHtml), /overdue/i);
     // Figures that are not overdue carry no note.
     const quiet = renderToStaticMarkup(createElement(App, { pathname: "/economy", initialData: data }));
     assert.doesNotMatch(quiet, /Update overdue/);

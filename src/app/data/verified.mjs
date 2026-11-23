@@ -838,10 +838,10 @@ export function freshness(metric, now = new Date()) {
       label: "Update delayed · showing last verified figure",
       kind: "warning",
     };
-  if (releaseOverdue(metric, now)) return { label: OVERDUE_LABEL, kind: "warning" };
   const checked = Date.parse(metric.last_successful_check_at ?? "");
   if (!Number.isFinite(checked) || now.getTime() - checked > 24 * 3600_000)
     return { label: "Last check over a day ago", kind: "warning" };
+  if (releaseOverdue(metric, now)) return { label: OVERDUE_LABEL, kind: "warning" };
   const today = londonDay(now);
   // A successful poll does not prove that a weekly attachment has advanced.
   // This conservative age warning is a FinStats rule, not an official release date.

@@ -682,7 +682,7 @@ def test_rents_flip_to_delayed_after_the_end_of_the_deadline_london_date(tmp_pat
         assert after['metrics'][key]['next_release_date'] is None
 
 
-def test_deadline_uses_the_london_date_across_british_summer_time():
+def test_deadline_uses_the_london_date_across_british_summer_time(tmp_path):
     payload = {'observations': [{'period': '2026-05'}]}  # June ends 30 June; +25 days = 25 July.
     assert publication_deadline('private_rent_level', '2026-05') == date(2026, 7, 25)
     # 23:30 UTC on 25 July is 00:30 BST on 26 July: already past the deadline day.
@@ -690,9 +690,27 @@ def test_deadline_uses_the_london_date_across_british_summer_time():
         2026, 7, 25, 23, 30, tzinfo=timezone.utc).astimezone(LONDON).date().isoformat()) == 'delayed'
     assert release_status('private_rent_level', payload, None, datetime(
         2026, 7, 25, 22, 30, tzinfo=timezone.utc).astimezone(LONDON).date().isoformat()) == 'awaiting_next_release'
+    # Also exercise publish()'s own UTC->Europe/London conversion during BST.
+    collect(tmp_path, fixtures=FIXTURES, clock=lambda: CPI_WHEN)
+    # Latest mortgage observation in fixtures is 2026-09; next month Oct ends 31 Oct + 45d = 15 Dec (winter),
+    # so test BST conversion directly on a stored snapshot whose latest observation is 2026-05.
+    store = Store(tmp_path)
+    try:
+        row = store.latest('private_rent_level')
+        stored = json.loads(row['payload'])
+        stored['observations'] = [o for o in stored['observations'] if o['period'] <= '2026-05']
+        store.db.execute('UPDATE snapshot SET payload=? WHERE id=?', (json.dumps(stored), row['id']))
+        store.db.commit()
+    finally:
+        store.db.close()
+    before = republish(tmp_path, datetime(2026, 7, 25, 22, 30, tzinfo=timezone.utc))
+    after = republish(tmp_path, datetime(2026, 7, 25, 23, 30, tzinfo=timezone.utc))
+    assert before['metrics']['private_rent_level']['release_status'] == 'awaiting_next_release'
+    assert after['metrics']['private_rent_level']['release_status'] == 'delayed'
 
 
 def test_deadline_for_each_frequency():
+    assert set(MAX_PUBLICATION_DELAY_DAYS) == set(DEFINITIONS) - {'bank_rate'}
     assert {d.frequency for d in DEFINITIONS.values()} == {'daily', 'weekly', 'monthly', 'quarterly', 'annual'}
     assert publication_deadline('cpi', '2026-12') == date(2027, 1, 31) + timedelta(days=30)
     assert publication_deadline('petrol_price', '2026-10-19') == date(2026, 10, 26) + timedelta(days=10)
