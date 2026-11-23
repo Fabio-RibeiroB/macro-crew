@@ -914,3 +914,91 @@ Implementation slices (one issue and one focused PR each):
    everyday items → prices collected monthly → compared with a year earlier).
    Other measures follow only if the owner likes the pilot.
 
+
+### M14 — Catching data drift (approved 19 November 2026; slice 2 pending)
+
+**Why:** a manual check on 19 November 2026 found 20 of 22 live figures
+matching their official sources. The two private-rents figures were a month
+behind: ONS renamed its workbook, the collector quietly used last month's
+edition and still reported "ok". Sources will keep changing in ways we can't
+predict, so instead of guessing each change we check the result: is each
+figure as recent as it should be, and does it match the source?
+
+**Demonstration:** an overdue figure says so on the site; a mismatch between
+the live site and an official source opens one GitHub issue for the owner.
+No AI, no secrets, no paid services, no server changes for the check itself.
+
+Implementation slices (one issue and one focused PR each). Each lists its
+outcome, affected files, acceptance checks and exclusions.
+
+1. **Rents edition (done: #185, #187).**
+   - Outcome: the newest dated ONS rents edition is used, even when ONS adds a
+     numeric suffix to the file name.
+   - Files: `src/finstats/sources.py`, `src/finstats/delivery.py`,
+     `src/app/data/verified.mjs`, their tests.
+   - Checks: page fixtures with old and new links in any order choose the
+     18 November 2026 edition; no valid link raises; the browser accepts
+     `statistics10.xlsx` and rejects any other suffix; October 2026 rents are
+     live.
+   - Excludes: other collectors.
+
+2. **One bad figure must not blank the site (owner approval pending).**
+   - Outcome: if one metric fails the browser's provenance or definition
+     checks, only that metric shows as unavailable; every other verified
+     figure is still displayed.
+   - Files: `src/app/data/verified.mjs` (`parseDataset`) and the pages'
+     unavailable states; `tests/frontend/`.
+   - Checks: a generation with one metric's source URL altered still loads
+     the other metrics, and that metric renders its honest unavailable state;
+     a bad manifest, checksum, schema version or generation id still rejects
+     the whole generation; the 19 November URL case is a regression test.
+   - Excludes: collector changes; relaxing any provenance rule.
+
+3. **Freshness.**
+   - Outcome: a figure whose next period is overdue stays visible with a
+     plain "update overdue" note on its card and on Sources.
+   - Rule: reuse the existing `release_status` ("delayed"), kept separate
+     from `collection_status`, reference age and collector health
+     (architecture assessment, freshness policy). Where no official next
+     release date is known, a metric may define a maximum publication delay
+     in days. Deadline = end of the period after the latest shown one, plus
+     that delay, at the end of that London date. Example: rents for October
+     2026 ended 31 October and were published 18 November (18 days); with a
+     25-day limit, a still-missing October would be flagged after
+     25 November. Metrics without a delay rule (Bank Rate, which changes only
+     when the MPC decides) are never overdue by age.
+   - Files: `src/finstats/sources.py` (`DEFINITIONS`, delay per metric),
+     `src/finstats/publication.py` (`release_status`), the frontend status
+     note and Sources page; Python and frontend tests.
+   - Checks: injected clock just before and just after a deadline gives
+     "awaiting_next_release" and "delayed"; a successful collection keeps
+     `collection_status` "ok" while "delayed"; Bank Rate is never "delayed"
+     by age; the note renders at 360px.
+   - Excludes: changing published values; per-figure warnings in the crawl.
+
+4. **Daily cross-check.**
+   - Outcome: once a day, a GitHub Actions job compares the live site with
+     the official sources and opens one issue when they disagree.
+   - How: the job runs the site's own reader (`verified.mjs`, on Node) over
+     the live generation, then standard-library Python fetches each latest figure, its period and
+     recent history from the publisher by a different route where one exists
+     (ONS CSV versus JSON, the Bank of England database, the government's
+     fuel CSV, Land Registry CSV, Ofgem's page). On a mismatch, a rejected
+     figure or an overdue figure, it opens one issue or comments on the open
+     one, and closes it once everything matches again. A clean run sends
+     nothing. An unreachable source is reported as "could not check", never
+     as a pass.
+   - Files: `scripts/cross_check.py`, `.github/workflows/cross-check.yml`,
+     offline tests with recorded responses.
+   - Checks: recorded responses that match produce no issue; a one-month
+     lag (the 19 November case), a changed value and an unreachable source
+     each produce the right report; tests never touch the network; the
+     workflow uses only the default `GITHUB_TOKEN` with `issues: write`.
+   - Excludes: AI, secrets, paid services, server changes, fixing data
+     automatically.
+
+**Not included:** a second production collector, push or text alerts, a
+visitor-facing "last cross-checked" date, predicting each possible format
+change. An AI agent that drafts fix PRs from the cross-check issue is also
+out: AGENTS.md forbids shell or file tools for an AI agent, so it would need
+an explicit owner rule change and its own constrained design first.
