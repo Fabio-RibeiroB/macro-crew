@@ -278,7 +278,7 @@ test("ONS HF6X producer data renders only on Government with adjacent-month pp c
   assert.equal(debt.latest.period, "2026-09");
   assert.equal(previousReading(debt).period, "2026-08");
   assert.ok(Math.abs(Number(debt.latest.value) - Number(previousReading(debt).value) - 0.4) < 1e-9);
-  assert.equal(freshness({ ...debt, last_successful_check_at: "2026-11-21T12:00:00.000Z" }, new Date("2026-11-21T12:00:00Z")).label, "New release awaited");
+  assert.equal(freshness({ ...debt, last_successful_check_at: "2026-11-21T12:00:00.000Z" }, new Date("2026-11-21T12:00:00Z")).label, "Update overdue · showing last verified figure");
   const { createServer } = await import("vite");
   const { createElement } = await import("react");
   const { renderToStaticMarkup } = await import("react-dom/server");

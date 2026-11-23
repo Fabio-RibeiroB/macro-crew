@@ -361,6 +361,18 @@
 .dark .fs-fresh-warning {
   color: #edc17e;
 }
+/* Plain overdue note beside a Sources disclosure; wraps rather than overflows at 360px. */
+.fs-overdue {
+  margin: 0 0 8px;
+  max-width: 100%;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: #986115;
+  overflow-wrap: anywhere;
+}
+.dark .fs-overdue {
+  color: #edc17e;
+}
 .fs-details {
   border-top: 1px solid var(--fs-line);
   margin-top: 16px;

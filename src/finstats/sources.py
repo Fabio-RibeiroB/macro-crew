@@ -242,6 +242,62 @@ def public_definition(key):
     return content
 
 
+# Maximum days after the end of a period before its figure is overdue. This is a
+# FinStats operator rule (not an official release date) used only where the source
+# gives no next release date. Deliberately absent: bank_rate, which changes only when
+# the MPC decides, so age alone never makes it overdue. Kept outside Definition so it
+# never reaches public_definition(), which the browser validates field by field.
+MAX_PUBLICATION_DELAY_DAYS = {
+    'cpih': 30, 'cpi': 30, 'cpi_index': 30, 'gdp': 50,
+    'regular_pay_nominal_growth': 60, 'regular_pay_real_growth': 60, 'unemployment': 60,
+    'private_rent_growth': 25, 'private_rent_level': 25,  # Oct 2026: ended 31 Oct, published 18 Nov.
+    'house_price_level': 60, 'house_price_growth': 60,
+    'petrol_price': 10, 'diesel_price': 10,  # Weekly; margin for bank-holiday weeks.
+    'public_debt': 35, 'mortgage_2y_fixed_75': 45, 'mortgage_5y_fixed_75': 45,
+    'gilt_5y': 10, 'gilt_10y': 10, 'gilt_20y': 10,  # Daily; covers a UK bank-holiday weekend.
+    'household_energy': 14, PRICE_TO_EARNINGS: 120,  # ONS publishes the annual ratio in March.
+}
+
+
+def _add_months(day, months):
+    year, month = divmod(day.year * 12 + day.month - 1 + months, 12)
+    return date(year, month + 1, min(day.day, calendar.monthrange(year, month + 1)[1]))
+
+
+def _plus_days(day, days):
+    return date.fromordinal(day.toordinal() + days)
+
+
+def publication_deadline(key, latest_period, effective_end=None):
+    """Last London date on which the period after `latest_period` may still be unpublished.
+
+    Deadline = end of the period after the latest shown one + the metric's maximum
+    publication delay. None when the metric has no delay rule or the period is unreadable.
+    """
+    delay = MAX_PUBLICATION_DELAY_DAYS.get(key)
+    if delay is None:
+        return None
+    frequency = DEFINITIONS[key].frequency
+    try:
+        if frequency == 'monthly':
+            year, month = (int(part) for part in latest_period.split('-'))
+            end = _plus_days(_add_months(date(year, month, 1), 2), -1)
+        elif frequency == 'annual':
+            end = date(int(latest_period) + 1, 12, 31)
+        elif frequency == 'weekly':
+            end = _plus_days(date.fromisoformat(latest_period), 7)
+        elif frequency == 'daily':
+            end = _plus_days(date.fromisoformat(latest_period), 1)
+        elif frequency == 'quarterly':
+            start = _plus_days(date.fromisoformat(effective_end), 1)
+            end = _plus_days(_add_months(start, 3), -1)
+        else:
+            return None
+    except (ValueError, TypeError, AttributeError):
+        return None
+    return _plus_days(end, delay)
+
+
 def fixture_file(key):
     """Offline recorded-fixture file name; live collection never uses these."""
     definition = DEFINITIONS[key]
