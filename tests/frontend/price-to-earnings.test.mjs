@@ -51,7 +51,7 @@ test("the reader accepts the producer's annual England and Wales ratio and keeps
   parseDataset(data, manifest());
 });
 
-test("the reader rejects a ratio that drifts from its registered definition or provenance", () => {
+test("the reader isolates a ratio that drifts from its registered definition or provenance", () => {
   const cases = {
     "wrong geography": (d) => { d.definition.geography = "United Kingdom"; },
     "wrong unit": (d) => { d.definition.unit = "percent"; },
@@ -68,7 +68,12 @@ test("the reader rejects a ratio that drifts from its registered definition or p
   for (const [label, mutate] of Object.entries(cases)) {
     const data = producer();
     mutate(data.metrics.price_to_earnings);
-    assert.throws(() => parseDataset(data, manifest()), Error, label);
+    const parsed = parseDataset(data, manifest());
+    const ratio = parsed.metrics.price_to_earnings;
+    assert.equal(ratio.verification_rejected, true, label);
+    assert.equal(ratio.latest, null, label);
+    assert.deepEqual(ratio.history, [], label);
+    assert.equal(parsed.metrics.cpih.validation_status, "verified", label);
   }
 });
 
