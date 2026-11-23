@@ -21,6 +21,7 @@ import {
   parseManifest as parseM1Manifest,
   parseDataset as parseM1Dataset,
 } from "../fixtures/verified/m1-reader.mjs";
+import { assertOnlyIsolated } from "./isolation-helpers.mjs";
 
 const WIRE = new URL("../fixtures/verified/", import.meta.url);
 const fixture = (name) =>
@@ -109,13 +110,12 @@ test("card and history share a validated generation and explicit definitions", (
   const { data, manifest } = sample();
   assert.equal(parseDataset(data, parseManifest(manifest)), data);
 });
+test("rejects mixed generations", () => {
+  const { data, manifest } = sample();
+  data.generation_id = "c".repeat(32);
+  assert.throws(() => parseDataset(data, manifest), /Mismatched data generation/);
+});
 for (const [name, mutate] of [
-  [
-    "mixed generations",
-    (d) => {
-      d.generation_id = "c".repeat(32);
-    },
-  ],
   [
     "wrong unit",
     (d) => {
@@ -175,10 +175,13 @@ for (const [name, mutate] of [
     },
   ],
 ])
-  test(`rejects ${name}`, () => {
+  test(`isolates ${name} to its own metric`, () => {
     const { data, manifest } = sample();
+    const pristine = structuredClone(data);
     mutate(data);
-    assert.throws(() => parseDataset(data, manifest));
+    assert.deepEqual(assertOnlyIsolated(pristine, parseDataset(data, manifest)), [
+      Object.keys(pristine.metrics).find((key) => JSON.stringify(pristine.metrics[key]) !== JSON.stringify(data.metrics[key])),
+    ]);
   });
 
 test("manifest cannot fetch paths outside its immutable generation", () => {
@@ -525,7 +528,7 @@ test("an unavailable registered optional member stays an absent view", () => {
   assert.deepEqual(parsed.metrics.cpi.history, []);
 });
 
-test("an unavailable optional member still needs its registered definition", () => {
+test("an unavailable optional member with a drifted definition is isolated, not trusted", () => {
   const data = optionalData();
   data.metrics.cpi = {
     ...data.metrics.cpi,
@@ -534,18 +537,20 @@ test("an unavailable optional member still needs its registered definition", () 
     latest: null,
   };
   data.metrics.cpi.definition.unit = "index";
-  assert.throws(() =>
-    parseDataset(data, parseManifest(fixtureManifest("v1-with-optional"))),
-  );
+  const parsed = parseDataset(data, parseManifest(fixtureManifest("v1-with-optional")));
+  assert.equal(parsed.metrics.cpi.definition.unit, OPTIONAL_METRICS.cpi.unit);
+  assert.equal(parsed.metrics.cpi.verification_rejected, true);
+  assert.equal(parsed.metrics.cpih.validation_status, "verified");
 });
 
+test("an unknown metric key is omitted, never displayed", () => {
+  const data = optionalData();
+  data.metrics.made_up = data.metrics.cpi;
+  const parsed = parseDataset(data, parseManifest(fixtureManifest("v1-with-optional")));
+  assert.equal("made_up" in parsed.metrics, false);
+  assert.equal(parsed.metrics.cpi.validation_status, "verified");
+});
 for (const [name, mutate] of [
-  [
-    "unknown metric key",
-    (d) => {
-      d.metrics.made_up = d.metrics.cpi;
-    },
-  ],
   [
     "wrong optional unit",
     (d) => {
@@ -730,10 +735,12 @@ for (const [name, mutate] of [
     },
   ],
 ])
-  test(`rejects ${name}`, () => {
+  test(`isolates ${name} to its own metric`, () => {
     const data = optionalData();
+    const pristine = structuredClone(data);
     mutate(data);
-    assert.throws(() =>
+    assertOnlyIsolated(
+      pristine,
       parseDataset(data, parseManifest(fixtureManifest("v1-with-optional"))),
     );
   });

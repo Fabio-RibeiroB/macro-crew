@@ -94,7 +94,7 @@ test("the label names the calculation, the deflator and the base month", () => {
   assert.equal(realPriceTitle("2026-09"), "After inflation (FinStats calculation using ONS CPI, September 2026 prices)");
 });
 
-test("the reader accepts the producer's CPI index member and rejects a changed contract", () => {
+test("the reader accepts the producer's CPI index member and isolates a changed contract", () => {
   const accepted = parseDataset(data, manifest);
   const index = accepted.metrics.cpi_index;
   assert.equal(index.definition.series, "D7BT");
@@ -116,6 +116,9 @@ test("the reader accepts the producer's CPI index member and rejects a changed c
   ]) {
     const bad = structuredClone(data);
     change(bad.metrics.cpi_index);
-    assert.throws(() => parseDataset(bad, manifest));
+    const parsed = parseDataset(bad, manifest);
+    assert.equal(parsed.metrics.cpi_index.verification_rejected, true);
+    assert.equal(parsed.metrics.cpi_index.latest, null);
+    assert.equal(parsed.metrics.house_price_level.validation_status, "verified");
   }
 });

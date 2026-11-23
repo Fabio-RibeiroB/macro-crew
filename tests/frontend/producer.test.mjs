@@ -106,7 +106,9 @@ test("strict reader keeps announced Ofgem periods separate and accepts date-boun
       : invalidData.metrics.household_energy.latest;
     invalidPoint.reference.effective_end = "2026-09-30";
     invalidPoint.reference.period_status = status;
-    await assert.rejects(() => withWire(invalidData));
+    const isolatedCap = await withWire(invalidData);
+    assertMetricIsolated(isolatedCap, "household_energy");
+    assert.equal(isolatedCap.metrics.household_energy.upcoming_period, null);
   }
 
   const activatedData = JSON.parse(JSON.stringify(announcedData));
@@ -138,7 +140,7 @@ test("strict reader keeps announced Ofgem periods separate and accepts date-boun
   for (const corrupt of corruptions) {
     const candidate = JSON.parse(JSON.stringify(noCurrentData));
     corrupt(candidate.metrics.household_energy);
-    await assert.rejects(() => withWire(candidate));
+    assertMetricIsolated(await withWire(candidate), "household_energy");
   }
 
   const upcomingOnly = JSON.parse(energyBytes.toString("utf8"));
@@ -150,7 +152,7 @@ test("strict reader keeps announced Ofgem periods separate and accepts date-boun
   const upcomingState = await withWire(upcomingOnly);
   assert.equal(upcomingState.metrics.household_energy.upcoming_period.value, "1750");
   upcomingMetric.snapshot_evidence_kind = "recorded_fixture";
-  await assert.rejects(() => withWire(upcomingOnly));
+  assertMetricIsolated(await withWire(upcomingOnly), "household_energy");
 
   const neverCollected = JSON.parse(energyBytes.toString("utf8"));
   const emptyMetric = neverCollected.metrics.household_energy;
@@ -164,6 +166,14 @@ test("strict reader keeps announced Ofgem periods separate and accepts date-boun
   assert.equal(cold.metrics.household_energy.latest, null);
   assert.equal(cold.metrics.household_energy.history.length, 0);
 });
+
+function assertMetricIsolated(data, key) {
+  const metric = data.metrics[key];
+  assert.equal(metric.verification_rejected, true, key);
+  assert.equal(metric.validation_status, "unavailable", key);
+  assert.equal(metric.latest, null, key);
+  assert.deepEqual(metric.history, [], key);
+}
 
 function fileFetcher(data, selectedManifest = manifest) {
   return async (url) =>
@@ -373,7 +383,10 @@ test("BoE 5/10/20 nominal par producer export binds exact series and renders Gov
   changed.metrics.gilt_10y.definition.download_url = "https://www.bankofengland.co.uk/boeapps/database/other.csv";
   const badBytes = Buffer.from(JSON.stringify(changed));
   const badManifest = { ...giltManifest, sha256: createHash("sha256").update(badBytes).digest("hex") };
-  await assert.rejects(() => loadVerified("/", fileFetcher(badBytes, badManifest)), (error) => error.kind === "invalid");
+  const isolatedGilt = await loadVerified("/", fileFetcher(badBytes, badManifest));
+  assertMetricIsolated(isolatedGilt, "gilt_10y");
+  assert.equal(isolatedGilt.metrics.gilt_5y.validation_status, "verified");
+  assert.equal(isolatedGilt.metrics.gilt_20y.validation_status, "verified");
 });
 
 test("producer output passes the manifest checksum and the full reader contract", async () => {
@@ -661,7 +674,7 @@ test("a produced generation with unavailable CPI stays a valid absence", async (
   assert.equal(parsed.metrics.cpih.latest.value, "3.3");
 });
 
-test("PIPR workbook URL accepts ONS numeric file suffix but not other suffixes", () => {
+test("PIPR workbook URL accepts ONS numeric file suffix and isolates any other suffix", () => {
   const data = JSON.parse(readFileSync(new URL("producer-pay-v1.json", WIRE), "utf8"));
   const manifest = parseManifest(JSON.parse(readFileSync(new URL("producer-pay-v1.manifest.json", WIRE), "utf8")));
   const base = "https://www.ons.gov.uk/file?uri=/economy/inflationandpriceindices/datasets/priceindexofprivaterentsukmonthlypricestatistics/18november2026/priceindexofprivaterentsukmonthlypricestatistics";
@@ -671,5 +684,14 @@ test("PIPR workbook URL accepts ONS numeric file suffix but not other suffixes",
     return copy;
   };
   assert.equal(parseDataset(withUrl("10.xlsx"), manifest).metrics.private_rent_growth.latest.value, "3.8");
-  assert.throws(() => parseDataset(withUrl("v2.xlsx"), manifest), /provenance/);
+  // The 19 November regression: an unexpected suffix isolates private rents
+  // only. Every other figure stays verified instead of the whole site blanking.
+  const rejected = parseDataset(withUrl("v2.xlsx"), manifest);
+  for (const key of ["private_rent_growth", "private_rent_level"]) {
+    assertMetricIsolated(rejected, key);
+    assert.equal(rejected.metrics[key].definition.metric_id, data.metrics[key].definition.metric_id);
+    assert.ok(!JSON.stringify(rejected.metrics[key]).includes("v2.xlsx"));
+  }
+  assert.equal(rejected.metrics.house_price_level.validation_status, "verified");
+  assert.equal(rejected.metrics.cpih.latest.value, data.metrics.cpih.latest.value);
 });

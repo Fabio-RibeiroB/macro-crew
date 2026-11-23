@@ -915,7 +915,7 @@ Implementation slices (one issue and one focused PR each):
    Other measures follow only if the owner likes the pilot.
 
 
-### M14 — Catching data drift (approved 19 November 2026; slice 2 pending)
+### M14 — Catching data drift (approved 19 November 2026)
 
 **Why:** a manual check on 19 November 2026 found 20 of 22 live figures
 matching their official sources. The two private-rents figures were a month
@@ -942,7 +942,7 @@ outcome, affected files, acceptance checks and exclusions.
      live.
    - Excludes: other collectors.
 
-2. **One bad figure must not blank the site (owner approval pending).**
+2. **One bad figure must not blank the site (approved 23 November 2026).**
    - Outcome: if one metric fails the browser's provenance or definition
      checks, only that metric shows as unavailable; every other verified
      figure is still displayed.

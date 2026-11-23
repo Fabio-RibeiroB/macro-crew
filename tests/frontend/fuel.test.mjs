@@ -30,17 +30,25 @@ test("strict reader accepts actual producer petrol and diesel weekly snapshots",
   assert.equal(accepted.metrics.diesel_price.latest.value, "199.33");
 });
 
-test("weekly feed rejects changed source, unit, or non-Monday reference", () => {
+test("weekly feed isolates changed source, unit, or non-Monday reference to petrol only", () => {
+  const isolatesPetrol = (candidate) => {
+    const parsed = parseDataset(candidate, manifest);
+    assert.equal(parsed.metrics.petrol_price.verification_rejected, true);
+    assert.equal(parsed.metrics.petrol_price.latest, null);
+    assert.deepEqual(parsed.metrics.petrol_price.history, []);
+    assert.equal(parsed.metrics.diesel_price.latest.value, data.metrics.diesel_price.latest.value);
+    assert.equal(parsed.metrics.cpih.validation_status, "verified");
+  };
   const wrongUnit = copy(data);
   wrongUnit.metrics.petrol_price.definition.unit = "percent";
-  assert.throws(() => parseDataset(wrongUnit, manifest), /definition/);
+  isolatesPetrol(wrongUnit);
   const wrongSource = copy(data);
   wrongSource.metrics.petrol_price.source_download_url = "https://example.com/fuel.csv";
-  assert.throws(() => parseDataset(wrongSource, manifest), /provenance/);
+  isolatesPetrol(wrongSource);
   const wrongWeek = copy(data);
   wrongWeek.metrics.petrol_price.latest.reference.date = "2026-10-20";
   wrongWeek.metrics.petrol_price.history.at(-1).reference.date = "2026-10-20";
-  assert.throws(() => parseDataset(wrongWeek, manifest), /weekly observation reference/);
+  isolatesPetrol(wrongWeek);
 });
 
 test("a missing week remains a chart gap and cannot be compared with an adjacent week", () => {

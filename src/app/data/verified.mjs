@@ -29,8 +29,9 @@ export const METRICS = {
  * Reviewed optional metric members. Absent members stay absent; a present
  * member must match its registered statistical definition exactly, including
  * unit, geography, window metadata and its exact qualified source and
- * download URLs, or the whole generation is rejected. Registry entries are
- * code-owned contracts, not payload-supplied rules.
+ * download URLs, or that one metric is isolated as unavailable (see
+ * `parseDataset`). Registry entries are code-owned contracts, not
+ * payload-supplied rules.
  */
 export const OPTIONAL_METRICS = {
   household_energy: {
@@ -590,6 +591,99 @@ function fuelDownloadUrl(value) {
       /^\/media\/[a-f0-9]+\/CSV__2018_-__\.csv$/.test(url.pathname);
   } catch { return false; }
 }
+/** Code-owned public source pages for core metrics; never taken from the payload. */
+const CORE_SOURCES = {
+  bank_rate: { title: "Official Bank Rate", source_url: "https://www.bankofengland.co.uk/boeapps/database/" },
+  cpih: { title: "CPIH annual rate", source_url: "https://www.ons.gov.uk/economy/inflationandpriceindices/timeseries/l55o/mm23" },
+  gdp: { title: "Monthly GDP growth", source_url: "https://www.ons.gov.uk/economy/grossdomesticproductgdp/timeseries/ecyx/mgdp" },
+};
+const UNAVAILABLE_FIELDS = {
+  collection_status: "unavailable",
+  validation_status: "unavailable",
+  last_successful_check_at: null,
+  source_published_date: null,
+  next_release_date: null,
+  latest: null,
+  history: [],
+  verification_rejected: true,
+};
+/**
+ * Honest unavailable stand-in for one metric that failed the browser's checks.
+ * Built only from code-owned registry values: nothing from the rejected payload
+ * (URLs, values, evidence) is carried over.
+ */
+function isolatedMetric(key) {
+  if (Object.hasOwn(METRICS, key)) {
+    const [metric_id, series, dataset, frequency, comparison, adjustment] = METRICS[key];
+    return {
+      definition: { metric_id, series, dataset, frequency, comparison, adjustment, unit: "percent", version: 1, ...CORE_SOURCES[key] },
+      ...UNAVAILABLE_FIELDS,
+    };
+  }
+  const definition = { ...OPTIONAL_METRICS[key] };
+  return {
+    definition,
+    ...UNAVAILABLE_FIELDS,
+    ...(key === "household_energy" ? { upcoming_period: null } : {}),
+  };
+}
+function validateCoreMetric(metric, expected) {
+  if (!object(metric) || !object(metric.definition))
+    fail("Missing metric definition");
+  const d = metric.definition;
+  const actual = [d.metric_id, d.series, d.dataset, d.frequency, d.comparison, d.adjustment];
+  if (
+    actual.some((v, i) => v !== expected[i]) ||
+    d.unit !== "percent" ||
+    d.version !== 1 ||
+    !officialUrl(d.source_url)
+  )
+    fail("Unexpected metric definition");
+  if (!["ok", "degraded", "unavailable"].includes(metric.collection_status))
+    fail("Invalid collection state");
+  if (
+    metric.last_successful_check_at !== null &&
+    !instant(metric.last_successful_check_at)
+  )
+    fail("Invalid check timestamp");
+  if (!Array.isArray(metric.history)) fail("Invalid history");
+  if (metric.validation_status === "unavailable") {
+    if (metric.latest !== null || metric.history.length)
+      fail("Unavailable metric has values");
+    return;
+  }
+  if (
+    metric.validation_status !== "verified" ||
+    metric.snapshot_evidence_kind !== "official_download" ||
+    !officialUrl(metric.source_download_url) ||
+    !/^[a-f0-9]{64}$/.test(metric.source_sha256) ||
+    !instant(metric.retrieved_at)
+  )
+    fail("Missing official provenance");
+  if (metric.source_published_date !== null && !isoDate(metric.source_published_date))
+    fail("Invalid release date");
+  if (metric.next_release_date !== null && !isoDate(metric.next_release_date))
+    fail("Invalid expected release date");
+  if (!metric.history.length) fail("Empty verified history");
+  metric.history.forEach((p) => validatePoint(p, d.frequency));
+  if (metric.history.some((p, i, arr) => i > 0 && p.period <= arr[i - 1].period))
+    fail("History is not ordered and unique");
+  validatePoint(metric.latest, d.frequency);
+  const end = metric.history.at(-1);
+  if (
+    metric.latest.value === null ||
+    metric.latest.period !== end.period ||
+    metric.latest.value !== end.value
+  )
+    fail("Card and chart disagree");
+}
+/**
+ * Whole-generation integrity (schema, id, mode, publication time, metrics
+ * container) rejects the entire dataset. A metric that fails its own checks is
+ * replaced by an honest unavailable stand-in so every other verified figure
+ * still displays. Unknown keys have no registered definition and are omitted.
+ * The same object is returned when nothing was isolated.
+ */
 export function parseDataset(value, manifest) {
   if (
     !object(value) ||
@@ -600,76 +694,31 @@ export function parseDataset(value, manifest) {
     !object(value.metrics)
   )
     fail("Mismatched data generation");
-  for (const [key, expected] of Object.entries(METRICS)) {
-    const metric = value.metrics[key];
-    if (!object(metric) || !object(metric.definition))
-      fail("Missing metric definition");
-    const d = metric.definition;
-    const actual = [
-      d.metric_id,
-      d.series,
-      d.dataset,
-      d.frequency,
-      d.comparison,
-      d.adjustment,
-    ];
-    if (
-      actual.some((v, i) => v !== expected[i]) ||
-      d.unit !== "percent" ||
-      d.version !== 1 ||
-      !officialUrl(d.source_url)
-    )
-      fail("Unexpected metric definition");
-    if (!["ok", "degraded", "unavailable"].includes(metric.collection_status))
-      fail("Invalid collection state");
-    if (
-      metric.last_successful_check_at !== null &&
-      !instant(metric.last_successful_check_at)
-    )
-      fail("Invalid check timestamp");
-    if (!Array.isArray(metric.history)) fail("Invalid history");
-    if (metric.validation_status === "unavailable") {
-      if (metric.latest !== null || metric.history.length)
-        fail("Unavailable metric has values");
+  const replacements = new Map();
+  const attempt = (key, validate) => {
+    try {
+      validate();
+    } catch {
+      replacements.set(key, isolatedMetric(key));
+    }
+  };
+  for (const [key, expected] of Object.entries(METRICS))
+    attempt(key, () => validateCoreMetric(value.metrics[key], expected));
+  for (const [key, metric] of Object.entries(value.metrics)) {
+    if (Object.hasOwn(METRICS, key)) continue;
+    if (!Object.hasOwn(OPTIONAL_METRICS, key)) {
+      replacements.set(key, null);
       continue;
     }
-    if (
-      metric.validation_status !== "verified" ||
-      metric.snapshot_evidence_kind !== "official_download" ||
-      !officialUrl(metric.source_download_url) ||
-      !/^[a-f0-9]{64}$/.test(metric.source_sha256) ||
-      !instant(metric.retrieved_at)
-    )
-      fail("Missing official provenance");
-    if (
-      metric.source_published_date !== null &&
-      !isoDate(metric.source_published_date)
-    )
-      fail("Invalid release date");
-    if (metric.next_release_date !== null && !isoDate(metric.next_release_date))
-      fail("Invalid expected release date");
-    if (!metric.history.length) fail("Empty verified history");
-    metric.history.forEach((p) => validatePoint(p, d.frequency));
-    if (
-      metric.history.some((p, i, arr) => i > 0 && p.period <= arr[i - 1].period)
-    )
-      fail("History is not ordered and unique");
-    validatePoint(metric.latest, d.frequency);
-    const end = metric.history.at(-1);
-    if (
-      metric.latest.value === null ||
-      metric.latest.period !== end.period ||
-      metric.latest.value !== end.value
-    )
-      fail("Card and chart disagree");
+    attempt(key, () => validateOptionalMetric(metric, OPTIONAL_METRICS[key]));
   }
+  if (!replacements.size) return value;
+  const metrics = {};
   for (const [key, metric] of Object.entries(value.metrics)) {
-    if (key in METRICS) continue;
-    const spec = OPTIONAL_METRICS[key];
-    if (!spec) fail("Unknown metric");
-    validateOptionalMetric(metric, spec);
+    if (replacements.get(key) !== null) metrics[key] = metric;
   }
-  return value;
+  for (const [key, metric] of replacements) if (metric) metrics[key] = metric;
+  return { ...value, metrics };
 }
 export class VerifiedDataError extends Error {
   constructor(kind, message) {

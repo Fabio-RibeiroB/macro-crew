@@ -62,26 +62,30 @@ test("the recorded producer output carries both mortgage rates through the stric
   assert.deepEqual(five.latest, { period: "2026-10", value: "5.19", status: "observed" });
 });
 
-test("the reader rejects a mortgage member whose qualification, series or source drifted", () => {
-  const reject = (edit, message) => {
+test("the reader isolates a mortgage member whose qualification, series or source drifted", () => {
+  const reject = (edit) => {
     const dataset = producer();
     edit(dataset.metrics.mortgage_2y_fixed_75);
-    assert.throws(
-      () => parseDataset(dataset, { generation_id: dataset.generation_id, published_at: dataset.published_at }),
-      message,
-    );
+    const parsed = parseDataset(dataset, { generation_id: dataset.generation_id, published_at: dataset.published_at });
+    const bad = parsed.metrics.mortgage_2y_fixed_75;
+    assert.equal(bad.verification_rejected, true);
+    assert.equal(bad.latest, null);
+    assert.deepEqual(bad.history, []);
+    assert.equal(bad.definition.ltv, 75);
+    assert.equal(parsed.metrics.mortgage_5y_fixed_75.latest !== null, true);
+    assert.equal(parsed.metrics.cpih.validation_status, "verified");
   };
-  reject((m) => { m.definition.ltv = 85; }, /Unexpected mortgage-rate qualification/);
-  reject((m) => { m.definition.fixed_years = 5; }, /Unexpected mortgage-rate qualification/);
-  reject((m) => { delete m.definition.ltv; }, /mortgage-rate definition fields|mortgage-rate qualification/);
-  reject((m) => { m.definition.extra = "x"; }, /Unexpected/);
-  reject((m) => { m.definition.series = "IUMBV42"; }, /Unexpected optional metric definition/);
-  reject((m) => { m.definition.unit = "GBP"; }, /Unexpected optional metric definition/);
-  reject((m) => { m.definition.frequency = "daily"; }, /Unexpected optional metric definition/);
-  reject((m) => { m.definition.geography = "Great Britain"; }, /Unexpected optional metric definition/);
-  reject((m) => { m.source_download_url = "https://www.bankofengland.co.uk/boeapps/database/other.csv"; }, /official provenance/);
-  reject((m) => { m.history.at(-1).period = "2026-10-31"; m.latest.period = "2026-10-31"; }, /Invalid statistical observation/);
-  reject((m) => { m.latest.value = "5.40"; }, /Card and chart disagree/);
+  reject((m) => { m.definition.ltv = 85; });
+  reject((m) => { m.definition.fixed_years = 5; });
+  reject((m) => { delete m.definition.ltv; });
+  reject((m) => { m.definition.extra = "x"; });
+  reject((m) => { m.definition.series = "IUMBV42"; });
+  reject((m) => { m.definition.unit = "GBP"; });
+  reject((m) => { m.definition.frequency = "daily"; });
+  reject((m) => { m.definition.geography = "Great Britain"; });
+  reject((m) => { m.source_download_url = "https://www.bankofengland.co.uk/boeapps/database/other.csv"; });
+  reject((m) => { m.history.at(-1).period = "2026-10-31"; m.latest.period = "2026-10-31"; });
+  reject((m) => { m.latest.value = "5.40"; });
 });
 
 test("an unavailable mortgage member is accepted by the reader and carries no values", () => {
