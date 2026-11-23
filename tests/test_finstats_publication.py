@@ -643,3 +643,114 @@ def test_cpi_index_publishes_full_history_with_source_evidence(tmp_path):
     assert member['snapshot_evidence_kind'] == 'official_download'
     assert member['source_download_url'].endswith('/timeseries/d7bt/mm23/data')
     assert member['source_published_date'] == '2026-10-21'
+
+
+# --- M14 slice 3: update overdue ---------------------------------------------------
+
+from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
+
+from finstats.publication import release_status
+from finstats.sources import DEFINITIONS, MAX_PUBLICATION_DELAY_DAYS, public_definition, publication_deadline
+
+LONDON = ZoneInfo('Europe/London')
+
+
+def republish(directory, when):
+    store = Store(directory)
+    try:
+        publish(store, when)
+    finally:
+        store.db.close()
+    return read_generation(directory)
+
+
+def test_rents_flip_to_delayed_after_the_end_of_the_deadline_london_date(tmp_path):
+    collect(tmp_path, fixtures=FIXTURES, clock=lambda: CPI_WHEN)
+    # September 2026 is latest; October ends 31 Oct; 25-day limit gives 25 Nov.
+    assert read_generation(tmp_path)['metrics']['private_rent_level']['latest']['period'] == '2026-09'
+    assert MAX_PUBLICATION_DELAY_DAYS['private_rent_level'] == 25
+    assert publication_deadline('private_rent_level', '2026-09') == date(2026, 11, 25)
+    before = republish(tmp_path, datetime(2026, 11, 25, 23, 59, tzinfo=LONDON))
+    after = republish(tmp_path, datetime(2026, 11, 26, 0, 1, tzinfo=LONDON))
+    for key in ('private_rent_growth', 'private_rent_level'):
+        assert before['metrics'][key]['release_status'] == 'awaiting_next_release'
+        assert after['metrics'][key]['release_status'] == 'delayed'
+        # Release timing never rewrites the figure or the collector's own health.
+        assert after['metrics'][key]['latest'] == before['metrics'][key]['latest']
+        assert after['metrics'][key]['collection_status'] == 'ok'
+        assert after['metrics'][key]['next_release_date'] is None
+
+
+def test_deadline_uses_the_london_date_across_british_summer_time(tmp_path):
+    payload = {'observations': [{'period': '2026-05'}]}  # June ends 30 June; +25 days = 25 July.
+    assert publication_deadline('private_rent_level', '2026-05') == date(2026, 7, 25)
+    # 23:30 UTC on 25 July is 00:30 BST on 26 July: already past the deadline day.
+    assert release_status('private_rent_level', payload, None, datetime(
+        2026, 7, 25, 23, 30, tzinfo=timezone.utc).astimezone(LONDON).date().isoformat()) == 'delayed'
+    assert release_status('private_rent_level', payload, None, datetime(
+        2026, 7, 25, 22, 30, tzinfo=timezone.utc).astimezone(LONDON).date().isoformat()) == 'awaiting_next_release'
+    # Also exercise publish()'s own UTC->Europe/London conversion during BST.
+    collect(tmp_path, fixtures=FIXTURES, clock=lambda: CPI_WHEN)
+    # Latest mortgage observation in fixtures is 2026-09; next month Oct ends 31 Oct + 45d = 15 Dec (winter),
+    # so test BST conversion directly on a stored snapshot whose latest observation is 2026-05.
+    store = Store(tmp_path)
+    try:
+        row = store.latest('private_rent_level')
+        stored = json.loads(row['payload'])
+        stored['observations'] = [o for o in stored['observations'] if o['period'] <= '2026-05']
+        store.db.execute('UPDATE snapshot SET payload=? WHERE id=?', (json.dumps(stored), row['id']))
+        store.db.commit()
+    finally:
+        store.db.close()
+    before = republish(tmp_path, datetime(2026, 7, 25, 22, 30, tzinfo=timezone.utc))
+    after = republish(tmp_path, datetime(2026, 7, 25, 23, 30, tzinfo=timezone.utc))
+    assert before['metrics']['private_rent_level']['release_status'] == 'awaiting_next_release'
+    assert after['metrics']['private_rent_level']['release_status'] == 'delayed'
+
+
+def test_deadline_for_each_frequency():
+    assert set(MAX_PUBLICATION_DELAY_DAYS) == set(DEFINITIONS) - {'bank_rate'}
+    assert {d.frequency for d in DEFINITIONS.values()} == {'daily', 'weekly', 'monthly', 'quarterly', 'annual'}
+    assert publication_deadline('cpi', '2026-12') == date(2027, 1, 31) + timedelta(days=30)
+    assert publication_deadline('petrol_price', '2026-10-19') == date(2026, 10, 26) + timedelta(days=10)
+    assert publication_deadline('gilt_10y', '2026-10-30') == date(2026, 10, 31) + timedelta(days=10)
+    assert publication_deadline('price_to_earnings', '2025') == date(2026, 12, 31) + timedelta(days=120)
+    assert publication_deadline('household_energy', '2026-10-01', '2026-12-31') == date(2027, 3, 31) + timedelta(days=14)
+    assert publication_deadline('cpi', 'not-a-period') is None
+
+
+def test_announced_energy_period_and_bank_rate_are_never_delayed_by_age():
+    energy = {'active_period': {'period': '2026-10-01', 'reference': {'effective_end': '2026-12-31'}},
+              'upcoming_period': {'period': '2027-01-01'}, 'observations': []}
+    assert release_status('household_energy', energy, None, '2031-01-01') == 'awaiting_next_release'
+    assert 'bank_rate' not in MAX_PUBLICATION_DELAY_DAYS
+    bank = {'observations': [{'period': '2020-01-01'}]}
+    assert release_status('bank_rate', bank, None, '2031-01-01') == 'unknown'
+    # An official next release date still wins, and keeps the existing rule.
+    assert release_status('cpi', {'observations': [{'period': '2026-09'}]}, '2026-11-18', '2026-11-18') == 'awaiting_next_release'
+    assert release_status('cpi', {'observations': [{'period': '2026-09'}]}, '2026-11-18', '2026-11-19') == 'delayed'
+
+
+def test_bank_rate_published_years_later_is_still_unknown(tmp_path):
+    collect(tmp_path, fixtures=FIXTURES, clock=lambda: CPI_WHEN)
+    data = republish(tmp_path, datetime(2030, 6, 1, 12, tzinfo=LONDON))
+    assert data['metrics']['bank_rate']['release_status'] == 'unknown'
+    assert data['metrics']['private_rent_level']['release_status'] == 'delayed'
+
+
+def test_overdue_figure_keeps_collection_ok_and_public_definition_unchanged(tmp_path):
+    for key in DEFINITIONS:
+        assert not any('delay' in field for field in public_definition(key))
+    private, public_dir = tmp_path / 'private', tmp_path / 'public'
+    collect(private, transport=fixture_transport, clock=lambda: CPI_WHEN)
+    republish(private, datetime(2026, 12, 20, 12, tzinfo=LONDON))
+    from finstats.delivery import deliver
+    deliver(private, public_dir)
+    manifest = json.loads((public_dir / 'current.json').read_text())
+    public = json.loads((public_dir / manifest['data_url']).read_text())
+    rent = public['metrics']['private_rent_level']
+    assert rent['release_status'] == 'delayed'
+    assert rent['collection_status'] == 'ok'
+    assert rent['latest'] is not None
+    assert rent['definition'] == public_definition('private_rent_level')

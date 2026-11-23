@@ -561,6 +561,13 @@ function Sources() {
           past publication vintage.
         </p>
         <p>
+          When a figure’s next period is overdue, because its publisher’s
+          release date has passed or our allowed publication delay has run out,
+          the last verified figure stays visible with an “Update overdue” note.
+          Collection health, a figure’s age and release timing are reported
+          separately.
+        </p>
+        <p>
           If a source fails, previously verified data stays available with
           freshness information. An AI failure cannot stop valid figures being
           published.

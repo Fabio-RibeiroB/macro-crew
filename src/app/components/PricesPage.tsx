@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { chartUpdated, inflationTargetLine } from "../data/chartMeta.mjs";
-import { chartPoints, formatPeriod } from "../data/verified.mjs";
+import { chartPoints, formatPeriod, OVERDUE_LABEL, releaseOverdue } from "../data/verified.mjs";
 import { changeDirection, comparableEnergyPrevious, decimalDifference, overviewRows } from "../data/overview.mjs";
 import { checkedAt } from "../data/format.mjs";
 import { UpdatedChip } from "./UpdatedChip";
@@ -51,6 +51,7 @@ function FuelFigure({ label, tag, row, metric }: { label: string; tag: string; r
       <p className="fs-fig-src">
         {metric?.latest ? <>Pence per litre · official figure · DESNZ</> : "A verified reading is not available yet."}
         {metric?.latest && metric.collection_status !== "ok" && <span className="fs-fresh-warning"> · Update delayed · showing last verified figure</span>}
+        {metric?.latest && metric.collection_status === "ok" && releaseOverdue(metric) && <span className="fs-fresh-warning"> · {OVERDUE_LABEL}</span>}
       </p>
     </div>
   );

@@ -7,7 +7,7 @@ from pathlib import Path
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-from finstats.sources import DEFINITIONS, public_definition
+from finstats.sources import DEFINITIONS, public_definition, publication_deadline
 from finstats.storage import atomic_write, encode, timestamp
 
 
@@ -27,6 +27,28 @@ def health(store, when):
             # Detailed errors remain private in SQLite; public output uses a safe status.
         }
     return {'schema_version': 1, 'checked_at': timestamp(when), 'metrics': result}
+
+
+def release_status(key, payload, next_release, local_date):
+    """Release timing only; never collection health, reference age or Bank Rate age.
+
+    An official next release date decides when the source gives one. Otherwise a
+    metric's maximum publication delay (sources.MAX_PUBLICATION_DELAY_DAYS) sets a
+    deadline at the end of that London date. Metrics with neither stay 'unknown'.
+    """
+    if next_release:
+        return 'delayed' if next_release < local_date else 'awaiting_next_release'
+    latest = (payload['active_period'] if key == 'household_energy'
+              else payload['observations'][-1] if payload['observations'] else None)
+    if not latest:
+        return 'unknown'
+    if key == 'household_energy' and payload.get('upcoming_period'):
+        return 'awaiting_next_release'  # The next period is already announced.
+    effective_end = (latest.get('reference') or {}).get('effective_end')
+    deadline = publication_deadline(key, latest['period'], effective_end)
+    if deadline is None:
+        return 'unknown'
+    return 'delayed' if local_date > deadline.isoformat() else 'awaiting_next_release'
 
 
 def publish(store, when):
@@ -79,8 +101,7 @@ def publish(store, when):
                     'publication_time_precision': 'date' if payload['published_date'] else 'unknown',
                     'source_published_at': None,
                     'next_release_date': next_release,
-                    'release_status': ('delayed' if next_release < local_date else 'awaiting_next_release')
-                                      if next_release else 'unknown',
+                    'release_status': release_status(key, payload, next_release, local_date),
                     'retrieved_at': selected['collected_at'],
                     'source_download_url': selected['source_url'],
                     'source_sha256': selected['raw_hash'],

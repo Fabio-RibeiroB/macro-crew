@@ -1,6 +1,6 @@
 // Shared building blocks for subject pages (ADR 0001): a fixed label column in the
 // order Key figure, What it means, Chart, AI summary, Sources.
-import { formatPeriod, freshness } from "../data/verified.mjs";
+import { formatPeriod, freshness, OVERDUE_LABEL, releaseOverdue } from "../data/verified.mjs";
 import { checkedAt, checkedBrief } from "../data/format.mjs";
 import { Lines } from "./IndicatorTable";
 import { MoreDetail } from "./MoreDetail";
@@ -71,7 +71,10 @@ export function Sources({ metric, extra, publisher }: any) {
   if (!metric?.definition) return <p>Source details appear when a verified reading is available.</p>;
   const { definition } = metric;
   const history = metric.history ?? [];
+  const overdue = metric.latest && metric.collection_status === "ok" && releaseOverdue(metric);
   return (
+    <>
+    {overdue && <p className="fs-overdue" role="status">{OVERDUE_LABEL}</p>}
     <MoreDetail label={`Source: ${publisher ?? publisherOf(definition.source_url)} · ${checkedBrief(metric.last_successful_check_at)}`}>
       <dl className="fs-src">
         <div><dt>Series</dt><dd>{definition.title ? `${definition.title}, ` : ""}{definition.dataset} / {definition.series}</dd></div>
@@ -90,6 +93,7 @@ export function Sources({ metric, extra, publisher }: any) {
       <OfficialLink href={definition.source_url}>View the official series</OfficialLink>
       {extra}
     </MoreDetail>
+    </>
   );
 }
 

@@ -291,7 +291,7 @@ test("stale checks and missed releases stay visible even when numbers are valid"
   metric.last_successful_check_at = "2026-10-22T12:00:00Z";
   assert.equal(
     freshness(metric, new Date("2026-10-22T13:00:00Z")).label,
-    "New release awaited",
+    "Update overdue · showing last verified figure",
   );
   metric.collection_status = "degraded";
   assert.match(freshness(metric).label, /last verified/);

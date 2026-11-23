@@ -862,6 +862,24 @@ export function previousPublishedWindow(metric) {
   if (expectedPrevious.toISOString().slice(0, 7) !== metric.latest.period) return null;
   return previous;
 }
+const londonDay = (now) =>
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/London",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+export const OVERDUE_LABEL = "Update overdue · showing last verified figure";
+/**
+ * True when the next period is overdue: the collector published release_status
+ * "delayed" (an official date or a FinStats delay limit has passed), or the
+ * official next release date has passed since. Independent of collection health.
+ */
+export function releaseOverdue(metric, now = new Date()) {
+  if (!metric?.latest) return false;
+  if (metric.release_status === "delayed") return true;
+  return Boolean(metric.next_release_date) && metric.next_release_date < londonDay(now);
+}
 export function freshness(metric, now = new Date()) {
   if (!metric.latest) return { label: "Unavailable", kind: "warning" };
   if (metric.collection_status !== "ok")
@@ -872,12 +890,8 @@ export function freshness(metric, now = new Date()) {
   const checked = Date.parse(metric.last_successful_check_at ?? "");
   if (!Number.isFinite(checked) || now.getTime() - checked > 24 * 3600_000)
     return { label: "Last check over a day ago", kind: "warning" };
-  const today = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/London",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(now);
+  if (releaseOverdue(metric, now)) return { label: OVERDUE_LABEL, kind: "warning" };
+  const today = londonDay(now);
   // A successful poll does not prove that a weekly attachment has advanced.
   // This conservative age warning is a FinStats rule, not an official release date.
   if (metric.definition.frequency === "weekly") {
@@ -886,8 +900,6 @@ export function freshness(metric, now = new Date()) {
     if (overdue.toISOString().slice(0, 10) <= today)
       return { label: "Weekly observation at least two weeks old · showing last verified figure", kind: "warning" };
   }
-  if (metric.next_release_date && metric.next_release_date < today)
-    return { label: "New release awaited", kind: "warning" };
   return { label: "Checked against official data", kind: "ok" };
 }
 export function formatPeriod(value) {
