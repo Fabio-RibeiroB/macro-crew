@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
+import http.client
 import io
 import json
 import os
@@ -26,7 +28,6 @@ import sys
 import tempfile
 import time
 import zipfile
-import hashlib
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
@@ -34,9 +35,11 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
+from urllib.parse import urljoin, urlsplit
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 from zoneinfo import ZoneInfo
+
+_DEFAULT_URLOPEN = urlopen
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / 'src'))
@@ -90,24 +93,43 @@ class SourceError(Exception):
 
 # ---------------------------------------------------------------- HTTP
 
-def make_fetcher(allowed_hosts, timeout=30, attempts=3, sleep=time.sleep):
-    """Bounded, HTTPS-only GET returning bytes. The final URL must stay on an allowed host.
+class _CheckedRedirectHandler(HTTPRedirectHandler):
+    """Validate every redirect hop before urllib connects to the target."""
 
-    Only 429/5xx answers and timeouts are retried (at most ``attempts`` tries, waits capped
-    at 30 seconds, honouring Retry-After); anything else fails at once.
+    def __init__(self, allowed_hosts):
+        super().__init__()
+        self._allowed_hosts = allowed_hosts
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        resolved = urljoin(req.full_url, newurl)
+        parts = urlsplit(resolved)
+        if parts.scheme != 'https' or parts.hostname not in self._allowed_hosts:
+            raise FetchError(f'refusing redirect to {resolved}')
+        return super().redirect_request(req, fp, code, msg, headers, resolved)
+
+
+def make_fetcher(allowed_hosts, timeout=30, attempts=3, sleep=time.sleep):
+    """Bounded, HTTPS-only GET returning bytes. Every hop and final URL must stay on an allowed HTTPS host.
+
+    Only 429/5xx answers, HTTP protocol errors and timeouts are retried (at most ``attempts`` tries,
+    waits capped at 30 seconds, honouring Retry-After); anything else fails at once.
     """
+    opener = build_opener(_CheckedRedirectHandler(allowed_hosts))
+
     def fetch(url, limit=MAX_SMALL_BYTES):
         parts = urlsplit(url)
         if parts.scheme != 'https' or parts.hostname not in allowed_hosts:
             raise FetchError(f'refusing to fetch {url}')
         request = Request(url, headers={'User-Agent': USER_AGENT})
+        open_fn = opener.open if urlopen is _DEFAULT_URLOPEN else urlopen
         for attempt in range(1, attempts + 1):
             wait = 5 * attempt
             try:
-                with urlopen(request, timeout=timeout) as response:
+                with open_fn(request, timeout=timeout) as response:
                     if response.status != 200:
                         raise FetchError(f'HTTP {response.status} from {parts.hostname}')
-                    if urlsplit(response.geturl()).hostname not in allowed_hosts:
+                    final = urlsplit(response.geturl())
+                    if final.scheme != 'https' or final.hostname not in allowed_hosts:
                         raise FetchError(f'redirected away from {parts.hostname}')
                     body = response.read(limit + 1)
             except FetchError:
@@ -118,8 +140,8 @@ def make_fetcher(allowed_hosts, timeout=30, attempts=3, sleep=time.sleep):
                     sleep(min(int(retry_after), 30) if retry_after.isdigit() else wait)
                     continue
                 raise FetchError(f'HTTP {exc.code} from {parts.hostname}') from exc
-            except (URLError, OSError, ValueError) as exc:  # timeouts, resets, bad URLs
-                if attempt < attempts and isinstance(exc, (TimeoutError, URLError)):
+            except (URLError, OSError, ValueError, http.client.HTTPException) as exc:
+                if attempt < attempts and isinstance(exc, (TimeoutError, URLError, http.client.HTTPException)):
                     sleep(wait)
                     continue
                 raise FetchError(f'{type(exc).__name__}: {exc}') from exc
@@ -175,10 +197,12 @@ class SiteReading:
     parsed: dict | None = None       # the dataset after verified.mjs
     error: str | None = None         # whole-generation rejection
     unreachable: str | None = None   # the site itself could not be read
+    reader_error: str | None = None  # Node / verified.mjs runner failed
 
 
 def run_site_reader(manifest_bytes, generation_bytes, node='node', reader=VERIFIED_MJS):
     """Run parseManifest, the SHA-256 check and parseDataset of verified.mjs on Node."""
+    child_env = {k: v for k, v in os.environ.items() if 'TOKEN' not in k.upper() and 'SECRET' not in k.upper()}
     with tempfile.TemporaryDirectory(prefix='finstats-cross-check-') as folder:
         manifest_path, generation_path = Path(folder, 'current.json'), Path(folder, 'data.json')
         manifest_path.write_bytes(manifest_bytes)
@@ -187,7 +211,7 @@ def run_site_reader(manifest_bytes, generation_bytes, node='node', reader=VERIFI
             done = subprocess.run(
                 [node, '--input-type=module', '-e', NODE_RUNNER, str(reader),
                  str(manifest_path), str(generation_path)],
-                capture_output=True, timeout=120, check=False)
+                capture_output=True, timeout=120, check=False, env=child_env)
         except (OSError, subprocess.SubprocessError) as exc:
             raise RuntimeError(f'could not run Node for verified.mjs: {exc}') from exc
     try:
@@ -226,7 +250,11 @@ def read_site(base, fetch, node='node', reader=VERIFIED_MJS):
         reading.raw = json.loads(generation_bytes.decode('utf-8'))
     except (UnicodeError, ValueError):
         reading.raw = None
-    result = run_site_reader(manifest_bytes, generation_bytes, node, reader)
+    try:
+        result = run_site_reader(manifest_bytes, generation_bytes, node, reader)
+    except RuntimeError as exc:
+        reading.reader_error = str(exc)
+        return reading
     if result.get('ok') is True and isinstance(result.get('dataset'), dict) and isinstance(reading.raw, dict):
         reading.parsed = result['dataset']
     else:
@@ -713,6 +741,9 @@ def run_check(site_url, fetch, today=None, node='node', reader=VERIFIED_MJS,
     if reading.unreachable:
         report.site_problem = f'Could not read the live site: {reading.unreachable}'
         return report
+    if reading.reader_error:
+        report.site_problem = f'Could not run the site reader: {reading.reader_error}'
+        return report
     if reading.error:
         report.site_problem = f'The live generation was rejected by the site reader: {reading.error}'
         return report
@@ -728,7 +759,9 @@ def run_check(site_url, fetch, today=None, node='node', reader=VERIFIED_MJS,
             latest = max(truth.points)
             result.official = f'{truth.points[latest]} ({latest})'
             differences = compare(site_points(metric), truth.points, periods)
-        except (FetchError, SourceError, KeyError, TypeError, ValueError, ET.ParseError) as exc:
+        except Exception as exc:
+            # Any unexpected source format change must degrade to "could not check" for this
+            # metric rather than aborting the whole run without opening an issue.
             result.kinds.append(COULD_NOT_CHECK)
             result.details.append(f'{type(exc).__name__}: {exc}')
             continue
@@ -738,6 +771,12 @@ def run_check(site_url, fetch, today=None, node='node', reader=VERIFIED_MJS,
         if not result.kinds:
             result.kinds.append(OK)
     return report
+
+
+def _safe_markdown(text):
+    """Prevent untrusted publisher text from injecting mentions or breaking Markdown lines."""
+    clean = ' '.join(str(text).split())
+    return re.sub(r'@(?=[A-Za-z0-9])', '@\u200b', clean)
 
 
 def render_report(report, run_url=None):
@@ -750,7 +789,7 @@ def render_report(report, run_url=None):
                  f'checked {report.checked_at}' + (f' · [run]({run_url})' if run_url else ''))
     lines.append('')
     if report.site_problem:
-        lines += [f'**{report.site_problem}**', '']
+        lines += [f'**{_safe_markdown(report.site_problem)}**', '']
     elif report.clean:
         lines += [f'All {len(report.results)} figures match their official sources.', '']
     else:
@@ -762,11 +801,13 @@ def render_report(report, run_url=None):
         lines += ['| Figure | Result | On the site | Official |', '| --- | --- | --- | --- |']
         for result in report.problems:
             kinds = ', '.join(PROBLEM_LABEL[kind] for kind in result.kinds if kind != OK)
-            lines.append(f'| `{result.key}` | {kinds} | {result.site or "-"} | {result.official or "-"} |')
+            site_cell = _safe_markdown(result.site or '-').replace('|', '/')
+            official_cell = _safe_markdown(result.official or '-').replace('|', '/')
+            lines.append(f'| `{result.key}` | {kinds} | {site_cell} | {official_cell} |')
         lines.append('')
         for result in report.problems:
             lines.append(f'**`{result.key}`**' + (f' — {result.route}' if result.route else ''))
-            lines += [f'- {detail}' for detail in result.details[:8]]
+            lines += [f'- {_safe_markdown(detail)}' for detail in result.details[:8]]
             if len(result.details) > 8:
                 lines.append(f'- … and {len(result.details) - 8} more')
             lines.append('')
@@ -779,6 +820,9 @@ def render_report(report, run_url=None):
 
 
 # ---------------------------------------------------------------- GitHub issue lifecycle
+
+BOT_LOGINS = frozenset({'github-actions[bot]'})
+
 
 class GitHubClient:
     def __init__(self, token, repo, opener=urlopen):
@@ -816,6 +860,9 @@ class GitHubClient:
 
 def find_open_issue(client):
     for issue in client.open_issues():
+        author = (issue.get('user') or {}).get('login')
+        if author not in BOT_LOGINS:
+            continue
         if issue.get('title') == ISSUE_TITLE or ISSUE_MARKER in (issue.get('body') or ''):
             return issue
     return None

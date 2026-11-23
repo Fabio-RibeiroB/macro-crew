@@ -11,6 +11,7 @@ import copy
 import csv
 import gzip
 import hashlib
+import http.client
 import importlib.util
 import io
 import json
@@ -233,7 +234,8 @@ class FakeGitHub:
         self.writes.append(('close', number))
 
 
-EXISTING = {'number': 3, 'title': cc.ISSUE_TITLE, 'body': cc.ISSUE_MARKER + '\nold report'}
+BOT_USER = {'login': 'github-actions[bot]'}
+EXISTING = {'number': 3, 'title': cc.ISSUE_TITLE, 'body': cc.ISSUE_MARKER + '\nold report', 'user': BOT_USER}
 
 
 # ------------------------------------------------------------------ the guard itself
@@ -252,8 +254,20 @@ def test_default_fetcher_refuses_plain_http_and_foreign_hosts_before_any_request
             fetch(url)
 
 
-def test_default_fetcher_retries_429_then_succeeds_and_bounds_the_wait(monkeypatch):
-    answers = [HTTPError('https://www.ons.gov.uk/x', 429, 'Too Many Requests', {'Retry-After': '90'}, None), 'ok']
+def test_checked_redirect_handler_refuses_foreign_hosts_and_http_downgrades():
+    handler = cc._CheckedRedirectHandler({'www.ons.gov.uk'})
+    req = urllib.request.Request('https://www.ons.gov.uk/start')
+    for target in ('https://evil.example/data', 'http://www.ons.gov.uk/downgrade'):
+        with pytest.raises(cc.FetchError, match='refusing redirect'):
+            handler.redirect_request(req, None, 302, 'Found', {}, target)
+
+
+def test_default_fetcher_retries_429_and_http_exceptions_then_succeeds(monkeypatch):
+    answers = [
+        HTTPError('https://www.ons.gov.uk/x', 429, 'Too Many Requests', {'Retry-After': '90'}, None),
+        http.client.IncompleteRead(b'part'),
+        'ok',
+    ]
     waits = []
 
     class Response:
@@ -274,15 +288,31 @@ def test_default_fetcher_retries_429_then_succeeds_and_bounds_the_wait(monkeypat
     monkeypatch.setattr(cc, 'urlopen', fake_urlopen)
     fetch = cc.make_fetcher({'www.ons.gov.uk'}, sleep=waits.append)
     assert fetch('https://www.ons.gov.uk/x') == b'data'
-    assert waits == [30]  # Retry-After 90 is capped at 30 seconds
+    assert waits == [30, 10]  # Retry-After 90 is capped at 30 seconds; attempt 2 waits 5*2=10s
 
 
-def test_default_fetcher_gives_up_on_persistent_errors_and_oversize_bodies(monkeypatch):
+def test_default_fetcher_gives_up_on_persistent_errors_downgrades_and_oversize_bodies(monkeypatch):
     def always_500(request, timeout):
         raise HTTPError(request.full_url, 503, 'Unavailable', {}, None)
     monkeypatch.setattr(cc, 'urlopen', always_500)
     with pytest.raises(cc.FetchError, match='503'):
         cc.make_fetcher({'www.ons.gov.uk'}, sleep=lambda s: None)('https://www.ons.gov.uk/x')
+
+    def always_bad_status(request, timeout):
+        raise http.client.BadStatusLine('garbage')
+    monkeypatch.setattr(cc, 'urlopen', always_bad_status)
+    with pytest.raises(cc.FetchError, match='BadStatusLine'):
+        cc.make_fetcher({'www.ons.gov.uk'}, sleep=lambda s: None)('https://www.ons.gov.uk/x')
+
+    class Downgraded:
+        status = 200
+        def __enter__(self): return self
+        def __exit__(self, *exc): return False
+        def geturl(self): return 'http://www.ons.gov.uk/x'
+        def read(self, n): return b'ok'
+    monkeypatch.setattr(cc, 'urlopen', lambda request, timeout: Downgraded())
+    with pytest.raises(cc.FetchError, match='redirected away'):
+        cc.make_fetcher({'www.ons.gov.uk'})('https://www.ons.gov.uk/x')
 
     class Big:
         status = 200
@@ -307,7 +337,7 @@ def test_verified_mjs_reads_a_recorded_generation_on_node(generation):
 
 
 @needs_node
-def test_verified_mjs_rejects_a_wrong_checksum_and_a_bad_definition(generation):
+def test_verified_mjs_rejects_bad_generation_and_isolates_a_single_bad_metric(generation):
     site = publish(generation)
     manifest = json.loads(site[SITE + 'data/current.json'])
     data_key = SITE + 'data/' + manifest['data_url']
@@ -315,11 +345,20 @@ def test_verified_mjs_rejects_a_wrong_checksum_and_a_bad_definition(generation):
     result = cc.run_site_reader(json.dumps(manifest).encode(), site[data_key])
     assert result['ok'] is False and 'integrity' in result['error']
 
+    wrong_schema = copy.deepcopy(generation)
+    wrong_schema['schema_version'] = 99
+    site = publish(wrong_schema)
+    result = cc.run_site_reader(site[SITE + 'data/current.json'], site[SITE + f"data/generations/{wrong_schema['generation_id']}/data.json"])
+    assert result['ok'] is False
+
     altered = copy.deepcopy(generation)
     altered['metrics']['cpi']['source_download_url'] = 'https://evil.example/data'
     site = publish(altered)
     result = cc.run_site_reader(site[SITE + 'data/current.json'], site[SITE + f"data/generations/{altered['generation_id']}/data.json"])
-    assert result['ok'] is False
+    assert result['ok'] is True
+    assert result['dataset']['metrics']['cpi']['validation_status'] == 'unavailable'
+    assert result['dataset']['metrics']['cpi']['verification_rejected'] is True
+    assert result['dataset']['metrics']['cpih']['validation_status'] == 'verified'
 
 
 # ------------------------------------------------------------------ clean run
@@ -459,13 +498,40 @@ def test_an_unreachable_live_site_is_reported_not_passed(generation):
     assert not report.clean and report.results == []
 
 
+@needs_node
+def test_an_unexpected_source_format_change_is_could_not_check_without_aborting_the_run(generation):
+    fake = web(generation)
+    # {"description": "x"} triggers AttributeError inside ons_json; it must degrade per metric.
+    fake.replace('https://www.ons.gov.uk/economy/inflationandpriceindices/timeseries/l55o/mm23/data',
+                 b'{"description": "x"}')
+    report = check(fake)
+    by_key = {r.key: r for r in report.results}
+    assert report.site_problem is None
+    assert by_key['cpih'].kinds == [cc.COULD_NOT_CHECK]
+    assert 'AttributeError' in by_key['cpih'].details[0]
+    assert by_key['cpi'].kinds == [cc.OK]
+    assert not report.clean
+
+
+def test_a_failing_site_reader_is_reported_as_site_problem_not_an_unhandled_crash(generation):
+    report = check(web(generation), node='nonexistent-node-binary-for-test')
+    assert report.site_problem and report.site_problem.startswith('Could not run the site reader')
+    assert not report.clean and report.results == []
+    client = FakeGitHub()
+    assert cc.sync_issue(report, cc.render_report(report), client, out=lambda s: None) == 'opened'
+
+
 # ------------------------------------------------------------------ rejected, overdue, unavailable
 
 @needs_node
-def test_a_figure_that_fails_the_site_reader_rejects_the_whole_generation_today(generation):
+def test_a_figure_that_fails_the_site_reader_is_isolated_as_rejected_while_others_are_checked(generation):
     generation['metrics']['cpi']['source_download_url'] = 'https://evil.example/data'
     report = check(web(generation))
-    assert report.site_problem.startswith('The live generation was rejected by the site reader')
+    by_key = {r.key: r for r in report.results}
+    assert report.site_problem is None
+    assert by_key['cpi'].kinds == [cc.REJECTED]
+    assert [r.key for r in report.problems] == ['cpi']
+    assert by_key['cpih'].kinds == [cc.OK]  # every other figure is still checked
     assert not report.clean
     client = FakeGitHub()
     assert cc.sync_issue(report, cc.render_report(report), client, out=lambda s: None) == 'opened'
@@ -477,35 +543,9 @@ def test_a_bad_checksum_rejects_the_generation(generation):
     manifest = json.loads(fake.exact[SITE + 'data/current.json'])
     manifest['sha256'] = 'f' * 64
     fake.exact[SITE + 'data/current.json'] = json.dumps(manifest).encode()
-    assert 'integrity' in check(fake).site_problem
-
-
-def per_metric_reader(tmp_path):
-    """A stand-in for slice 2's reader: it drops one bad metric instead of throwing."""
-    real = (ROOT / 'src' / 'app' / 'data' / 'verified.mjs').read_text()
-    wrapper = real.replace('export function parseDataset(', 'function realParseDataset(') + '''
-export function parseDataset(value, manifest) {
-  const copy = structuredClone(value);
-  const bad = copy.metrics.cpi;
-  delete copy.metrics.cpi;
-  const dataset = realParseDataset(copy, manifest);
-  dataset.metrics.cpi = { ...bad, validation_status: "unavailable", verification_rejected: true, latest: null, history: [] };
-  return dataset;
-}
-'''
-    path = tmp_path / 'per-metric-reader.mjs'
-    path.write_text(wrapper)
-    return path
-
-
-@needs_node
-def test_a_metric_the_reader_drops_while_the_generation_loads_is_rejected(generation, tmp_path):
-    report = check(web(generation), reader=per_metric_reader(tmp_path))
-    by_key = {r.key: r for r in report.results}
-    assert report.site_problem is None
-    assert by_key['cpi'].kinds == [cc.REJECTED]
-    assert [r.key for r in report.problems] == ['cpi']
-    assert by_key['cpih'].kinds == [cc.OK]  # every other figure is still checked
+    report = check(fake)
+    assert 'integrity' in report.site_problem
+    assert not report.clean
 
 
 @needs_node
@@ -591,16 +631,31 @@ def test_a_problem_with_no_open_issue_opens_exactly_one():
     assert cc.ISSUE_MARKER in body and '| `cpi` | Mismatch | 3.4 (2026-09) | 3.5 (2026-09) |' in body
 
 
+def test_render_report_neutralizes_mentions_from_untrusted_source_errors():
+    result = cc.MetricResult('cpi', [cc.COULD_NOT_CHECK], details=["SourceError: bad cell '@victim'\n# injected"])
+    body = cc.render_report(cc.Report(SITE, 'a' * 32, '2026-10-22 12:00 UTC', [result]))
+    assert '@victim' not in body and '@\u200bvictim' in body
+    assert '\n# injected' not in body
+
+
 def test_a_repeat_problem_comments_on_the_open_issue_without_a_duplicate():
-    other = {'number': 9, 'title': 'Something else', 'body': 'unrelated'}
+    other = {'number': 9, 'title': 'Something else', 'body': 'unrelated', 'user': BOT_USER}
     client, report = FakeGitHub([other, EXISTING]), problem_report()
     assert cc.sync_issue(report, cc.render_report(report), client, out=lambda s: None) == 'commented'
     assert [w[:2] for w in client.writes] == [('comment', 3)]
 
 
 def test_the_issue_is_found_by_marker_even_if_the_title_was_edited():
-    client = FakeGitHub([{'number': 4, 'title': 'renamed', 'body': 'x ' + cc.ISSUE_MARKER}])
+    client = FakeGitHub([{'number': 4, 'title': 'renamed', 'body': 'x ' + cc.ISSUE_MARKER, 'user': BOT_USER}])
     assert cc.find_open_issue(client)['number'] == 4
+
+
+def test_outsider_issues_with_matching_title_or_marker_are_ignored():
+    outsider = {'number': 99, 'title': cc.ISSUE_TITLE, 'body': cc.ISSUE_MARKER, 'user': {'login': 'someone-else'}}
+    client = FakeGitHub([outsider])
+    assert cc.find_open_issue(client) is None
+    assert cc.sync_issue(clean_report(), '', client, out=lambda s: None) == 'nothing'
+    assert client.writes == []
 
 
 def test_clean_run_closes_the_open_issue_with_a_comment():
@@ -611,7 +666,7 @@ def test_clean_run_closes_the_open_issue_with_a_comment():
 
 
 def test_clean_run_with_no_open_issue_sends_nothing():
-    client = FakeGitHub([{'number': 9, 'title': 'Something else', 'body': ''}])
+    client = FakeGitHub([{'number': 9, 'title': 'Something else', 'body': '', 'user': BOT_USER}])
     assert cc.sync_issue(clean_report(), '', client, out=lambda s: None) == 'nothing'
     assert client.writes == []
 
@@ -673,7 +728,7 @@ def test_main_end_to_end_clean_then_lag_then_clean_again(generation, capsys):
     assert [w[0] for w in client.writes] == ['create']
     assert 'actions/runs/42' in client.writes[0][2]
 
-    client.issues = [{'number': 11, 'title': cc.ISSUE_TITLE, 'body': client.writes[0][2]}]
+    client.issues = [{'number': 11, 'title': cc.ISSUE_TITLE, 'body': client.writes[0][2], 'user': BOT_USER}]
     assert cc.main([], fetch=web(lagged), client=client, env=env, out=lambda s: None) == 0
     assert [w[0] for w in client.writes] == ['create', 'comment']
 
@@ -681,9 +736,16 @@ def test_main_end_to_end_clean_then_lag_then_clean_again(generation, capsys):
     assert [w[0] for w in client.writes] == ['create', 'comment', 'comment', 'close']
 
 
+@needs_node
 def test_main_without_credentials_cannot_open_an_issue_but_dry_run_works(generation):
-    fake = web(copy.deepcopy(generation))
-    assert cc.main(['--dry-run'], fetch=fake, env={}, out=lambda s: None) == 0
+    clean = web(copy.deepcopy(generation))
+    assert cc.main(['--dry-run'], fetch=clean, env={}, out=lambda s: None) == 0
+    assert cc.main([], fetch=clean, env={}, out=lambda s: None) == 0
+
+    broken = copy.deepcopy(generation)
+    broken['metrics']['cpi']['latest']['value'] = broken['metrics']['cpi']['history'][-1]['value'] = '9.9'
+    assert cc.main(['--dry-run'], fetch=web(broken), env={}, out=lambda s: None) == 0
+    assert cc.main([], fetch=web(broken), env={}, out=lambda s: None) == 1
 
 
 # ------------------------------------------------------------------ the workflow
