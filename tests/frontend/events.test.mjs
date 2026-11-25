@@ -4,21 +4,27 @@ import { createHash } from "node:crypto";
 import { eventsAreStale, loadEvents, upcomingEvents, validateEventsPayload } from "../../src/app/data/events.mjs";
 import { createRefreshController, refreshView } from "../../src/app/data/refresh.mjs";
 
+const HMT_FETCH = "https://www.gov.uk/api/search.json?filter_organisations=hm-treasury&q=%22date+of+the+Budget%22&order=-public_timestamp&count=20";
+const HMT_CALENDAR = "https://www.gov.uk/government/organisations/hm-treasury";
+const HMT_EVENT = "https://www.gov.uk/government/news/budget-date-announced";
+const OFGEM_URL = "https://www.ofgem.gov.uk/energy-regulation/domestic-and-non-domestic/energy-pricing-rules/energy-price-cap";
+const ONS_FETCH = "https://api.beta.ons.gov.uk/v1/search/releases?limit=1000&offset=0&sort=release_date_asc&release-type=type-upcoming&fromDate=2026-03-28&toDate=2027-03-28";
+
 const event = (id, date, time, status = "scheduled", source = "boe_mpc", indicators = ["uk.bank_rate.daily"], title = "MPC decision and minutes") => ({
   id, title, date, time, time_precision: time ? "minute" : "date", status, source,
-  source_url: source === "boe_mpc" ? "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates" : source === "ons" ? `https://www.ons.gov.uk${id.slice(id.indexOf(":") + 1)}` : source === "hm_treasury" ? "https://www.gov.uk/government/publications/chancellor-letter-to-the-treasury-select-committee-tsc-budget-2026-date" : source === "ofgem_energy" ? "https://www.ofgem.gov.uk/news/changes-energy-price-cap-between-1-october-and-31-december-2026" : "https://www.ons.gov.uk/releases/gdp",
+  source_url: source === "boe_mpc" ? "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates" : source === "ons" ? `https://www.ons.gov.uk${id.slice(id.indexOf(":") + 1)}` : source === "hm_treasury" ? HMT_EVENT : source === "ofgem_energy" ? OFGEM_URL : "https://www.ons.gov.uk/releases/gdp",
   linked_indicators: indicators,
 });
 const payload = (events) => {
   const ons = events.filter((item) => item.source === "ons");
   const mpc = events.filter((item) => item.source === "boe_mpc");
   return { schema_version: 1, mode: "official", checked_at: "2026-03-28T12:00:00Z", providers: {
-    ons: { status: "ok", qualification: "qualified", retrieved_at: "2026-03-28T12:00:00Z", calendar_url: "https://www.ons.gov.uk/releasecalendar", source_url: "https://api.beta.ons.gov.uk/v1/search/releases?limit=1000&offset=0&sort=release_date_asc&fromDate=2026-03-28&toDate=2027-03-28", events: ons },
+    ons: { status: "ok", qualification: "qualified", retrieved_at: "2026-03-28T12:00:00Z", calendar_url: "https://www.ons.gov.uk/releasecalendar", source_url: ONS_FETCH, events: ons },
     boe_mpc: { status: "ok", qualification: "qualified", retrieved_at: "2026-03-28T12:00:00Z", calendar_url: "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates", source_url: "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates", events: mpc },
     obr: { status: "unqualified", qualification: "unqualified", source_url: "https://obr.uk/publications/", calendar_url: "https://obr.uk/publications/", events: [] },
-    hm_treasury: { status: "unqualified", qualification: "unqualified", source_url: "https://www.gov.uk/government/publications/chancellor-letter-to-the-treasury-select-committee-tsc-budget-2026-date", calendar_url: "https://www.gov.uk/government/publications/chancellor-letter-to-the-treasury-select-committee-tsc-budget-2026-date", events: [] },
+    hm_treasury: { status: "unqualified", qualification: "unqualified", source_url: HMT_FETCH, calendar_url: HMT_CALENDAR, events: [] },
     desnz_fuel: { status: "unqualified", qualification: "unqualified", source_url: "https://www.gov.uk/government/statistics/weekly-road-fuel-prices", calendar_url: "https://www.gov.uk/government/statistics/weekly-road-fuel-prices", events: [] },
-    ofgem_energy: { status: "unqualified", qualification: "unqualified", source_url: "https://www.ofgem.gov.uk/news/changes-energy-price-cap-between-1-october-and-31-december-2026", calendar_url: "https://www.ofgem.gov.uk/energy-regulation/domestic-and-non-domestic/energy-pricing-rules/energy-price-cap", events: [] },
+    ofgem_energy: { status: "unqualified", qualification: "unqualified", source_url: OFGEM_URL, calendar_url: OFGEM_URL, events: [] },
   }, events };
 };
 
@@ -70,27 +76,27 @@ test("provider qualification can advance while exact source binding remains enfo
 
 test("ONS query and Ofgem fetch/calendar URLs stay bound to the producer contract", () => {
   const value = payload([]);
-  const ofgemFetch = "https://www.ofgem.gov.uk/news/changes-energy-price-cap-between-1-october-and-31-december-2026";
-  const ofgemCalendar = "https://www.ofgem.gov.uk/energy-regulation/domestic-and-non-domestic/energy-pricing-rules/energy-price-cap";
   value.providers.ofgem_energy = {
     status: "ok", qualification: "qualified", retrieved_at: value.checked_at,
-    source_url: ofgemFetch, calendar_url: ofgemCalendar, events: [],
+    source_url: OFGEM_URL, calendar_url: OFGEM_URL, events: [],
   };
   assert.equal(validateEventsPayload(value).providers.ofgem_energy.qualification, "qualified");
-  value.providers.ofgem_energy.source_url = `${ofgemFetch}?next=https://evil.example`;
+  value.providers.ofgem_energy.source_url = `${OFGEM_URL}?next=https://evil.example`;
   assert.throws(() => validateEventsPayload(value), /Invalid official events data/);
-  value.providers.ofgem_energy.source_url = ofgemFetch;
-  value.providers.ons.source_url = "https://api.beta.ons.gov.uk/v1/search/releases?limit=1000&offset=0&sort=release_date_asc&fromDate=2026-03-28&toDate=2027-03-28&extra=1";
+  value.providers.ofgem_energy.source_url = "https://www.ofgem.gov.uk/news/changes-energy-price-cap-between-1-october-and-31-december-2026";
+  assert.throws(() => validateEventsPayload(value), /Invalid official events data/);
+  value.providers.ofgem_energy.source_url = OFGEM_URL;
+  value.providers.ons.source_url = `${ONS_FETCH}&extra=1`;
+  assert.throws(() => validateEventsPayload(value), /Invalid official events data/);
+  value.providers.ons.source_url = ONS_FETCH.replace("&release-type=type-upcoming", "");
   assert.throws(() => validateEventsPayload(value), /Invalid official events data/);
 });
 
 test("Ofgem events use the typical dual-fuel bill ID and exact announced-by deadline wording", () => {
-  const sourceUrl = "https://www.ofgem.gov.uk/news/changes-energy-price-cap-between-1-october-and-31-december-2026";
-  const calendarUrl = "https://www.ofgem.gov.uk/energy-regulation/domestic-and-non-domestic/energy-pricing-rules/energy-price-cap";
   const deadline = {
     id: "ofgem:price-cap:2026-11-25", title: "Ofgem price cap level announcement due by 25 November 2026; Ofgem may publish earlier (effective period 1 January 2027 to 31 March 2027)",
     date: "2026-11-25", time: null, time_precision: "date", status: "scheduled", source: "ofgem_energy",
-    source_url: sourceUrl, linked_indicators: ["uk.energy_price_cap.typical_dual_fuel_bill"],
+    source_url: OFGEM_URL, linked_indicators: ["uk.energy_price_cap.typical_dual_fuel_bill"],
   };
   const value = payload([deadline]);
   value.providers.ofgem_energy.status = "ok";
@@ -113,15 +119,18 @@ test("Government event links use the canonical net debt metric ID", () => {
   const fiscal = {
     id: `hm-treasury:autumn-budget:${budgetDate}`, title: "Autumn Budget", date: budgetDate,
     time: null, time_precision: "date", status: "scheduled", source: "hm_treasury",
-    source_url: "https://www.gov.uk/government/publications/chancellor-letter-to-the-treasury-select-committee-tsc-budget-2026-date",
+    source_url: HMT_EVENT,
     linked_indicators: ["uk.public_debt.net_debt_gdp"],
   };
   const official = payload([fiscal]);
   official.providers.hm_treasury = {
     status: "ok", qualification: "qualified", retrieved_at: official.checked_at,
-    source_url: fiscal.source_url, calendar_url: fiscal.source_url, events: [fiscal],
+    source_url: HMT_FETCH, calendar_url: HMT_CALENDAR, events: [fiscal],
   };
   assert.equal(validateEventsPayload(official).events[0].linked_indicators[0], "uk.public_debt.net_debt_gdp");
+  official.events = [{ ...fiscal, source_url: `${HMT_EVENT}?bad=1` }];
+  official.providers.hm_treasury.events = official.events;
+  assert.throws(() => validateEventsPayload(official), /Invalid official events data/);
   official.events = [{ ...fiscal, linked_indicators: ["uk.public_debt.share_gdp"] }];
   official.providers.hm_treasury.events = official.events;
   assert.throws(() => validateEventsPayload(official), /Invalid official events data/);
@@ -232,13 +241,13 @@ test("Government route renders a qualified fiscal date linked to the canonical d
   const fiscal = {
     id: `hm-treasury:autumn-budget:${budgetDate}`, title: "Autumn Budget", date: budgetDate,
     time: null, time_precision: "date", status: "scheduled", source: "hm_treasury",
-    source_url: "https://www.gov.uk/government/publications/chancellor-letter-to-the-treasury-select-committee-tsc-budget-2026-date",
+    source_url: HMT_EVENT,
     linked_indicators: ["uk.public_debt.net_debt_gdp"],
   };
   const official = payload([fiscal]);
   official.providers.hm_treasury = {
     status: "ok", qualification: "qualified", retrieved_at: official.checked_at,
-    source_url: fiscal.source_url, calendar_url: fiscal.source_url, events: [fiscal],
+    source_url: HMT_FETCH, calendar_url: HMT_CALENDAR, events: [fiscal],
   };
   validateEventsPayload(official);
   const { createServer } = await import("vite");
@@ -249,7 +258,7 @@ test("Government route renders a qualified fiscal date linked to the canonical d
     const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
     const html = renderToStaticMarkup(createElement(App, { pathname: "/government-budget", initialEvents: official }));
     assert.match(html, /Autumn Budget/);
-    assert.match(html, /href="https:\/\/www\.gov\.uk\/government\/publications\/chancellor-letter-to-the-treasury-select-committee-tsc-budget-2026-date"/);
+    assert.match(html, /href="https:\/\/www\.gov\.uk\/government\/news\/budget-date-announced"/);
     assert.ok(html.indexOf("Autumn Budget") > html.indexOf("Public sector net debt"));
     assert.ok(html.indexOf("Autumn Budget") > html.indexOf("How to read Budget announcements"));
   } finally { await server.close(); }

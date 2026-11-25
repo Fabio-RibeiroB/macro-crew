@@ -2,9 +2,9 @@ const SOURCES = {
   ons: { calendar: "https://www.ons.gov.uk/releasecalendar", host: "www.ons.gov.uk" },
   boe_mpc: { fetch: "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates", calendar: "https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates", host: "www.bankofengland.co.uk" },
   obr: { fetch: "https://obr.uk/publications/", calendar: "https://obr.uk/publications/", host: "obr.uk" },
-  hm_treasury: { fetch: "https://www.gov.uk/government/publications/chancellor-letter-to-the-treasury-select-committee-tsc-budget-2026-date", calendar: "https://www.gov.uk/government/publications/chancellor-letter-to-the-treasury-select-committee-tsc-budget-2026-date", host: "www.gov.uk" },
+  hm_treasury: { fetch: "https://www.gov.uk/api/search.json?filter_organisations=hm-treasury&q=%22date+of+the+Budget%22&order=-public_timestamp&count=20", calendar: "https://www.gov.uk/government/organisations/hm-treasury", host: "www.gov.uk" },
   desnz_fuel: { fetch: "https://www.gov.uk/government/statistics/weekly-road-fuel-prices", calendar: "https://www.gov.uk/government/statistics/weekly-road-fuel-prices", host: "www.gov.uk" },
-  ofgem_energy: { fetch: "https://www.ofgem.gov.uk/news/changes-energy-price-cap-between-1-october-and-31-december-2026", calendar: "https://www.ofgem.gov.uk/energy-regulation/domestic-and-non-domestic/energy-pricing-rules/energy-price-cap", host: "www.ofgem.gov.uk" },
+  ofgem_energy: { fetch: "https://www.ofgem.gov.uk/energy-regulation/domestic-and-non-domestic/energy-pricing-rules/energy-price-cap", calendar: "https://www.ofgem.gov.uk/energy-regulation/domestic-and-non-domestic/energy-pricing-rules/energy-price-cap", host: "www.ofgem.gov.uk" },
 };
 const INDICATORS = new Set([
   "uk.bank_rate.daily", "uk.road_fuel.unleaded_petrol_price", "uk.road_fuel.diesel_price", "uk.energy_price_cap.typical_dual_fuel_bill", "uk.public_debt.net_debt_gdp",
@@ -28,6 +28,7 @@ function officialUrl(value, source, event = false) {
     if (!expected || url.protocol !== "https:" || url.username || url.password || url.port || url.hostname !== expected.host) return false;
     if (!event) return value === expected.calendar;
     if (source === "ons") return /^\/releases\/[a-zA-Z0-9/_-]+$/.test(url.pathname) && !url.search && !url.hash;
+    if (source === "hm_treasury") return (/^\/government\/(?:news|publications)\/[a-z0-9-]+$/.test(url.pathname) || url.pathname === "/government/organisations/hm-treasury") && !url.search && !url.hash;
     return value === expected.fetch;
   } catch { return false; }
 }
@@ -45,7 +46,7 @@ function validateProvider(name, provider) {
     try {
       const u = new URL(provider.source_url);
       allowed = name === "ons"
-        ? u.protocol === "https:" && !u.username && !u.password && !u.hash && u.hostname === "api.beta.ons.gov.uk" && u.port === "" && u.pathname === "/v1/search/releases" && /^limit=1000&offset=0&sort=release_date_asc&fromDate=\d{4}-\d{2}-\d{2}&toDate=\d{4}-\d{2}-\d{2}$/.test(u.search.slice(1))
+        ? u.protocol === "https:" && !u.username && !u.password && !u.hash && u.hostname === "api.beta.ons.gov.uk" && u.port === "" && u.pathname === "/v1/search/releases" && /^limit=1000&offset=0&sort=release_date_asc&release-type=type-upcoming&fromDate=\d{4}-\d{2}-\d{2}&toDate=\d{4}-\d{2}-\d{2}$/.test(u.search.slice(1))
         : provider.source_url === SOURCES[name].fetch;
     } catch { /* rejected below */ }
     check(allowed);

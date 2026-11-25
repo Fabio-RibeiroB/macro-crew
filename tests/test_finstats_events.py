@@ -61,8 +61,8 @@ def test_failure_after_successful_empty_schedule_is_stale(tmp_path):
                 return (Path(FIXTURES)/'desnz_weekly_road_fuel_prices_release_2026-10-20.html').read_bytes()
             if 'obr.uk' in url:
                 return (Path(FIXTURES)/'events_obr.html').read_bytes()
-            if 'chancellor-letter-to-the-treasury' in url:
-                return (Path(FIXTURES)/'events_hm_treasury.html').read_bytes()
+            if 'gov.uk/api/search.json' in url:
+                return b'{"total":0,"results":[]}'
             return (Path(FIXTURES)/'events_ofgem_energy.html').read_bytes()
     collect_events(tmp_path,clock=lambda:NOW,fetch=EmptyOfficial())
     before=json.loads((tmp_path/'events.json').read_text())
@@ -167,12 +167,15 @@ def test_qualified_adapters_extract_official_dates_and_fail_closed_on_markup_cha
         parse_source('hm_treasury',b'<main><h1>Chancellor letter - Budget 2026 date</h1><div class="govspeak">The Budget takes place on 28 October 2026.</div></main>',NOW.date())
 
 def test_ons_fetch_url_is_bound_to_approved_host_and_path():
-    from finstats.events import _provider_url_valid
-    from finstats.events import _parse_ons
-    url='https://api.beta.ons.gov.uk/v1/search/releases?limit=1000&offset=0&sort=release_date_asc&fromDate=2026-10-22&toDate=2027-10-22'
+    from finstats.events import _provider_url_valid, _parse_ons, _source_url
+    url='https://api.beta.ons.gov.uk/v1/search/releases?limit=1000&offset=0&sort=release_date_asc&release-type=type-upcoming&fromDate=2026-10-22&toDate=2027-10-22'
+    assert _source_url('ons',NOW.date())==url
     assert _provider_url_valid('ons',url)
+    assert not _provider_url_valid('ons',url.replace('&release-type=type-upcoming',''))
+    assert not _provider_url_valid('ons',url.replace('type-upcoming','type-published'))
     assert not _provider_url_valid('ons',url.replace('api.beta.ons.gov.uk','evil.example'))
     assert not _provider_url_valid('ons',url.replace('limit=1000','limit=100'))
+    assert not _provider_url_valid('ons',url+'#frag')
     with pytest.raises(ValueError,match='truncated'):
         _parse_ons(b'{"breakdown":{"total":2},"releases":[{}]}',NOW.date())
 
@@ -198,7 +201,9 @@ def test_time_requires_zone_and_is_converted_to_london():
 
 def test_event_horizon_is_safe_on_leap_day():
     from finstats.events import _source_url
-    assert 'toDate=2025-02-28' in _source_url('ons',datetime(2024,2,29,tzinfo=timezone.utc).date())
+    url=_source_url('ons',datetime(2024,2,29,tzinfo=timezone.utc).date())
+    assert 'toDate=2025-02-28' in url
+    assert 'release-type=type-upcoming' in url
 
 def test_reworked_boe_or_desnz_page_fails_closed():
     from finstats.events import parse_source
@@ -233,3 +238,161 @@ def test_malformed_recognized_ons_date_retains_previous_schedule(tmp_path, bad_d
     assert 'ons' in result['failed_sources']
     assert result['schedule']['providers']['ons']['status'] == 'stale'
     assert result['schedule']['providers']['ons']['events'] == previous
+
+
+def test_durable_sources_contain_no_hardcoded_2026_urls():
+    from finstats.events import SOURCES
+    for name, (fetch_url, calendar_url) in SOURCES.items():
+        assert '2026' not in fetch_url, name
+        assert '2026' not in calendar_url, name
+    assert 'release-type=type-upcoming' in SOURCES['ons'][0]
+    assert SOURCES['ofgem_energy'][0] == SOURCES['ofgem_energy'][1]
+    assert SOURCES['hm_treasury'][0].startswith('https://www.gov.uk/api/search.json?')
+    assert SOURCES['hm_treasury'][1] == 'https://www.gov.uk/government/organisations/hm-treasury'
+
+
+def test_ofgem_durable_page_parses_omitted_start_year_and_excludes_published_periods():
+    from finstats.events import SOURCES, parse_source
+    durable_html = (
+        b'<main><h1>Energy price cap</h1>'
+        b'<article><h3>Changes to energy price cap between 1 January and 31 March 2027</h3>'
+        b'<p>Publication date: 25 November 2026</p></article>'
+        b'<section><h2>\n  Energy price cap dates\n</h2>'
+        b'<p>The levels for the next periods will be announced by:</p>'
+        b'<p>25 November 2026 \xe2\x80\x93 period 1 January 2027 to 31 March 2027</p>'
+        b'<p>23 February 2027 \xe2\x80\x93 period 1 April 2027 to 30 June 2027</p>'
+        b'<p>25 August 2027 \xe2\x80\x93 period 1 October to 31 December 2027</p>'
+        b'<p>24 November 2027 \xe2\x80\x93 period 1 November to 31 January 2028</p>'
+        b'<p>We may publish before these dates if we need to because of external reasons.</p>'
+        b'</section></main>'
+    )
+    events = parse_source('ofgem_energy', durable_html, datetime(2026, 11, 25, 12, tzinfo=timezone.utc).date())
+    assert [e['date'] for e in events] == ['2027-02-23', '2027-08-25', '2027-11-24']
+    assert events[0]['source_url'] == SOURCES['ofgem_energy'][0]
+    assert events[1]['title'] == (
+        'Ofgem price cap level announcement due by 25 August 2027; '
+        'Ofgem may publish earlier (effective period 1 October 2027 to 31 December 2027)'
+    )
+    assert events[2]['title'] == (
+        'Ofgem price cap level announcement due by 24 November 2027; '
+        'Ofgem may publish earlier (effective period 1 November 2027 to 31 January 2028)'
+    )
+    bad_period = (
+        b'<main><h1>Energy price cap</h1><h2>Energy price cap dates</h2>'
+        b'<p>The levels for the next periods will be announced by: '
+        b'23 February 2027 - period 30 June 2027 to 1 April 2027. '
+        b'We may publish before these dates.</p></main>'
+    )
+    with pytest.raises(ValueError, match='Ofgem'):
+        parse_source('ofgem_energy', bad_period, NOW.date())
+
+
+def test_hm_treasury_durable_search_api_extracts_future_budget_and_handles_unknown_dates(tmp_path):
+    from finstats.events import SOURCES, parse_source
+    payload = {
+        'total': 4,
+        'results': [
+            {
+                'public_timestamp': '2026-07-31T14:04:56Z',
+                'title': 'Chancellor letter to the Treasury Select Committee (TSC) - Budget 2026 date',
+                'link': '/government/publications/chancellor-letter-to-the-treasury-select-committee-tsc-budget-2026-date',
+                'description': 'The Chancellor has today written to the Treasury Select Committee (TSC) to confirm the date of the budget.',
+            },
+            {
+                'public_timestamp': '2026-07-31T14:03:00Z',
+                'title': 'Budget announcement 2026',
+                'link': '/government/news/budget-2026-date-announcement',
+                'description': 'Today (Friday 31 July), the Chancellor has confirmed that the date of the Budget will be Wednesday 28 October.',
+            },
+            {
+                'public_timestamp': '2026-12-10T11:00:00Z',
+                'title': 'Spring Budget 2027 date',
+                'link': '/government/news/spring-budget-2027-date',
+                'description': 'The Chancellor confirmed that the date of the Spring Budget will be Wednesday 10 March.',
+            },
+            {
+                'public_timestamp': '2027-07-15T10:00:00Z',
+                'title': 'Autumn Budget 2027 date',
+                'link': '/government/publications/autumn-budget-2027-date',
+                'description': 'The next Budget will be held on Wednesday 27 October 2027.',
+            },
+        ],
+    }
+    raw = json.dumps(payload).encode()
+    before_2026 = parse_source('hm_treasury', raw, datetime(2026, 9, 1, tzinfo=timezone.utc).date())
+    assert [(e['date'], e['source_url']) for e in before_2026] == [
+        ('2026-10-28', 'https://www.gov.uk/government/news/budget-2026-date-announcement'),
+        ('2027-03-10', 'https://www.gov.uk/government/news/spring-budget-2027-date'),
+        ('2027-10-27', 'https://www.gov.uk/government/publications/autumn-budget-2027-date'),
+    ]
+    assert all(e['linked_indicators'] == ['uk.public_debt.net_debt_gdp'] for e in before_2026)
+
+    after_all = parse_source('hm_treasury', raw, datetime(2027, 11, 1, tzinfo=timezone.utc).date())
+    assert after_all == []
+
+    # Full collection + public_events projection validates durable HM Treasury event provenance.
+    def official_fetch(url):
+        if 'api.beta.ons.gov.uk' in url:
+            return b'{"breakdown":{"total":0},"releases":[]}'
+        if 'bankofengland.co.uk' in url:
+            return (Path(FIXTURES) / 'events_boe_mpc_capture.html').read_bytes()
+        if 'weekly-road-fuel-prices' in url:
+            return (Path(FIXTURES) / 'desnz_weekly_road_fuel_prices_release_2026-10-20.html').read_bytes()
+        if 'obr.uk' in url:
+            return (Path(FIXTURES) / 'events_obr.html').read_bytes()
+        if 'gov.uk/api/search.json' in url:
+            return raw
+        return (Path(FIXTURES) / 'events_ofgem_energy.html').read_bytes()
+
+    result = collect_events(tmp_path, clock=lambda: datetime(2027, 11, 1, 12, tzinfo=timezone.utc), fetch=official_fetch)
+    assert result['failed_sources'] == []
+    hmt = result['schedule']['providers']['hm_treasury']
+    assert hmt['status'] == 'ok' and hmt['unknown_dates'] is True and hmt['events'] == []
+    assert hmt['source_url'] == SOURCES['hm_treasury'][0]
+    assert hmt['calendar_url'] == SOURCES['hm_treasury'][1]
+    assert public_events(tmp_path)['providers']['hm_treasury']['unknown_dates'] is True
+
+    result_future = collect_events(tmp_path, clock=lambda: datetime(2026, 9, 1, 12, tzinfo=timezone.utc), fetch=official_fetch)
+    assert result_future['failed_sources'] == []
+    projected = public_events(tmp_path)
+    assert len(projected['providers']['hm_treasury']['events']) == 3
+
+    # Reject spoofed HM Treasury event URL in public_events.
+    tampered = json.loads((tmp_path / 'events.json').read_text())
+    tampered['providers']['hm_treasury']['events'][0]['source_url'] = 'https://evil.example/government/news/fake'
+    (tmp_path / 'events.json').write_text(json.dumps(tampered))
+    with pytest.raises(ValueError, match='HM Treasury'):
+        public_events(tmp_path)
+
+
+@pytest.mark.parametrize('bad_payload', [
+    b'{truncated',
+    b'{"unexpected": true}',
+    b'{"total": true, "results": [{}]}',
+    b'{"total": 2, "results": []}',
+    b'{"total": 0, "results": [{}]}',
+    b'{"total": 1, "results": ["not-a-dict"]}',
+    json.dumps({'total': 1, 'results': [{
+        'public_timestamp': '2027-07-01T10:00:00Z',
+        'link': '/evil/path',
+        'description': 'The Chancellor confirmed that the date of the Budget will be Wednesday 27 October.',
+    }]}).encode(),
+    json.dumps({'total': 1, 'results': [{
+        'public_timestamp': '2027-07-01T10:00:00',
+        'link': '/government/news/budget-2027',
+        'description': 'The Chancellor confirmed that the date of the Budget will be Wednesday 27 October.',
+    }]}).encode(),
+    json.dumps({'total': 1, 'results': [{
+        'link': '/government/news/budget-2027',
+        'description': 'The Chancellor confirmed that the date of the Budget will be Wednesday 27 October.',
+    }]}).encode(),
+    json.dumps({'total': 1, 'results': [{
+        'public_timestamp': '2027-07-01T10:00:00Z',
+        'link': '/government/news/budget-2027',
+        'description': 'The Chancellor confirmed that the date of the Budget will be 31 February.',
+    }]}).encode(),
+])
+def test_hm_treasury_malformed_search_payload_fails_closed(bad_payload):
+    from finstats.events import parse_source
+    with pytest.raises(ValueError, match='HM Treasury'):
+        parse_source('hm_treasury', bad_payload, NOW.date())
