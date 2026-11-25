@@ -92,3 +92,8 @@
   font-size: 14px;
   white-space: nowrap;
 }
+
+.fs-aisum p.fs-aisum-who {
+  margin: 8px 0 0;
+  font-size: 14px;
+}

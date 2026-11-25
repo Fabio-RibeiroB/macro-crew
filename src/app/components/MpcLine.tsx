@@ -10,10 +10,10 @@ export function MpcLine({ reports, reportTime = null }: { reports: any[]; report
   const report = reports.find((item) => item?.key === "monetary_policy_report");
   const written = aiWrittenShort(report, reportTime);
   return (
-    <section className="fs-container fs-mpc-line" aria-label="Monetary Policy Committee, AI summary">
+    <section className="fs-container fs-mpc-line" aria-label="Bank of England Monetary Policy Committee, AI summary">
       <span className="fs-ai-tag">AI summary</span>
       <p>
-        <strong>MPC:</strong> {line.text}
+        <strong>Bank of England (MPC):</strong> {line.text}
         {written && <span className="fs-mpc-date"> {written}</span>}
       </p>
       <a className="fs-link" href="/economy#ai-summary">Read the AI summary</a>

@@ -42,6 +42,8 @@ export function AboutPage() {
         <a className="fs-link" href="/sources">How we check the data</a>
         {" · "}
         <a className="fs-link" href="/economy#ai-summary">Read the AI summary</a>
+        {" · "}
+        <a className="fs-link" href="/whos-who">Who’s who in UK economic data</a>
       </p>
 
       <h2>What it is not</h2>

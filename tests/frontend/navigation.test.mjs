@@ -26,16 +26,17 @@ test("plain-English pages have stable direct URLs and unique navigation identiti
     [
       ["/about", "About"],
       ["/sources", "Sources"],
+      ["/whos-who", "Who’s who"],
     ],
   );
   // About is also in the collapsed menu; the desktop main nav stays on subject pages.
   assert.deepEqual(
     MENU_ONLY_PAGES.map((p) => p.path),
-    ["/about"],
+    ["/about", "/whos-who"],
   );
   assert.deepEqual(
     PAGES.map((p) => p.path),
-    ["/", "/calendar", "/prices", "/economy", "/jobs-pay", "/housing", "/government-budget", "/about", "/sources"],
+    ["/", "/calendar", "/prices", "/economy", "/jobs-pay", "/housing", "/government-budget", "/about", "/sources", "/whos-who"],
   );
   for (const page of PAGES) {
     assert.equal(resolvePage(page.path).id, page.id);

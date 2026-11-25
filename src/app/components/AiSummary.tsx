@@ -9,6 +9,11 @@ import { aiFailureNotice } from "../data/aiStatus.mjs";
 import { aiWrittenLabel, publicationName, publicationTitle, summaryParts } from "../data/aiSummary.mjs";
 import { OfficialLink } from "./OfficialLink";
 
+const WHO_LINKS: Record<string, { href: string; label: string }> = {
+  monetary_policy_report: { href: "/whos-who#mpc", label: "Who is the MPC?" },
+  financial_stability_report: { href: "/whos-who#boe", label: "Who is the Bank of England?" },
+};
+
 export function AiCommentary({ reports, reportTime, aiStatus = null }: any) {
   const notice = aiFailureNotice(aiStatus, reportTime);
   return (
@@ -37,6 +42,11 @@ export function AiCommentary({ reports, reportTime, aiStatus = null }: any) {
               <OfficialLink href={report.source}>{publicationName(report)}</OfficialLink>.
               {" "}AI can make mistakes — check the original publication.
             </p>
+            {WHO_LINKS[report.key] && (
+              <p className="fs-aisum-who">
+                <a className="fs-link" href={WHO_LINKS[report.key].href}>{WHO_LINKS[report.key].label}</a>
+              </p>
+            )}
           </article>
         );
       })}

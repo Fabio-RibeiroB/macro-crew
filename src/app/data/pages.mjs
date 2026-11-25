@@ -86,6 +86,16 @@ export const PAGES = [
       "Where FinStats UK figures come from, how they are checked, and how facts, forecasts and explanations are kept distinct.",
     place: "footer",
   },
+  {
+    id: "whos-who",
+    path: "/whos-who",
+    label: "Who’s who",
+    title: "Who’s who in UK economic data",
+    description:
+      "A plain-English guide to the institutions behind UK economic figures and decisions: the Bank of England and its MPC, the ONS, Ofgem, HM Treasury, the OBR and more.",
+    place: "footer",
+    menu: true,
+  },
 ];
 
 /** Public origin and site-wide link-preview image (see scripts/link-previews.mjs). */
