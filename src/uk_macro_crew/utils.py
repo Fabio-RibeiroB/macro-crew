@@ -5,7 +5,12 @@ import json
 import logging
 from datetime import datetime
 from dotenv import load_dotenv, find_dotenv
-from uk_macro_crew.schema import validate_latest_snapshot, SchemaValidationError
+from uk_macro_crew.schema import (
+    SchemaValidationError,
+    validate_latest_snapshot,
+    verify_report_source_urls,
+    verify_source_url,
+)
 from uk_macro_crew.history import build_history_from_snapshot, get_history_filename
 from uk_macro_crew.normalization import normalize_latest_snapshot
 
@@ -29,7 +34,7 @@ def get_json_filename() -> str:
     return "research_report.json"
 
 
-def save_json_hook(result) -> None:
+def save_json_hook(result, url_verifier=None) -> None:
     """
     Save JSON output after crew execution with system-generated metadata.
     
@@ -38,6 +43,7 @@ def save_json_hook(result) -> None:
     
     Args:
         result: The result object from crew execution containing the JSON output
+        url_verifier: Optional injectable verifier ``(url, allowed_domains) -> final_url``
     """
     json_filename = get_json_filename()
     history_filename = get_history_filename()
@@ -63,13 +69,17 @@ def save_json_hook(result) -> None:
         
         json_content = json_content.strip()
         
-        # Parse JSON, validate contract, and add system-generated metadata
+        # Parse JSON, validate contract, verify report source URLs, and add system-generated metadata
         try:
             parsed_json = json.loads(json_content)
             parsed_json = normalize_latest_snapshot(parsed_json)
 
             # Validate business payload before we write anything.
             validate_latest_snapshot(parsed_json)
+
+            # Fail closed before persisting if any report source URL does not resolve to HTTP 200.
+            active_verifier = verify_source_url if url_verifier is None else url_verifier
+            verify_report_source_urls(parsed_json, url_verifier=active_verifier)
 
             # Ensure metadata exists and add system-generated fields.
             if "metadata" not in parsed_json:

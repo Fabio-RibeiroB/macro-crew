@@ -1,6 +1,9 @@
 import re
+from collections.abc import Callable
 from datetime import date
-from urllib.parse import urlparse
+from urllib.error import HTTPError, URLError
+from urllib.parse import urljoin, urlparse, urlsplit
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -10,6 +13,10 @@ ALLOWED_PLACEHOLDER = "not available"
 
 # Optional one-sentence AI headline on a report summary (shown on the overview).
 MAX_HEADLINE_CHARS = 160
+
+DEFAULT_URL_VERIFY_TIMEOUT = 10.0
+DEFAULT_MAX_REDIRECTS = 5
+URL_VERIFY_USER_AGENT = "FinStats source verifier/1.0"
 
 INDICATOR_SOURCE_DOMAINS = {
     "interest_rate": ("bankofengland.co.uk",),
@@ -195,3 +202,143 @@ def validate_latest_snapshot(payload: dict, today: date | None = None) -> None:
         for field in ("overall_summary", "interest_rate", "cpih", "gdp"):
             if field in context and not isinstance(context[field], str):
                 raise SchemaValidationError(f"plain_english_context.{field} must be a string")
+
+
+def _validate_verifiable_url(url: str, allowed_domains: tuple[str, ...]) -> None:
+    if not isinstance(url, str) or not url or any(ord(c) < 32 for c in url):
+        raise SchemaValidationError(f"Invalid source URL: {url!r}")
+    parsed = urlsplit(url)
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise SchemaValidationError(f"Invalid port in source URL: {url}") from exc
+    host = (parsed.hostname or "").lower()
+    if (
+        parsed.scheme != "https"
+        or not host
+        or parsed.username
+        or parsed.password
+        or port not in (None, 443)
+    ):
+        raise SchemaValidationError(
+            f"Source URL must be a direct HTTPS URL on an approved host: {url}"
+        )
+    if not _host_matches_allowed(host, allowed_domains):
+        raise SchemaValidationError(
+            f"Source URL host '{host}' is not in approved domains: {allowed_domains}"
+        )
+
+
+class _ApprovedDomainRedirectHandler(HTTPRedirectHandler):
+    """Follow bounded HTTP redirects only while targets remain HTTPS on approved domains."""
+
+    def __init__(self, allowed_domains: tuple[str, ...], max_redirects: int):
+        super().__init__()
+        self.allowed_domains = allowed_domains
+        self.max_redirects = max_redirects
+        self.redirects = 0
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        self.redirects += 1
+        if self.redirects > self.max_redirects:
+            raise SchemaValidationError(
+                f"Source URL exceeded maximum redirects ({self.max_redirects}): {req.full_url}"
+            )
+        resolved = urljoin(req.full_url, newurl)
+        _validate_verifiable_url(resolved, self.allowed_domains)
+        redirected = super().redirect_request(req, fp, code, msg, headers, resolved)
+        if redirected is not None and req.get_method() == "HEAD" and code in (301, 302, 307, 308):
+            redirected.method = "HEAD"
+        return redirected
+
+
+def _http_probe(
+    url: str,
+    method: str,
+    timeout: float,
+    allowed_domains: tuple[str, ...],
+    max_redirects: int,
+) -> tuple[int, str]:
+    opener = build_opener(
+        ProxyHandler({}),
+        _ApprovedDomainRedirectHandler(allowed_domains, max_redirects),
+    )
+    request = Request(url, method=method, headers={"User-Agent": URL_VERIFY_USER_AGENT})
+    try:
+        with opener.open(request, timeout=timeout) as response:
+            status = getattr(response, "status", None)
+            if status is None:
+                status = response.getcode()
+            final_url = response.geturl() or url
+            return int(status), final_url
+    except HTTPError as exc:
+        final_url = exc.geturl() or url
+        code = int(exc.code)
+        exc.close()
+        return code, final_url
+
+
+def verify_source_url(
+    url: str,
+    allowed_domains: tuple[str, ...],
+    *,
+    fetcher: Callable[[str, str, float], tuple[int, str]] | None = None,
+    timeout: float = DEFAULT_URL_VERIFY_TIMEOUT,
+    max_redirects: int = DEFAULT_MAX_REDIRECTS,
+) -> str:
+    """Verify ``url`` resolves to HTTP 200 on an approved HTTPS domain.
+
+    Sends HEAD first and falls back to GET on HTTP 405 (Method Not Allowed).
+    Rejects non-200 responses, network/timeout errors, excessive redirects, and
+    any redirect whose target leaves ``allowed_domains`` or HTTPS.
+    """
+    _validate_verifiable_url(url, allowed_domains)
+
+    def _probe(target: str, method: str) -> tuple[int, str]:
+        try:
+            if fetcher is not None:
+                return fetcher(target, method, timeout)
+            return _http_probe(target, method, timeout, allowed_domains, max_redirects)
+        except SchemaValidationError:
+            raise
+        except (URLError, TimeoutError, OSError) as exc:
+            raise SchemaValidationError(f"Could not verify source URL {target}: {exc}") from exc
+
+    status, final_url = _probe(url, "HEAD")
+    _validate_verifiable_url(final_url, allowed_domains)
+
+    if status == 405:
+        status, final_url = _probe(url, "GET")
+        _validate_verifiable_url(final_url, allowed_domains)
+
+    if status != 200:
+        raise SchemaValidationError(f"Source URL returned HTTP {status} (expected 200): {url}")
+
+    return final_url
+
+
+def verify_report_source_urls(
+    payload: dict,
+    *,
+    url_verifier: Callable[[str, tuple[str, ...]], str] = verify_source_url,
+) -> None:
+    """Verify every non-placeholder report source URL resolves to HTTP 200 on an approved domain."""
+    reports = payload.get("current_report_summaries")
+    if not isinstance(reports, dict):
+        raise SchemaValidationError("current_report_summaries must be an object")
+
+    for report_name, allowed_domains in REPORT_SOURCE_DOMAINS.items():
+        obj = reports.get(report_name)
+        if not isinstance(obj, dict):
+            raise SchemaValidationError(f"Missing report object: {report_name}")
+        source = obj.get("source")
+        if not isinstance(source, str):
+            raise SchemaValidationError(f"{report_name}.source must be a string")
+        if source == ALLOWED_PLACEHOLDER:
+            continue
+        try:
+            url_verifier(source, allowed_domains)
+        except SchemaValidationError as exc:
+            raise SchemaValidationError(
+                f"{report_name}.source verification failed: {exc}"
+            ) from exc

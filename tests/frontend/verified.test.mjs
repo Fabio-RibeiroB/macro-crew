@@ -322,7 +322,7 @@ test("missing manifest fails without fetching legacy numbers", async () => {
   assert.equal(calls, 1);
 });
 
-test("AI report failure is independent and malicious links are excluded", () => {
+test("AI report failure is independent and malicious or unavailable entries are excluded", () => {
   assert.deepEqual(legacyReports(null), []);
   assert.deepEqual(
     legacyReports({
@@ -335,6 +335,43 @@ test("AI report failure is independent and malicious links are excluded", () => 
     }),
     [],
   );
+  const validMpr = {
+    summary: "Bank Rate was held while inflation eased toward target.",
+    report_date: "2026-11-05",
+    source: "https://www.bankofengland.co.uk/monetary-policy-report/2026/november-2026",
+  };
+  for (const unavailableSummary of ["not available", "Not Available", "  NOT AVAILABLE  ", "", "   "]) {
+    const reports = legacyReports({
+      current_report_summaries: {
+        monetary_policy_report: validMpr,
+        financial_stability_report: {
+          summary: unavailableSummary,
+          report_date: "2026-11-05",
+          source: "https://www.bankofengland.co.uk/financial-stability-report",
+        },
+      },
+    });
+    assert.deepEqual(
+      reports.map((r) => r.key),
+      ["monetary_policy_report"],
+    );
+  }
+  for (const unavailableSource of ["not available", "Not available", "  ", ""]) {
+    const reports = legacyReports({
+      current_report_summaries: {
+        monetary_policy_report: validMpr,
+        financial_stability_report: {
+          summary: "Banking system remains resilient.",
+          report_date: "2026-07-01",
+          source: unavailableSource,
+        },
+      },
+    });
+    assert.deepEqual(
+      reports.map((r) => r.key),
+      ["monetary_policy_report"],
+    );
+  }
 });
 
 test("the recorded M1 payload is accepted and serializes byte-identically", () => {
