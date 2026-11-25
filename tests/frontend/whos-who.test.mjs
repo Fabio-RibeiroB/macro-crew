@@ -49,7 +49,7 @@ test("the page renders all eight institutions with anchors, FinStats links and o
     }
     assert.match(main, /Monetary Policy Committee \(MPC\)/);
     assert.match(main, /nine-member/);
-    for (const href of ["/economy#interest-rates", "/prices#figures", "/jobs-pay", "/housing#house-prices", "/prices#household-energy", "/prices#petrol-diesel", "/government-budget"])
+    for (const href of ["/economy#interest-rates", "/prices#inflation", "/jobs-pay", "/housing#house-prices", "/prices#household-energy", "/prices#petrol-diesel", "/government-budget", "/government-budget#gilt-yields", "/government-budget#public-debt"])
       assert.ok(main.includes(`<a class="fs-link" href="${href}">`), href);
     const external = [...main.matchAll(/<a class="fs-link" href="(https:[^"]+)" target="_blank" rel="noopener noreferrer"/g)].map((m) => m[1]);
     assert.equal(external.length, IDS.length);

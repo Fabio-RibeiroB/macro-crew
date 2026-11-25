@@ -35,7 +35,7 @@ export const INSTITUTIONS: Institution[] = [
       "The UK’s central bank. It sets monetary policy, watches over the stability of the financial system and publishes Bank Rate, gilt yields and mortgage rates, plus the Monetary Policy and Financial Stability Reports. Its decisions affect what you pay on borrowing and earn on savings.",
     links: [
       { href: "/economy#interest-rates", label: "Bank Rate" },
-      { href: "/government-budget", label: "Gilt yields" },
+      { href: "/government-budget#gilt-yields", label: "Gilt yields" },
       { href: "/housing", label: "Mortgage rates" },
     ],
     official: { href: "https://www.bankofengland.co.uk", label: "Bank of England" },
@@ -47,10 +47,10 @@ export const INSTITUTIONS: Institution[] = [
     summary:
       "The UK’s independent statistics agency. It produces CPI and CPIH inflation, GDP, pay, unemployment, private rents and public sector net debt. These are the official measures of how prices, jobs and the economy are changing for households.",
     links: [
-      { href: "/prices#figures", label: "Inflation" },
+      { href: "/prices#inflation", label: "Inflation" },
       { href: "/jobs-pay", label: "Jobs and pay" },
       { href: "/housing", label: "Private rents" },
-      { href: "/government-budget", label: "Public sector net debt" },
+      { href: "/government-budget#public-debt", label: "Public sector net debt" },
     ],
     official: { href: "https://www.ons.gov.uk", label: "Office for National Statistics" },
   },
@@ -59,7 +59,7 @@ export const INSTITUTIONS: Institution[] = [
     name: "Ofgem",
     short: "Ofgem",
     summary:
-      "The energy regulator for Great Britain. It sets the quarterly energy price cap, which limits what suppliers can charge per unit on default tariffs. Changes to the cap flow straight into many household energy bills.",
+      "The energy regulator for Great Britain. It sets the quarterly energy price cap, which limits the unit rates and daily standing charges suppliers can set on default tariffs. Changes to the cap flow straight into many household energy bills.",
     links: [{ href: "/prices#household-energy", label: "Household energy" }],
     official: {
       href: "https://www.ofgem.gov.uk/energy-regulation/domestic-and-non-domestic/energy-pricing-rules/energy-price-cap",
@@ -80,7 +80,7 @@ export const INSTITUTIONS: Institution[] = [
     name: "Office for Budget Responsibility (OBR)",
     short: "OBR",
     summary:
-      "The UK’s independent fiscal watchdog. It publishes its own Economic and fiscal outlook forecasts alongside Budgets, rather than taking the government’s word for it. They show whether the plans add up.",
+      "The UK’s independent fiscal watchdog. It produces the official economy and public finance forecasts (the Economic and fiscal outlook) at each Budget and judges whether the government is on track to meet its fiscal rules.",
     links: [{ href: "/government-budget", label: "How to read Budget announcements" }],
     official: { href: "https://obr.uk/", label: "Office for Budget Responsibility" },
   },
