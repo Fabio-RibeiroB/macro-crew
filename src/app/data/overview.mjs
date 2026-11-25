@@ -235,6 +235,26 @@ export function comparableEnergyPrevious(metric) {
   return previous ? { kind: "comparable", previous } : { kind: "unavailable" };
 }
 
+/**
+ * The announced cap, only when it is directly comparable with the effective cap: same
+ * consumption and tax basis (the 0% VAT window end date is ignored, as above) and not
+ * flagged `not_comparable_tax_change`. Otherwise a reason, so callers never imply a
+ * rise or fall across a tax-basis change.
+ */
+export function comparableEnergyUpcoming(metric) {
+  const latest = metric?.latest;
+  const upcoming = metric?.upcoming_period;
+  if (!latest?.reference || !upcoming?.reference || upcoming.value == null) return { kind: "unavailable" };
+  if (upcoming.reference.period_status !== "announced" || upcoming.period <= latest.period) return { kind: "unavailable" };
+  if (upcoming.reference.comparison_status === "not_comparable_tax_change") return { kind: "tax_change" };
+  return energyBasis(upcoming.reference) === energyBasis(latest.reference)
+    ? { kind: "comparable", upcoming }
+    : { kind: "unavailable" };
+}
+
+/** A published decimal string with its unit, exactly as the overview table prints it. */
+export const formatFigure = (value, unit) => UNITS[unit].value(value);
+
 function energyRow(base, metric) {
   if (!metric?.latest) return missingRow(base);
   const reference = metric.latest.reference;

@@ -62,6 +62,7 @@ import { UpdatedChip } from "./components/UpdatedChip";
 import { EventList } from "./components/EventList";
 import { FiguresTicker } from "./components/FiguresTicker";
 import { MpcLine } from "./components/MpcLine";
+import { OverviewTakeaway } from "./components/OverviewTakeaway";
 import { ReleaseSummaries } from "./components/ReleaseSummaries";
 import { createSummaryRefreshController, loadSummaries } from "./data/summaries.mjs";
 import "../styles/friendly.css";
@@ -477,6 +478,7 @@ function Overview({ data, loading, error, refresh }: any) {
       )}
       {data ? (
         <>
+          <OverviewTakeaway data={data} />
           <IndicatorTable
             data={data}
             hrefs={Object.fromEntries(Object.entries(topics).map(([kind, topic]) => [kind, topic.detailHref]))}
