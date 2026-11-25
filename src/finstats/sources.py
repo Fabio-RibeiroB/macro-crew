@@ -353,7 +353,8 @@ _STANDARD_5PCT_VAT_SENTENCE_RE = re.compile(
 )
 _OFGEM_WINDOW_GAS_VAT_SENTENCE_RE = re.compile(
     r'(?:(?:these|all)\s+)?(?:figures|prices|rates|charges)\s+'
-    r'(?:are\s+rounded\s+to\s+two\s+decimal\s+places\s+and\s+)?includ(?:e|es)\s+5%\s+VAT\s+on\s+gas',
+    r'(?:are\s+rounded\s+to\s+two\s+decimal\s+places\s+and\s+)?includ(?:e|es)\s+5%\s+VAT\s+on\s+gas'
+    r'(?:\s+and\s+are\s+rounded\s+to\s+two\s+decimal\s+places)?',
     re.I,
 )
 _SECONDARY_TARIFF_VAT_SENTENCE_RE = re.compile(
@@ -364,11 +365,32 @@ _SECONDARY_TARIFF_VAT_SENTENCE_RE = re.compile(
     r'(?:\s+and\s+are\s+rounded\s+to\s+two\s+decimal\s+places)?',
     re.I,
 )
+_SECONDARY_TARIFF_GAS_ONLY_VAT_SENTENCE_RE = re.compile(
+    r'(?:(?:these|all)\s+)?(?:figures|prices|rates|charges)\s+'
+    r'(?:are\s+rounded\s+to\s+two\s+decimal\s+places\s+and\s+)?'
+    r'includ(?:e|es)\s+VAT\s+on\s+gas\s+only'
+    r'(?:\s+and\s+are\s+rounded\s+to\s+two\s+decimal\s+places)?',
+    re.I,
+)
 
 
-_OFGEM_ZERO_WIDTH = {ord(c): None for c in '\u200b\u200c\u200d\ufeff'}
-_OFGEM_TAX_WORD_RE = re.compile(
-    r'\b(?:VAT|value[\s-]+added[\s-]+tax|tax(?:ed)?|untaxed)\b', re.I)
+_OFGEM_ZERO_WIDTH = {ord(c): None for c in '\u200b\u200c\u200d\ufeff\u00ad\u2060\u180e'}
+_OFGEM_EXPLICIT_TAX_WORD_RE = re.compile(
+    r'\b(?:VAT|value[\s-]+added[\s-]+tax|tax(?:ed|es|ation|[\s-]+free)|untax\w*)\b', re.I)
+_OFGEM_BARE_TAX_RE = re.compile(r'\btax\b', re.I)
+_OFGEM_TAX_CONTEXT_RE = re.compile(
+    r'(?:\b0\s*%|'
+    r'\b(?:electricity|gas|fuel|figures?|prices?|rates?|charges?|bills?|costs?|'
+    r'zero|nil|no|none|free|exempt\w*|exclud\w*|without|remov\w*|reduc\w*|appli\w*|includ\w*)\b)',
+    re.I,
+)
+
+
+def _ofgem_mentions_tax(sentence):
+    return bool(
+        _OFGEM_EXPLICIT_TAX_WORD_RE.search(sentence)
+        or (_OFGEM_BARE_TAX_RE.search(sentence) and _OFGEM_TAX_CONTEXT_RE.search(sentence))
+    )
 
 
 class OfgemPage(HTMLParser):
@@ -411,12 +433,13 @@ def _ofgem_sentences(blocks):
                 yield sentence
 
 
-_OFGEM_ZERO_RATED_RE = re.compile(r'\bzero[\s-]+rated\b', re.I)
+_OFGEM_ZERO_RATED_RE = re.compile(r'\bzero[\s-]+rate(?:d|s)?\b', re.I)
+_OFGEM_ZERO_PCT_RE = re.compile(r'\b0\s*(?:%|per\s*cent\b)', re.I)
 _OFGEM_FUEL_EXEMPT_RE = re.compile(
-    r'\b(?:electricity|gas)\b[^.]{0,40}\b(?:0%|tax[\s-]+free|exempt)\b', re.I)
+    r'\b(?:electricity|gas)\b[^.]{0,40}(?:\b0\s*%|\b(?:tax[\s-]+free|exempt)\b)', re.I)
 _OFGEM_FUEL_CONTRADICTION_RE = re.compile(
-    r'\b(?:electricity|gas)\b[^.]{0,60}\b(?:0%|zero|tax[\s-]+free|exempt\w*|extended|extension|'
-    r'remains?|continu\w+|except|apart|excluding|unless|subject)\b', re.I)
+    r'\b(?:electricity|gas)\b[^.]{0,60}(?:\b0\s*%|\b(?:zero|tax[\s-]+free|exempt\w*|extended|extension|'
+    r'remains?|continu\w+|except|apart|excluding|unless|subject)\b)', re.I)
 
 
 def _ofgem_has_unambiguous_standard_vat(blocks):
@@ -424,7 +447,7 @@ def _ofgem_has_unambiguous_standard_vat(blocks):
     for sentence in _ofgem_sentences(blocks):
         if _OFGEM_ZERO_RATED_RE.search(sentence) or _OFGEM_FUEL_EXEMPT_RE.search(sentence):
             return False
-        if not _OFGEM_TAX_WORD_RE.search(sentence):
+        if not _ofgem_mentions_tax(sentence):
             continue
         if _STANDARD_5PCT_VAT_SENTENCE_RE.fullmatch(sentence):
             has_explicit_5pct = True
@@ -438,8 +461,8 @@ def _ofgem_has_unambiguous_standard_vat(blocks):
 def _ofgem_post_window_standard_vat(blocks, vat_start, vat_end):
     """True only if Ofgem explicitly puts both fuels back on 5% VAT from the day after the window.
 
-    Every other VAT/tax sentence must be the window sentence itself or the gas sentence;
-    anything else, or any contradiction about a fuel's tax, fails closed.
+    Every other VAT/tax sentence must be the window sentence, the window gas sentence,
+    or a known secondary-tariff table caption; anything else, or any contradiction, fails closed.
     """
     def day(value): return f'{value.day} {value.strftime("%B")} {value.year}'
     resume = re.escape(day(vat_end + timedelta(days=1)))
@@ -457,10 +480,14 @@ def _ofgem_post_window_standard_vat(blocks, vat_start, vat_end):
     for sentence in _ofgem_sentences(blocks):
         if any(pattern.fullmatch(sentence) for pattern in post_window):
             found = True
-        elif window_sentence.fullmatch(sentence) or _OFGEM_WINDOW_GAS_VAT_SENTENCE_RE.fullmatch(sentence):
+        elif (window_sentence.fullmatch(sentence)
+              or _OFGEM_WINDOW_GAS_VAT_SENTENCE_RE.fullmatch(sentence)
+              or _SECONDARY_TARIFF_VAT_SENTENCE_RE.fullmatch(sentence)
+              or _SECONDARY_TARIFF_GAS_ONLY_VAT_SENTENCE_RE.fullmatch(sentence)
+              or _STANDARD_5PCT_VAT_SENTENCE_RE.fullmatch(sentence)):
             continue
-        elif (_OFGEM_TAX_WORD_RE.search(sentence) or _OFGEM_ZERO_RATED_RE.search(sentence)
-              or _OFGEM_FUEL_CONTRADICTION_RE.search(sentence)):
+        elif (_ofgem_mentions_tax(sentence) or _OFGEM_ZERO_RATED_RE.search(sentence)
+              or _OFGEM_ZERO_PCT_RE.search(sentence) or _OFGEM_FUEL_CONTRADICTION_RE.search(sentence)):
             return False
     return found
 
@@ -487,7 +514,7 @@ def parse_ofgem(key, body, today):
     rows=tables[0]; headers=rows[0]
     no_electricity_vat=re.search(r'There is no VAT on electricity from (\d{1,2} [A-Z][a-z]+ \d{4}) to (\d{1,2} [A-Z][a-z]+ \d{4})', text)
     if no_electricity_vat:
-        gas_vat=re.search(r'include 5% VAT on gas\b(?!\s+(?:and|&|plus)\s+electricity)', text, re.I)
+        gas_vat=any(_OFGEM_WINDOW_GAS_VAT_SENTENCE_RE.fullmatch(s) for s in _ofgem_sentences(page.blocks))
         if not gas_vat:
             raise ValidationError('Ofgem period-specific VAT basis is missing or changed')
         try:

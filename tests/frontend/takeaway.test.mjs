@@ -268,4 +268,6 @@ test("announced Q3 2027 cap on 5% VAT is never compared with the effective Q2 20
   assert.doesNotMatch(text, /energy|cap|£|rise|fall/i);
   metric.upcoming_period.reference.comparison_status = "compare_only_same_basis";
   assert.doesNotMatch(overviewTakeaway(data, now).text, /energy|cap|£|rise|fall/i, "differing tax basis alone blocks it");
+  metric.upcoming_period.reference.tax_treatment = window;
+  assert.match(overviewTakeaway(data, now).text, /energy cap is set to rise to £1,890\/year on 1 Jul 2027/, "same basis produces the clause");
 });
