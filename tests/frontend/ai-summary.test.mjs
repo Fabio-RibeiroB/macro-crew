@@ -145,4 +145,18 @@ test("AI summary text is only split and laid out, never changed", async () => {
     }),
     "Monetary Policy Report opening remarks",
   );
+  // FSR opening remarks and unrelated conference speeches must not be mislabelled as MPR.
+  assert.equal(
+    publicationTitle({
+      key: "financial_stability_report",
+      source: "https://www.bankofengland.co.uk/speech/2025/december/andrew-bailey-opening-remarks-financial-stability-report-press-conference",
+    }),
+    "Financial Stability Report opening remarks",
+  );
+  assert.equal(
+    publicationTitle({
+      source: "https://www.bankofengland.co.uk/speech/2026/october/opening-remarks-at-a-conference",
+    }),
+    "Monetary Policy Committee publication",
+  );
 });

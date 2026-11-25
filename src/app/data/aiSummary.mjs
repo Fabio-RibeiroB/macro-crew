@@ -90,10 +90,13 @@ const MONTH_YEAR = { month: "long", year: "numeric", timeZone: "UTC" };
 export function publicationTitle(report) {
   const source = String(report?.source ?? "");
   const lower = source.toLowerCase();
-  if (lower.includes("opening-remarks")) return "Monetary Policy Report opening remarks";
+  const isFsr = lower.includes("financial-stability-report") || report?.key === "financial_stability_report";
+  if (isFsr) return lower.includes("opening-remarks") ? "Financial Stability Report opening remarks" : "Financial Stability Report";
+  if (lower.includes("opening-remarks") && (lower.includes("/monetary-policy-report/") || report?.key === "monetary_policy_report")) {
+    return "Monetary Policy Report opening remarks";
+  }
   if (lower.includes("/monetary-policy-report/")) return "Monetary Policy Report";
   if (lower.includes("monetary-policy-summary-and-minutes")) return "Monetary Policy Summary and minutes";
-  if (lower.includes("financial-stability-report") || report?.key === "financial_stability_report") return "Financial Stability Report";
   return "Monetary Policy Committee publication";
 }
 
