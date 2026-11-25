@@ -425,6 +425,8 @@ def standard_vat_july_2027_page(
     'Figures include 5% VAT on gas and electricity.',
     'Figures include 5% VAT on both electricity and gas.',
     'Rates shown with 5% VAT on gas and electricity.',
+    'Figures include VAT at 5%.',
+    'Figures are rounded to two decimal places and include 5% VAT. Prices include VAT and are rounded to two decimal places.',
 ])
 def test_ofgem_standard_5_percent_vat_comparable_period(vat_text):
     snap = parse('household_energy', standard_vat_july_2027_page(vat_text=vat_text), date(2027, 7, 15))
@@ -480,6 +482,20 @@ def test_ofgem_standard_5_percent_vat_two_period_page_marks_only_earliest_non_co
     ]
 
 
+def test_ofgem_real_fixture_rewritten_to_standard_5_percent_vat_parses_cleanly():
+    rewritten = (
+        BODY
+        .replace(b'include 5% VAT on gas. There is no VAT on electricity from 1 October 2026 to 31 March 2027.',
+                 b'include 5% VAT.')
+        .replace(b'Prices include VAT on gas only and are rounded to two decimal places.',
+                 b'Prices include VAT and are rounded to two decimal places.')
+        .replace(b'Costs cannot be compared directly to previous periods because of this change.', b'')
+    )
+    snap = parse('household_energy', rewritten, date(2026, 10, 22))
+    assert snap.observations[0].reference['tax_treatment'] == '5% VAT on gas and electricity'
+    assert snap.observations[0].reference['comparison_status'] == 'compare_only_same_basis'
+
+
 @pytest.mark.parametrize('vat_text', [
     'Figures are rounded to two decimal places.',
     'Figures are rounded to two decimal places and include VAT.',
@@ -495,6 +511,15 @@ def test_ofgem_standard_5_percent_vat_two_period_page_marks_only_earliest_non_co
     'Figures include 5% VAT; no VAT applies to electricity.',
     'Figures do not include 5% VAT.',
     'Figures exclude VAT. Prepayment figures include 5% VAT.',
+    'Figures include 5% VAT. Electricity is VAT-free.',
+    'Figures include 5% VAT. VAT is not charged on electricity.',
+    'Figures include 5% VAT. Electricity is not subject to VAT.',
+    'Figures include 5% VAT, apart from electricity.',
+    'Figures include 5% VAT. Electricity VAT is zero.',
+    'Figures include 5% VAT. Electricity: 0 per cent VAT.',
+    'Figures include 5% VAT. From 1 October electricity VAT is removed.',
+    'Figures include 5% VAT where applicable.',
+    'Figures include 5% VAT. Electricity is zero-rated.',
 ])
 def test_ofgem_missing_malformed_or_gas_only_vat_fails_closed(vat_text):
     with pytest.raises(ValueError, match='VAT basis is missing or changed'):

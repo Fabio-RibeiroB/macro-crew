@@ -336,24 +336,81 @@ class Observation:
     reference: dict | None = None
 
 
+_OFGEM_BLOCK_TAGS = frozenset({
+    'article', 'br', 'caption', 'dd', 'div', 'dl', 'dt', 'figcaption', 'footer',
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'li', 'main', 'nav', 'ol', 'p',
+    'section', 'table', 'td', 'th', 'title', 'tr', 'ul',
+})
+_STANDARD_5PCT_VAT_SENTENCE_RE = re.compile(
+    r'(?:(?:these|all)\s+)?(?:figures|prices|rates|charges|bills|costs|amounts|'
+    r'unit\s+rates\s+and\s+standing\s+charges|standing\s+charges\s+and\s+unit\s+rates)\s+'
+    r'(?:(?:are\s+rounded\s+to\s+two\s+decimal\s+places\s+and\s+)?'
+    r'(?:includ(?:e|es)|are\s+shown\s+with|shown\s+with)\s+|including\s+)'
+    r'(?:5%\s+VAT|VAT\s+at\s+5%)'
+    r'(?:\s+on\s+(?:both\s+)?(?:gas\s+and\s+electricity|electricity\s+and\s+gas))?'
+    r'(?:(?:\s+and)?\s+are\s+rounded\s+to\s+two\s+decimal\s+places)?',
+    re.I,
+)
+_SECONDARY_TARIFF_VAT_SENTENCE_RE = re.compile(
+    r'(?:(?:these|all)\s+)?(?:figures|prices|rates|charges)\s+'
+    r'(?:are\s+rounded\s+to\s+two\s+decimal\s+places\s+and\s+)?'
+    r'includ(?:e|es)\s+VAT'
+    r'(?:\s+on\s+(?:both\s+)?(?:gas\s+and\s+electricity|electricity\s+and\s+gas))?'
+    r'(?:\s+and\s+are\s+rounded\s+to\s+two\s+decimal\s+places)?',
+    re.I,
+)
+
+
 class OfgemPage(HTMLParser):
     """Bounded parser for Ofgem's published average Direct Debit table."""
     def __init__(self):
         super().__init__(); self.tables=[]; self.table=None; self.row=None; self.cell=False; self.text=[]; self.body=[]
+        self.blocks=[]; self._block=[]
+    def _flush_block(self):
+        if self._block:
+            block=' '.join(' '.join(self._block).split()).replace('\u00a0', ' ').replace('\u202f', ' ')
+            if block: self.blocks.append(block)
+            self._block=[]
     def handle_starttag(self, tag, attrs):
+        if tag in _OFGEM_BLOCK_TAGS: self._flush_block()
         if tag == 'table': self.table=[]
         elif tag == 'tr' and self.table is not None: self.row=[]
         elif tag in ('td','th') and self.row is not None: self.cell=True; self.text=[]
     def handle_data(self, data):
         self.body.append(data)
+        self._block.append(data)
         if self.cell: self.text.append(data)
     def handle_endtag(self, tag):
+        if tag in _OFGEM_BLOCK_TAGS: self._flush_block()
         if tag in ('td','th') and self.cell:
             self.row.append(' '.join(' '.join(self.text).split())); self.cell=False
         elif tag == 'tr' and self.row is not None:
             self.table.append(self.row); self.row=None
         elif tag == 'table' and self.table is not None:
             self.tables.append(self.table); self.table=None
+    def close(self):
+        super().close(); self._flush_block()
+
+
+def _ofgem_has_unambiguous_standard_vat(blocks):
+    has_explicit_5pct = False
+    for block in blocks:
+        for raw_sentence in re.split(r'(?<=[.!?])\s+|(?<!\d)\.(?!\d)', block):
+            sentence = raw_sentence.strip().rstrip('.!?').strip()
+            if not sentence:
+                continue
+            if re.search(r'\bzero[\s-]+rated\b', sentence, re.I) or re.search(
+                    r'\b(?:electricity|gas)\b[^.]{0,40}\b(?:0%|tax[\s-]+free|exempt)\b', sentence, re.I):
+                return False
+            if not re.search(r'\bVAT\b', sentence, re.I):
+                continue
+            if _STANDARD_5PCT_VAT_SENTENCE_RE.fullmatch(sentence):
+                has_explicit_5pct = True
+            elif _SECONDARY_TARIFF_VAT_SENTENCE_RE.fullmatch(sentence):
+                continue
+            else:
+                return False
+    return has_explicit_5pct
 
 
 def _next_quarter_start(today):
@@ -365,7 +422,7 @@ def parse_ofgem(key, body, today):
     if key != 'household_energy': raise ValidationError('Unexpected Ofgem metric')
     if len(body) > MAX_OFGEM_BYTES: raise ValidationError('Ofgem page exceeds size limit')
     try:
-        page=OfgemPage(); page.feed(body.decode('utf-8'))
+        page=OfgemPage(); page.feed(body.decode('utf-8')); page.close()
     except (UnicodeError, ValueError) as exc: raise ValidationError('Invalid Ofgem HTML') from exc
     text=' '.join(' '.join(page.body).split()).replace('\u00a0', ' ').replace('\u202f', ' ')
     if ('Energy price cap unit rates and standing charges | Ofgem' not in text or
@@ -388,20 +445,7 @@ def parse_ofgem(key, body, today):
             raise ValidationError('Ofgem period-specific VAT basis is missing or changed') from exc
         period_tax_treatment=f'5% VAT on gas; 0% VAT on electricity from {no_electricity_vat[1]} to {no_electricity_vat[2]}'
     else:
-        if (re.search(r'\bno\s+VAT\b', text, re.I) or
-                re.search(r'\b0%\s*VAT\b', text, re.I) or
-                re.search(r'\bzero(?:\s*-\s*rated|\s+VAT)\b', text, re.I) or
-                re.search(r'\bVAT\b[^.]{0,60}\b(?:exempt|zero-?rated|0%|gas\s+only|electricity\s+only|except)\b', text, re.I) or
-                re.search(r'\b(?:exempt\s+from|exclud(?:e|es|ing)|without|(?:do(?:es)?\s+)?not\s+includ(?:e|es|ing))\s+(?:5%\s+)?VAT\b', text, re.I) or
-                re.search(r'\bVAT\s+(?:exempt|excluded|not\s+included)\b', text, re.I) or
-                re.search(r'\b5%\s+VAT\s+on\s+(?:gas|electricity)\b(?!\s+and\s+(?:gas|electricity)\b)', text, re.I) or
-                re.search(r'\b(?:gas|electricity)\s+(?:figures?|prices?|rates?|bills?|charges?)\s+includ(?:e|es|ing)\s+5%\s+VAT\b(?!\s+on\s+(?:both\s+)?(?:gas\s+and\s+electricity|electricity\s+and\s+gas)\b)', text, re.I)):
-            raise ValidationError('Ofgem period-specific VAT basis is missing or changed')
-        standard_vat=re.search(
-            r'\b(?:includ(?:e|es|ing)\s+5%\s+VAT(?:\s+on\s+(?:both\s+)?(?:gas\s+and\s+electricity|electricity\s+and\s+gas))?(?!\s+on\b)|'
-            r'5%\s+VAT\s+on\s+(?:both\s+)?(?:gas\s+and\s+electricity|electricity\s+and\s+gas))\b',
-            text, re.I)
-        if not standard_vat:
+        if not _ofgem_has_unambiguous_standard_vat(page.blocks):
             raise ValidationError('Ofgem period-specific VAT basis is missing or changed')
         vat_start=vat_end=None
         period_tax_treatment='5% VAT on gas and electricity'
