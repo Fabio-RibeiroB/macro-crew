@@ -377,11 +377,28 @@ def parse_ofgem(key, body, today):
     if len(tables)!=1: raise ValidationError('Ofgem average rates table missing or ambiguous')
     rows=tables[0]; headers=rows[0]
     no_electricity_vat=re.search(r'There is no VAT on electricity from (\d{1,2} [A-Z][a-z]+ \d{4}) to (\d{1,2} [A-Z][a-z]+ \d{4})', text)
-    gas_vat=re.search(r'include 5% VAT on gas', text, re.I)
-    if not no_electricity_vat or not gas_vat:
-        raise ValidationError('Ofgem period-specific VAT basis is missing or changed')
-    vat_start=datetime.strptime(no_electricity_vat[1], '%d %B %Y').date()
-    vat_end=datetime.strptime(no_electricity_vat[2], '%d %B %Y').date()
+    if no_electricity_vat:
+        gas_vat=re.search(r'include 5% VAT on gas', text, re.I)
+        if not gas_vat:
+            raise ValidationError('Ofgem period-specific VAT basis is missing or changed')
+        try:
+            vat_start=datetime.strptime(no_electricity_vat[1], '%d %B %Y').date()
+            vat_end=datetime.strptime(no_electricity_vat[2], '%d %B %Y').date()
+        except ValueError as exc:
+            raise ValidationError('Ofgem period-specific VAT basis is missing or changed') from exc
+        period_tax_treatment=f'5% VAT on gas; 0% VAT on electricity from {no_electricity_vat[1]} to {no_electricity_vat[2]}'
+    else:
+        if (re.search(r'\bno VAT on electricity\b', text, re.I) or
+                re.search(r'\bVAT on gas only\b', text, re.I)):
+            raise ValidationError('Ofgem period-specific VAT basis is missing or changed')
+        standard_vat=re.search(
+            r'\b(?:includ(?:e|es|ing)\s+5%\s+VAT(?:\s+on\s+(?:both\s+)?(?:gas\s+and\s+electricity|electricity\s+and\s+gas))?(?!\s+on\b)|'
+            r'5%\s+VAT\s+on\s+(?:both\s+)?(?:gas\s+and\s+electricity|electricity\s+and\s+gas))\b',
+            text, re.I)
+        if not standard_vat:
+            raise ValidationError('Ofgem period-specific VAT basis is missing or changed')
+        vat_start=vat_end=None
+        period_tax_treatment='5% VAT on gas and electricity'
     no_compare='Costs cannot be compared directly to previous periods because of this change' in text
     next_quarter=_next_quarter_start(today)
     periods=[]
@@ -407,7 +424,7 @@ def parse_ofgem(key, body, today):
         if explicit_usage and (int(explicit_usage[1].replace(',','')) != OFGEM_MEDIUM_SINGLE_RATE_ELECTRICITY_KWH or
                                int(explicit_usage[2].replace(',','')) != OFGEM_MEDIUM_GAS_KWH):
             raise ValidationError('Ofgem headline consumption basis conflicts with reviewed 2026 TDCVs')
-        if start < vat_start or end > vat_end:
+        if vat_start is not None and (start < vat_start or end > vat_end):
             raise ValidationError('Ofgem source does not state VAT treatment for this cap period')
         period_labels=(
             f'{start.day} {start.strftime("%B")} to {end.day} {end.strftime("%B")} {start.year}',
@@ -422,8 +439,9 @@ def parse_ofgem(key, body, today):
             if not parts: raise ValidationError('Ofgem rate cell format changed')
             rates[row[0].strip().lower()]={'unit_rate_p_per_kwh':parts[1], 'standing_charge_p_per_day':parts[2]}
         if set(rates)!={'electricity','gas'}: raise ValidationError('Ofgem dual-fuel rates incomplete')
-        tax_treatment=f'5% VAT on gas; 0% VAT on electricity from {no_electricity_vat[1]} to {no_electricity_vat[2]}'
-        comparison_status=('not_comparable_tax_change' if start == vat_start and no_compare
+        tax_treatment=period_tax_treatment
+        comparison_status=('not_comparable_tax_change'
+                           if no_compare and (vat_start is None or start == vat_start)
                            else 'compare_only_same_basis')
         periods.append((start,end,status,str(int(match[5].replace(',',''))),rates,
                         tax_treatment,comparison_status))

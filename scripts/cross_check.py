@@ -76,16 +76,22 @@ MONTH_NAMES = {name: index for index, name in enumerate(
     ('january', 'february', 'march', 'april', 'may', 'june', 'july', 'august',
      'september', 'october', 'november', 'december'), 1)}
 
-OK, MISMATCH, REJECTED, OVERDUE, UNAVAILABLE, COULD_NOT_CHECK = (
-    'ok', 'mismatch', 'rejected', 'overdue', 'unavailable', 'could_not_check')
+OK, MISMATCH, REJECTED, OVERDUE, UNAVAILABLE, COULD_NOT_CHECK, BROKEN_LINK = (
+    'ok', 'mismatch', 'rejected', 'overdue', 'unavailable', 'could_not_check', 'broken_link')
 PROBLEM_LABEL = {
     MISMATCH: 'Mismatch', REJECTED: 'Rejected by the site reader', OVERDUE: 'Update overdue',
     UNAVAILABLE: 'Unavailable on the site', COULD_NOT_CHECK: 'Could not check',
+    BROKEN_LINK: 'Broken link',
 }
+REPORT_SOURCE_PLACEHOLDERS = frozenset({'', 'not available', 'n/a', 'none', 'unavailable'})
 
 
 class FetchError(Exception):
     """A source could not be reached (HTTP error, timeout, network failure, bad redirect)."""
+
+    def __init__(self, message, status=None):
+        super().__init__(message)
+        self.status = status
 
 
 class SourceError(Exception):
@@ -128,7 +134,7 @@ def make_fetcher(allowed_hosts, timeout=30, attempts=3, sleep=time.sleep):
             try:
                 with open_fn(request, timeout=timeout) as response:
                     if response.status != 200:
-                        raise FetchError(f'HTTP {response.status} from {parts.hostname}')
+                        raise FetchError(f'HTTP {response.status} from {parts.hostname}', status=response.status)
                     final = urlsplit(response.geturl())
                     if final.scheme != 'https' or final.hostname not in allowed_hosts:
                         raise FetchError(f'redirected away from {parts.hostname}')
@@ -140,7 +146,7 @@ def make_fetcher(allowed_hosts, timeout=30, attempts=3, sleep=time.sleep):
                     retry_after = (exc.headers or {}).get('Retry-After', '')
                     sleep(min(int(retry_after), 30) if retry_after.isdigit() else wait)
                     continue
-                raise FetchError(f'HTTP {exc.code} from {parts.hostname}') from exc
+                raise FetchError(f'HTTP {exc.code} from {parts.hostname}', status=exc.code) from exc
             except (URLError, OSError, ValueError, http.client.HTTPException) as exc:
                 if attempt < attempts and isinstance(exc, (TimeoutError, URLError, http.client.HTTPException)):
                     sleep(wait)
@@ -149,13 +155,57 @@ def make_fetcher(allowed_hosts, timeout=30, attempts=3, sleep=time.sleep):
             if len(body) > limit:
                 raise FetchError(f'response from {parts.hostname} exceeds {limit} bytes')
             return body
+
+    def _probe(url, method):
+        parts = urlsplit(url)
+        request = Request(url, method=method, headers={'User-Agent': USER_AGENT})
+        open_fn = opener.open if urlopen is _DEFAULT_URLOPEN else urlopen
+        for attempt in range(1, attempts + 1):
+            wait = 5 * attempt
+            try:
+                with open_fn(request, timeout=timeout) as response:
+                    if response.status != 200:
+                        raise FetchError(f'HTTP {response.status} from {parts.hostname}', status=response.status)
+                    final = urlsplit(response.geturl())
+                    if final.scheme != 'https' or final.hostname not in allowed_hosts:
+                        raise FetchError(f'redirected away from {parts.hostname}')
+                    if method != 'HEAD':
+                        response.read(1)
+                    return
+            except FetchError:
+                raise
+            except HTTPError as exc:
+                if (exc.code == 429 or exc.code >= 500) and attempt < attempts:
+                    retry_after = (exc.headers or {}).get('Retry-After', '')
+                    sleep(min(int(retry_after), 30) if retry_after.isdigit() else wait)
+                    continue
+                raise FetchError(f'HTTP {exc.code} from {parts.hostname}', status=exc.code) from exc
+            except (URLError, OSError, ValueError, http.client.HTTPException) as exc:
+                if attempt < attempts and isinstance(exc, (TimeoutError, URLError, http.client.HTTPException)):
+                    sleep(wait)
+                    continue
+                raise FetchError(f'{type(exc).__name__}: {exc}') from exc
+
+    def check_url(url):
+        parts = urlsplit(url)
+        if parts.scheme != 'https' or parts.username or parts.password or parts.hostname not in allowed_hosts:
+            raise FetchError(f'refusing to check {url}')
+        try:
+            _probe(url, 'HEAD')
+        except FetchError as exc:
+            if exc.status in (403, 405, 501):
+                _probe(url, 'GET')
+            else:
+                raise
+
+    fetch.check_url = check_url
     return fetch
 
 
 class CachedFetcher:
     """One request per URL per run, failures included, so shared downloads are checked once."""
     def __init__(self, fetch):
-        self._fetch, self._cache = fetch, {}
+        self._fetch, self._cache, self._probe_cache = fetch, {}, {}
 
     def __call__(self, url, limit=MAX_SMALL_BYTES):
         if url not in self._cache:
@@ -167,6 +217,21 @@ class CachedFetcher:
         if error is not None:
             raise error
         return body
+
+    def check_url(self, url):
+        if url not in self._probe_cache:
+            probe = getattr(self._fetch, 'check_url', None)
+            try:
+                if probe is not None:
+                    probe(url)
+                else:
+                    self(url, MAX_SMALL_BYTES)
+                self._probe_cache[url] = None
+            except FetchError as exc:
+                self._probe_cache[url] = exc
+        error = self._probe_cache[url]
+        if error is not None:
+            raise error
 
 
 # ---------------------------------------------------------------- live site (site's own reader)
@@ -385,20 +450,28 @@ def ofgem_table_rates(body):
         if is_calendar_quarter(start, end):
             period = start.isoformat()
             if period in columns:
-                return {}
+                raise SourceError(f'Ofgem rates table has duplicate column for {period}')
             columns[period] = index
     rates = {}
     for period, col in columns.items():
         fuels = {}
         for row in rows[1:]:
-            if len(row) != len(headers) or row[0].strip().lower() not in {'electricity', 'gas'}:
+            if not row:
                 continue
+            fuel = row[0].strip().lower()
+            if fuel not in {'electricity', 'gas'}:
+                continue
+            if len(row) != len(headers):
+                raise SourceError(f'Ofgem rates table row width mismatch for {period} ({fuel})')
             parts = re.fullmatch(r'([\d.]+) pence per kWh ([\d.]+) pence daily standing charge', row[col])
             if not parts:
-                continue
-            fuels[row[0].strip().lower()] = (to_decimal(parts[1]), to_decimal(parts[2]))
-        if set(fuels) == {'electricity', 'gas'}:
-            rates[period] = fuels
+                raise SourceError(f'Ofgem rates cell format changed for {period} ({fuel})')
+            if fuel in fuels:
+                raise SourceError(f'Ofgem rates table has duplicate {fuel} row for {period}')
+            fuels[fuel] = (to_decimal(parts[1]), to_decimal(parts[2]))
+        if set(fuels) != {'electricity', 'gas'}:
+            raise SourceError(f'Ofgem dual-fuel rates incomplete for {period}')
+        rates[period] = fuels
     return rates
 
 
@@ -784,9 +857,9 @@ def compare_energy(metric, truth, today, periods=HISTORY_PERIODS):
             problems.append(f'latest period: site {latest.get("period")}, official {current}')
         else:
             problems.extend(_compare_energy_rates(f'current cap ({current})', latest, truth.rates[current]))
+    upcoming = (metric or {}).get('upcoming_period')
     if truth.upcoming:
         want_period, want_value = next(iter(truth.upcoming.items()))
-        upcoming = (metric or {}).get('upcoming_period')
         if not isinstance(upcoming, dict):
             problems.append(f'upcoming cap: site none, official {want_period} ({want_value})')
         else:
@@ -798,6 +871,11 @@ def compare_energy(metric, truth, today, periods=HISTORY_PERIODS):
                 problems.append(f'upcoming value for {want_period}: site {got_value}, official {want_value}')
             if want_period in truth.rates and got_period == want_period:
                 problems.extend(_compare_energy_rates(f'upcoming cap ({want_period})', upcoming, truth.rates[want_period]))
+    elif upcoming is not None:
+        if isinstance(upcoming, dict):
+            problems.append(f'upcoming cap: site {upcoming.get("period")} ({upcoming.get("value")}), official none')
+        else:
+            problems.append(f'upcoming cap: site {upcoming!r}, official none')
     return problems
 
 
@@ -818,12 +896,21 @@ class MetricResult:
 
 
 @dataclass
+class ReportLinkProblem:
+    key: str
+    kind: str
+    url: str
+    detail: str
+
+
+@dataclass
 class Report:
     site_url: str
     generation_id: str | None
     checked_at: str
     results: list
     site_problem: str | None = None  # whole-generation rejection or an unreadable site
+    report_link_problems: list = field(default_factory=list)
 
     @property
     def problems(self):
@@ -831,7 +918,7 @@ class Report:
 
     @property
     def clean(self):
-        return self.site_problem is None and not self.problems
+        return self.site_problem is None and not self.problems and not self.report_link_problems
 
 
 def latest_text(metric):
@@ -869,6 +956,68 @@ def check_site_metric(key, raw, parsed):
     return result, parsed_metric
 
 
+def check_research_report_links(site_url, fetch):
+    """Verify non-placeholder AI report summary source URLs in live research_report.json return HTTP 200."""
+    base = site_url if site_url.endswith('/') else site_url + '/'
+    report_url = base + 'research_report.json'
+    try:
+        raw_bytes = fetch(report_url, MAX_SMALL_BYTES)
+    except FetchError as exc:
+        if exc.status == 404:
+            return []
+        return [ReportLinkProblem('research_report.json', COULD_NOT_CHECK, report_url, str(exc))]
+    except Exception as exc:
+        return [ReportLinkProblem('research_report.json', COULD_NOT_CHECK, report_url,
+                                  f'{type(exc).__name__}: {exc}')]
+    try:
+        payload = json.loads(decode(raw_bytes, 'research_report.json'))
+    except (SourceError, ValueError) as exc:
+        return [ReportLinkProblem('research_report.json', COULD_NOT_CHECK, report_url,
+                                  f'invalid JSON: {exc}')]
+    if not isinstance(payload, dict):
+        return [ReportLinkProblem('research_report.json', COULD_NOT_CHECK, report_url,
+                                  'research_report.json root must be an object')]
+    summaries = payload.get('current_report_summaries')
+    if summaries is None:
+        return []
+    if not isinstance(summaries, dict):
+        return [ReportLinkProblem('research_report.json', COULD_NOT_CHECK, report_url,
+                                  'current_report_summaries must be an object')]
+    problems = []
+    for key, entry in summaries.items():
+        if not isinstance(entry, dict):
+            problems.append(ReportLinkProblem(str(key), COULD_NOT_CHECK, '', 'report entry must be an object'))
+            continue
+        source = entry.get('source')
+        if source is None:
+            continue
+        if not isinstance(source, str):
+            problems.append(ReportLinkProblem(str(key), BROKEN_LINK, '', 'source URL must be a string'))
+            continue
+        url = source.strip()
+        if url.lower() in REPORT_SOURCE_PLACEHOLDERS:
+            continue
+        parts = urlsplit(url)
+        if (parts.scheme != 'https' or not parts.hostname or parts.username or parts.password or
+                parts.hostname not in OFFICIAL_HOSTS):
+            problems.append(ReportLinkProblem(str(key), BROKEN_LINK, url,
+                                              'source URL is not an allowed official HTTPS URL'))
+            continue
+        try:
+            if hasattr(fetch, 'check_url'):
+                fetch.check_url(url)
+            else:
+                fetch(url, MAX_SMALL_BYTES)
+        except FetchError as exc:
+            kind = (BROKEN_LINK if exc.status is not None and 400 <= exc.status < 500 and exc.status != 429
+                    else COULD_NOT_CHECK)
+            problems.append(ReportLinkProblem(str(key), kind, url, str(exc)))
+        except Exception as exc:
+            problems.append(ReportLinkProblem(str(key), COULD_NOT_CHECK, url,
+                                              f'{type(exc).__name__}: {exc}'))
+    return problems
+
+
 def run_check(site_url, fetch, today=None, node='node', reader=VERIFIED_MJS,
               periods=HISTORY_PERIODS, now=None):
     now = now or datetime.now(timezone.utc)
@@ -893,20 +1042,26 @@ def run_check(site_url, fetch, today=None, node='node', reader=VERIFIED_MJS,
         try:
             truth = sources.read(key)
             result.route = truth.route
-            if key == 'household_energy' and (truth.upcoming or not truth.points):
+            if key == 'household_energy':
                 if truth.points:
                     latest = max(truth.points)
                     official_parts = [f'{truth.points[latest]} ({latest})']
                 else:
                     official_parts = [f'{quarter_start(today).isoformat()} table rates']
+                site_up = metric.get('upcoming_period')
                 if truth.upcoming:
                     up_period, up_value = next(iter(truth.upcoming.items()))
                     official_parts.append(f'upcoming {up_value} ({up_period})')
-                    site_up = metric.get('upcoming_period')
                     if isinstance(site_up, dict) and site_up.get('value') is not None:
                         result.site = f"{result.site}; upcoming {site_up['value']} ({site_up.get('period')})"
                     else:
                         result.site = f'{result.site}; upcoming none'
+                elif site_up is not None:
+                    official_parts.append('upcoming none')
+                    if isinstance(site_up, dict) and site_up.get('value') is not None:
+                        result.site = f"{result.site}; upcoming {site_up['value']} ({site_up.get('period')})"
+                    else:
+                        result.site = f'{result.site}; upcoming unexpected'
                 result.official = '; '.join(official_parts)
                 differences = compare_energy(metric, truth, today, periods)
             else:
@@ -924,6 +1079,7 @@ def run_check(site_url, fetch, today=None, node='node', reader=VERIFIED_MJS,
             result.details.extend(differences)
         if not result.kinds:
             result.kinds.append(OK)
+    report.report_link_problems = check_research_report_links(site_url, fetch)
     return report
 
 
@@ -947,10 +1103,17 @@ def render_report(report, run_url=None):
     elif report.clean:
         lines += [f'All {len(report.results)} figures match their official sources.', '']
     else:
-        summary = ', '.join(f'{counts[kind]} {PROBLEM_LABEL[kind].lower()}'
-                            for kind in (MISMATCH, REJECTED, OVERDUE, UNAVAILABLE, COULD_NOT_CHECK) if kind in counts)
-        lines += [f'{len(report.problems)} of {len(report.results)} figures need attention: {summary}; '
-                  f'{counts.get(OK, 0)} match.', '']
+        link_count = len(report.report_link_problems)
+        link_noun = 'link needs' if link_count == 1 else 'links need'
+        if report.problems:
+            summary = ', '.join(f'{counts[kind]} {PROBLEM_LABEL[kind].lower()}'
+                                for kind in (MISMATCH, REJECTED, OVERDUE, UNAVAILABLE, COULD_NOT_CHECK) if kind in counts)
+            suffix = f' {link_count} AI report source {link_noun} attention.' if link_count else ''
+            lines += [f'{len(report.problems)} of {len(report.results)} figures need attention: {summary}; '
+                      f'{counts.get(OK, 0)} match.{suffix}', '']
+        else:
+            lines += [f'All {len(report.results)} figures match their official sources, '
+                      f'but {link_count} AI report source {link_noun} attention.', '']
     if report.problems:
         lines += ['| Figure | Result | On the site | Official |', '| --- | --- | --- | --- |']
         for result in report.problems:
@@ -965,6 +1128,15 @@ def render_report(report, run_url=None):
             if len(result.details) > 8:
                 lines.append(f'- … and {len(result.details) - 8} more')
             lines.append('')
+    if report.report_link_problems:
+        lines += ['### AI report source links', '']
+        lines += ['| Report | Result | Source URL | Detail |', '| --- | --- | --- | --- |']
+        for item in report.report_link_problems:
+            key_cell = _safe_markdown(item.key).replace('|', '/')
+            url_cell = _safe_markdown(item.url or '-').replace('|', '/')
+            detail_cell = _safe_markdown(item.detail).replace('|', '/')
+            lines.append(f'| `{key_cell}` | {PROBLEM_LABEL[item.kind]} | {url_cell} | {detail_cell} |')
+        lines.append('')
     matching = [result.key for result in report.results if not result.problem]
     if matching and not report.site_problem:
         lines += ['<details><summary>Matching figures</summary>', '', ', '.join(f'`{key}`' for key in matching),
