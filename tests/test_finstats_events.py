@@ -99,7 +99,9 @@ def test_ons_release_families_link_only_relevant_indicators():
         {'uri':'/releases/unemployment','description':{'title':'Unemployment in the UK','release_date':'2027-07-01T08:30:00Z'}},
         {'uri':'/releases/vacancies','description':{'title':'Vacancies and jobs in the UK','release_date':'2027-08-01T08:30:00Z'}},
         {'uri':'/releases/earnings','description':{'title':'Employee earnings in the UK: 2027','release_date':'2027-09-01T08:30:00Z'}},
-    ],'breakdown':{'total':9}}).encode()
+        {'uri':'/releases/cpi-weights','description':{'title':'Consumer price inflation, updating weights: 2027','release_date':'2027-03-12T09:30:00Z'}},
+        {'uri':'/releases/cpi-basket','description':{'title':'Consumer price inflation basket of goods and services: 2027','release_date':'2027-03-12T09:30:00Z'}},
+    ],'breakdown':{'total':11}}).encode()
     parsed=_parse_ons(body,NOW.date())
     by_title={e['title']:e['linked_indicators'] for e in parsed}
     assert by_title['GDP monthly estimate, UK']==['uk.gdp.monthly_growth']
@@ -110,6 +112,8 @@ def test_ons_release_families_link_only_relevant_indicators():
     assert 'GDP first quarterly estimate, UK' not in by_title
     assert 'Unemployment in the UK' not in by_title
     assert 'Vacancies and jobs in the UK' not in by_title
+    assert 'Consumer price inflation, updating weights: 2027' not in by_title
+    assert 'Consumer price inflation basket of goods and services: 2027' not in by_title
     assert by_title['Employee earnings in the UK: 2027']==[
         'uk.regular_pay.nominal_annual_growth','uk.regular_pay.real_annual_growth']
     assert next(e for e in parsed if e['title'].endswith('corrected'))['status']=='published'
@@ -396,3 +400,137 @@ def test_hm_treasury_malformed_search_payload_fails_closed(bad_payload):
     from finstats.events import parse_source
     with pytest.raises(ValueError, match='HM Treasury'):
         parse_source('hm_treasury', bad_payload, NOW.date())
+
+
+@pytest.mark.parametrize('item,today', [
+    # Historical 2025 announcement edited later in 2025 or 2026: 26 Nov 2026 is a Thursday, not Wednesday.
+    ({
+        'public_timestamp': '2025-12-01T10:00:00Z',
+        'title': 'Budget announcement',
+        'link': '/government/news/budget-2025-address',
+        'description': 'Today (Wednesday 3 September), the Chancellor has confirmed that the date of the Budget will be Wednesday 26 November.',
+    }, datetime(2026, 1, 10, tzinfo=timezone.utc).date()),
+    ({
+        'public_timestamp': '2026-02-01T10:00:00Z',
+        'title': 'Budget announcement',
+        'link': '/government/news/budget-2025-address',
+        'description': 'Today (Wednesday 3 September), the Chancellor has confirmed that the date of the Budget will be Wednesday 26 November.',
+    }, datetime(2026, 3, 1, tzinfo=timezone.utc).date()),
+    # Edited 6 years later when 26 Nov is a Wednesday again, but title/link still marks Budget 2025.
+    ({
+        'public_timestamp': '2031-09-04T11:20:02Z',
+        'title': 'Budget 2025 date',
+        'link': '/government/news/budget-2025-date',
+        'description': 'Today (Wednesday 3 September), the Chancellor has confirmed that the date of the Budget will be Wednesday 26 November.',
+    }, datetime(2031, 9, 10, tzinfo=timezone.utc).date()),
+    # Wrong weekday (28 Oct 2026 is Wednesday, not Monday) with inferred or explicit year.
+    ({
+        'public_timestamp': '2026-07-31T14:03:00Z',
+        'title': 'Budget announcement 2026',
+        'link': '/government/news/budget-2026-date',
+        'description': 'The Chancellor confirmed that the date of the Budget will be Monday 28 October.',
+    }, datetime(2026, 9, 1, tzinfo=timezone.utc).date()),
+    ({
+        'public_timestamp': '2026-07-31T14:03:00Z',
+        'title': 'Budget announcement 2026',
+        'link': '/government/news/budget-2026-date',
+        'description': 'The next Budget will be held on Monday 28 October 2026.',
+    }, datetime(2026, 9, 1, tzinfo=timezone.utc).date()),
+    # Missing weekday when year is omitted cannot safely infer the year from public_timestamp.
+    ({
+        'public_timestamp': '2026-07-31T14:03:00Z',
+        'title': 'Budget announcement',
+        'link': '/government/news/budget-date',
+        'description': 'The Chancellor confirmed that the date of the Budget will be 28 October.',
+    }, datetime(2026, 9, 1, tzinfo=timezone.utc).date()),
+    # Speculation and negation framing must never emit an official Budget date.
+    ({
+        'public_timestamp': '2026-07-31T14:03:00Z',
+        'title': 'Response to press reports',
+        'link': '/government/news/press-response',
+        'description': 'Reports that the date of the Budget will be Wednesday 28 October are speculation.',
+    }, datetime(2026, 9, 1, tzinfo=timezone.utc).date()),
+    ({
+        'public_timestamp': '2026-07-31T14:03:00Z',
+        'title': 'Clarification on Budget date',
+        'link': '/government/news/budget-clarification',
+        'description': 'Claims that the date of the Budget will be Wednesday 28 October 2026 are not confirmed.',
+    }, datetime(2026, 9, 1, tzinfo=timezone.utc).date()),
+])
+def test_hm_treasury_rejects_edited_historical_wrong_weekday_and_speculation_items(item, today):
+    from finstats.events import parse_source
+    raw = json.dumps({'total': 1, 'results': [item]}).encode()
+    assert parse_source('hm_treasury', raw, today) == []
+
+
+def test_migrated_provider_urls_reset_cleanly_to_unavailable_on_transient_failure(tmp_path):
+    from finstats.events import SOURCES
+    legacy_state = {
+        'schema_version': 1,
+        'mode': 'official',
+        'checked_at': '2026-10-22T12:00:00Z',
+        'providers': {
+            'ons': {
+                'status': 'ok',
+                'qualification': 'qualified',
+                'retrieved_at': '2026-10-22T12:00:00Z',
+                'source_url': 'https://api.beta.ons.gov.uk/v1/search/releases?limit=1000&offset=0&sort=release_date_asc&fromDate=2026-10-22&toDate=2027-10-22',
+                'calendar_url': 'https://www.ons.gov.uk/releasecalendar',
+                'sha256': 'a' * 64,
+                'evidence_kind': 'official_download',
+                'events': [],
+            },
+            'ofgem_energy': {
+                'status': 'ok',
+                'qualification': 'qualified',
+                'retrieved_at': '2026-10-22T12:00:00Z',
+                'source_url': 'https://www.ofgem.gov.uk/news/changes-energy-price-cap-between-1-october-and-31-december-2026',
+                'calendar_url': 'https://www.ofgem.gov.uk/energy-regulation/domestic-and-non-domestic/energy-pricing-rules/energy-price-cap',
+                'sha256': 'b' * 64,
+                'evidence_kind': 'official_download',
+                'events': [],
+            },
+            'hm_treasury': {
+                'status': 'ok',
+                'qualification': 'qualified',
+                'retrieved_at': '2026-10-22T12:00:00Z',
+                'source_url': 'https://www.gov.uk/government/publications/chancellor-letter-to-the-treasury-select-committee-tsc-budget-2026-date',
+                'calendar_url': 'https://www.gov.uk/government/publications/chancellor-letter-to-the-treasury-select-committee-tsc-budget-2026-date',
+                'sha256': 'c' * 64,
+                'evidence_kind': 'official_download',
+                'events': [],
+            },
+        },
+        'attempts': [],
+        'revisions': [],
+    }
+    (tmp_path / 'events.json').write_text(json.dumps(legacy_state))
+
+    def partial_fetch(url):
+        if 'ofgem.gov.uk' in url:
+            raise OSError('transient Ofgem timeout')
+        if 'api.beta.ons.gov.uk' in url:
+            return b'{"breakdown":{"total":0},"releases":[]}'
+        if 'bankofengland.co.uk' in url:
+            return (Path(FIXTURES) / 'events_boe_mpc_capture.html').read_bytes()
+        if 'weekly-road-fuel-prices' in url:
+            return (Path(FIXTURES) / 'desnz_weekly_road_fuel_prices_release_2026-10-20.html').read_bytes()
+        if 'obr.uk' in url:
+            return (Path(FIXTURES) / 'events_obr.html').read_bytes()
+        if 'gov.uk/api/search.json' in url:
+            return b'{"total":0,"results":[]}'
+        raise AssertionError(f'unexpected url {url}')
+
+    result = collect_events(tmp_path, clock=lambda: NOW, fetch=partial_fetch)
+    assert result['failed_sources'] == ['ofgem_energy']
+    ofgem = result['schedule']['providers']['ofgem_energy']
+    assert ofgem['status'] == 'unavailable'
+    assert ofgem['events'] == []
+    assert ofgem['source_url'] == SOURCES['ofgem_energy'][0]
+    assert ofgem['calendar_url'] == SOURCES['ofgem_energy'][1]
+    assert 'retrieved_at' not in ofgem
+    # public_events must succeed so the newly deployed manifest can publish cleanly.
+    projected = public_events(tmp_path)
+    assert projected['providers']['ofgem_energy']['status'] == 'unavailable'
+    assert projected['providers']['ons']['status'] == 'ok'
+    assert projected['providers']['hm_treasury']['status'] == 'ok'

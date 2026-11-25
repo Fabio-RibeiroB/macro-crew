@@ -44,6 +44,8 @@ test("ONS family links require CPI wording and monthly GDP; producer inflation a
   const cpi = makeOns("consumer-prices", "Consumer price inflation, UK", ["uk.cpi.annual_rate", "uk.cpih.annual_rate"]);
   assert.equal(validateEventsPayload(payload([cpi])).events[0].title, cpi.title);
   assert.throws(() => validateEventsPayload(payload([makeOns("producer-prices", "Producer price inflation, UK", ["uk.cpi.annual_rate", "uk.cpih.annual_rate"])])), /Invalid official events data/);
+  assert.throws(() => validateEventsPayload(payload([makeOns("cpi-weights", "Consumer price inflation, updating weights: 2027", ["uk.cpi.annual_rate", "uk.cpih.annual_rate"])])), /Invalid official events data/);
+  assert.throws(() => validateEventsPayload(payload([makeOns("cpi-basket", "Consumer price inflation basket of goods and services: 2027", ["uk.cpi.annual_rate", "uk.cpih.annual_rate"])])), /Invalid official events data/);
   assert.throws(() => validateEventsPayload(payload([makeOns("inflation", "Inflation, UK", ["uk.cpi.annual_rate", "uk.cpih.annual_rate"])])), /Invalid official events data/);
   assert.throws(() => validateEventsPayload(payload([makeOns("quarterly-gdp", "GDP quarterly national accounts, UK", ["uk.gdp.monthly_growth"])])), /Invalid official events data/);
   assert.throws(() => validateEventsPayload(payload([makeOns("unemployment", "Labour market overview, UK", ["uk.regular_pay.nominal_annual_growth", "uk.regular_pay.real_annual_growth", "uk.unemployment.rate"])])), /Invalid official events data/);

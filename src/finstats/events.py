@@ -41,6 +41,8 @@ ONS_FAMILIES = {
 
 def _ons_indicators(title):
     title=' '.join(title.split())
+    if re.match(r'^Consumer price inflation(?:,\s*updating weights|\s+basket of goods and services)(?:,|:|\b)',title,re.I):
+        return []
     if re.match(r'^Consumer price inflation(?:,|:|\b)',title,re.I):
         return ONS_FAMILIES['inflation']
     if re.match(r'^GDP monthly estimate(?:,|:|\b)',title,re.I):
@@ -194,24 +196,40 @@ def _parse_obr(body,today):
     if d<today.isoformat(): return []
     return [event('obr:efo','OBR Economic and fiscal outlook',d,None,'scheduled','obr',INDICATORS['obr'],SOURCES['obr'][0])]
 
-def _infer_year_date(raw_date,pub_date):
+def _infer_year_date(raw_date,pub_date,weekday):
     m=re.fullmatch(r'(\d{1,2})\s+('+'|'.join(MONTH)+r')',raw_date.strip(),re.I)
     if not m: raise ValueError('invalid HM Treasury Budget date')
     day,month=int(m[1]),MONTH[m[2].capitalize()]
+    candidates=[]
     for year in (pub_date.year,pub_date.year+1):
         try: candidate=date(year,month,day)
         except ValueError: continue
-        if pub_date<=candidate<=pub_date+timedelta(days=366): return candidate.isoformat()
-    raise ValueError('invalid HM Treasury Budget date')
+        if pub_date<=candidate<=pub_date+timedelta(days=366): candidates.append(candidate)
+    if not candidates: raise ValueError('invalid HM Treasury Budget date')
+    # GOV.UK public_timestamp reflects last edit, not first publication; require a
+    # matching weekday before inferring a year so edited historical items cannot emit a false date.
+    if not weekday: return None
+    expected=weekday.lower()
+    for candidate in candidates:
+        if candidate.strftime('%A').lower()==expected: return candidate.isoformat()
+    return None
+
+_HMT_SPECULATION_RE=re.compile(
+    r'\b(?:speculation|rumours?|rumors?|reports?\s+that|claims?\s+that|'
+    r'not\s+(?:yet\s+)?(?:confirmed|announced|decided)|unconfirmed|denied|false|inaccurate|incorrect)\b',
+    re.I,
+)
 
 def _parse_hm_treasury_search(data,today):
+    # Count=20 newest-first results are bounded by recency rather than rejecting total > len(results),
+    # because older historical Budget announcements beyond the top 20 cannot be upcoming dates.
     if (not isinstance(data,dict) or not isinstance(data.get('results'),list)
             or not isinstance(data.get('total'),int) or isinstance(data.get('total'),bool)
             or data['total']<len(data['results'])
             or (data['total']>0 and not data['results'])):
         raise ValueError('unrecognized HM Treasury search response')
     months='|'.join(MONTH)
-    weekday=r'(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)'
+    weekday=r'(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)'
     budget_date_re=re.compile(
         rf'\b(?:(?:the\s+)?date\s+of\s+the\s+(?:(?:Autumn|Spring|Summer|Emergency)\s+)?Budget\s+will\s+be'
         rf'|(?:the\s+)?(?:(?:Autumn|Spring|Summer|Emergency|next)\s+)?Budget\s+will\s+be\s+held\s+on)\s+'
@@ -223,12 +241,16 @@ def _parse_hm_treasury_search(data,today):
         if not isinstance(item,dict): raise ValueError('invalid HM Treasury search item')
         desc=item.get('description')
         if not isinstance(desc,str): continue
-        match=budget_date_re.search(' '.join(desc.split()))
+        normalized=' '.join(desc.split())
+        if _HMT_SPECULATION_RE.search(normalized): continue
+        match=budget_date_re.search(normalized)
         if not match: continue
-        raw_date=match.group(1)
+        matched_weekday,raw_date=match.group(1),match.group(2)
         if re.search(r'\b20\d{2}\b',raw_date):
             d=_date(raw_date)
             if not d: raise ValueError('invalid HM Treasury Budget date')
+            if matched_weekday and date.fromisoformat(d).strftime('%A').lower()!=matched_weekday.lower():
+                continue
         else:
             pub=item.get('public_timestamp')
             if not isinstance(pub,str): raise ValueError('missing HM Treasury announcement timestamp')
@@ -236,7 +258,11 @@ def _parse_hm_treasury_search(data,today):
             except ValueError as exc: raise ValueError('invalid HM Treasury announcement timestamp') from exc
             if instant.tzinfo is None or instant.utcoffset() is None:
                 raise ValueError('HM Treasury announcement timestamp requires timezone')
-            d=_infer_year_date(raw_date,instant.astimezone(LONDON).date())
+            d=_infer_year_date(raw_date,instant.astimezone(LONDON).date(),matched_weekday)
+            if not d: continue
+            context=' '.join(str(item.get(k,'')) for k in ('title','link'))
+            budget_years=re.findall(r'budget[^0-9]{0,12}(20\d{2})\b',context,re.I)
+            if budget_years and d[:4] not in budget_years: continue
         link=item.get('link')
         if not isinstance(link,str) or not re.fullmatch(r'/government/(?:news|publications)/[a-z0-9-]+',link):
             raise ValueError('invalid HM Treasury announcement URL')
@@ -324,6 +350,31 @@ def _source_url(name,local):
     template=SOURCES[name][0]
     return template.format(today=local.isoformat(),year=(local+timedelta(days=365)).isoformat()) if '{' in template else template
 
+def _saved_provider_matches_contract(name,old,calendar_url):
+    if not isinstance(old,dict): return False
+    if not _provider_url_valid(name,old.get('source_url','')): return False
+    if old.get('calendar_url')!=calendar_url: return False
+    events=old.get('events',[])
+    if not isinstance(events,list): return False
+    for e in events:
+        if not isinstance(e,dict): return False
+        event_url=e.get('source_url','')
+        if name=='ons':
+            expected=_ons_indicators(e.get('title',''))
+            parts=urlsplit(event_url)
+            if (not expected or e.get('linked_indicators')!=expected
+                    or parts.scheme!='https' or parts.hostname!='www.ons.gov.uk'
+                    or parts.port is not None or parts.username is not None or parts.password is not None
+                    or parts.query or parts.fragment
+                    or not re.fullmatch(r'/releases/[a-zA-Z0-9/_-]+',parts.path)
+                    or e.get('id')!='ons:'+parts.path):
+                return False
+        elif name=='hm_treasury':
+            if not _hm_treasury_event_url_valid(event_url): return False
+        else:
+            if event_url!=SOURCES[name][0]: return False
+    return True
+
 def collect_events(state,clock=None,fetch=_fetch,fixtures=None):
     """Read one official bounded endpoint/provider; retain last verified events on failure."""
     now=(clock or (lambda:datetime.now(timezone.utc)))()
@@ -365,12 +416,24 @@ def collect_events(state,clock=None,fetch=_fetch,fixtures=None):
         except Exception as exc:
             failed.append(name); old=saved['providers'].get(name,{})
             had_success=old.get('evidence_kind')=='official_download' and old.get('retrieved_at')
-            old.update(status='stale' if had_success else 'unavailable',
-                       qualification='unqualified' if name in UNQUALIFIED_SOURCES else 'qualified',
-                       events=old.get('events',[]),
-                       source_url=old.get('source_url',url),calendar_url=old.get('calendar_url',source_url),
-                       last_failure_at=timestamp(now),last_error=type(exc).__name__)
-            saved['providers'][name]=old
+            qualification='unqualified' if name in UNQUALIFIED_SOURCES else 'qualified'
+            if had_success and _saved_provider_matches_contract(name,old,source_url):
+                old.update(status='stale',
+                           qualification=qualification,
+                           events=old.get('events',[]),
+                           source_url=old.get('source_url',url),calendar_url=old.get('calendar_url',source_url),
+                           last_failure_at=timestamp(now),last_error=type(exc).__name__)
+                saved['providers'][name]=old
+            else:
+                saved['providers'][name]={
+                    'status':'unavailable',
+                    'qualification':qualification,
+                    'events':[],
+                    'source_url':url,
+                    'calendar_url':source_url,
+                    'last_failure_at':timestamp(now),
+                    'last_error':type(exc).__name__,
+                }
             saved['attempts'].append({'provider':name,'at':timestamp(now),'status':'failed','source_url':url,'error_type':type(exc).__name__,'evidence_kind':'recorded_fixture' if fixtures else 'official_download'})
     saved['checked_at']=timestamp(now); saved['mode']='fixtures' if fixtures else 'official'
     atomic_write(state_file,encode(saved))

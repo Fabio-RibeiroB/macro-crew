@@ -88,7 +88,8 @@ function validateEvent(event, source) {
     const rent = ["uk.private_rent.annual_growth", "uk.private_rent.monthly_level"];
     const housing = ["uk.house_price.average_level", "uk.house_price.annual_change"];
     let wanted = [];
-    if (/^Consumer price inflation(?:,|:|\b)/i.test(title)) wanted = inflation;
+    if (/^Consumer price inflation(?:,\s*updating weights|\s+basket of goods and services)(?:,|:|\b)/i.test(title)) wanted = [];
+    else if (/^Consumer price inflation(?:,|:|\b)/i.test(title)) wanted = inflation;
     else if (/^GDP monthly estimate(?:,|:|\b)/i.test(title)) wanted = ["uk.gdp.monthly_growth"];
     else if (/^UK Labour Market(?:,|:|\b)/i.test(title)) wanted = labour;
     else if (/^(?:Employee earnings in the UK|Earnings and working hours)(?:,|:|\b)/i.test(title)) wanted = earnings;
