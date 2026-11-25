@@ -650,6 +650,7 @@ def test_ofgem_real_fixture_rewritten_as_mixed_vat_transition_page_parses_both_p
     POST_WINDOW_VAT + '<p>There is no VAT on electricity from 1 October 2026 to 30 September 2027.</p>',
     POST_WINDOW_VAT + '<p>Prices include VAT where applicable.</p>',
     POST_WINDOW_VAT + '<p>Prices include VAT on gas only from 1 July 2027.</p>',
+    POST_WINDOW_VAT + '<p>The tax holiday is extended to 30 September 2027.</p>',
     POST_WINDOW_VAT + '<p>Figures exclude tax.</p>',
     POST_WINDOW_VAT + '<p>Prices are untaxed.</p>',
     POST_WINDOW_VAT + '<p>Prices include value added tax.</p>',
@@ -709,6 +710,9 @@ def test_ofgem_later_quarter_after_window_also_requires_post_window_statement():
     'Figures include 5% VAT. Electricity is taxed at 0%.',
     'Figures include 5% VAT. Electricity carries no taxes.',
     'Figures include 5% VAT. Electricity is not subject to taxation.',
+    'Figures include 5% VAT. The tax holiday continues until 30 September 2027.',
+    'Figures include 5% VAT. The power tax holiday is extended.',
+    'Figures include 5% VAT. Tax suspended for domestic power until 2028.',
     'Figures include 5% VAT. Value added tax is not charged on electricity.',
 ])
 def test_ofgem_standard_vat_mode_checks_tax_wording_beyond_vat_token(vat_text):

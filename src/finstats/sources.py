@@ -378,18 +378,13 @@ _OFGEM_ZERO_WIDTH = {ord(c): None for c in '\u200b\u200c\u200d\ufeff\u00ad\u2060
 _OFGEM_EXPLICIT_TAX_WORD_RE = re.compile(
     r'\b(?:VAT|value[\s-]+added[\s-]+tax|tax(?:ed|es|ation|[\s-]+free)|untax\w*)\b', re.I)
 _OFGEM_BARE_TAX_RE = re.compile(r'\btax\b', re.I)
-_OFGEM_TAX_CONTEXT_RE = re.compile(
-    r'(?:\b0\s*%|'
-    r'\b(?:electricity|gas|fuel|figures?|prices?|rates?|charges?|bills?|costs?|'
-    r'zero|nil|no|none|free|exempt\w*|exclud\w*|without|remov\w*|reduc\w*|appli\w*|includ\w*)\b)',
-    re.I,
-)
+_OFGEM_UNRELATED_TAX_RE = re.compile(r'\bcouncil\s+tax\b', re.I)
 
 
 def _ofgem_mentions_tax(sentence):
     return bool(
         _OFGEM_EXPLICIT_TAX_WORD_RE.search(sentence)
-        or (_OFGEM_BARE_TAX_RE.search(sentence) and _OFGEM_TAX_CONTEXT_RE.search(sentence))
+        or _OFGEM_BARE_TAX_RE.search(_OFGEM_UNRELATED_TAX_RE.sub('', sentence))
     )
 
 
@@ -482,6 +477,7 @@ def _ofgem_post_window_standard_vat(blocks, vat_start, vat_end):
             found = True
         elif (window_sentence.fullmatch(sentence)
               or _OFGEM_WINDOW_GAS_VAT_SENTENCE_RE.fullmatch(sentence)
+              # Known captions on secondary regional tables; never set `found`, which still requires the exact resume date above.
               or _SECONDARY_TARIFF_VAT_SENTENCE_RE.fullmatch(sentence)
               or _SECONDARY_TARIFF_GAS_ONLY_VAT_SENTENCE_RE.fullmatch(sentence)
               or _STANDARD_5PCT_VAT_SENTENCE_RE.fullmatch(sentence)):
