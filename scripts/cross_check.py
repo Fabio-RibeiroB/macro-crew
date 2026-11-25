@@ -971,7 +971,7 @@ def check_research_report_links(site_url, fetch):
                                   f'{type(exc).__name__}: {exc}')]
     try:
         payload = json.loads(decode(raw_bytes, 'research_report.json'))
-    except (SourceError, ValueError) as exc:
+    except (SourceError, ValueError, RecursionError) as exc:
         return [ReportLinkProblem('research_report.json', COULD_NOT_CHECK, report_url,
                                   f'invalid JSON: {exc}')]
     if not isinstance(payload, dict):

@@ -388,8 +388,14 @@ def parse_ofgem(key, body, today):
             raise ValidationError('Ofgem period-specific VAT basis is missing or changed') from exc
         period_tax_treatment=f'5% VAT on gas; 0% VAT on electricity from {no_electricity_vat[1]} to {no_electricity_vat[2]}'
     else:
-        if (re.search(r'\bno VAT on electricity\b', text, re.I) or
-                re.search(r'\bVAT on gas only\b', text, re.I)):
+        if (re.search(r'\bno\s+VAT\b', text, re.I) or
+                re.search(r'\b0%\s*VAT\b', text, re.I) or
+                re.search(r'\bzero(?:\s*-\s*rated|\s+VAT)\b', text, re.I) or
+                re.search(r'\bVAT\b[^.]{0,60}\b(?:exempt|zero-?rated|0%|gas\s+only|electricity\s+only|except)\b', text, re.I) or
+                re.search(r'\b(?:exempt\s+from|exclud(?:e|es|ing)|without|(?:do(?:es)?\s+)?not\s+includ(?:e|es|ing))\s+(?:5%\s+)?VAT\b', text, re.I) or
+                re.search(r'\bVAT\s+(?:exempt|excluded|not\s+included)\b', text, re.I) or
+                re.search(r'\b5%\s+VAT\s+on\s+(?:gas|electricity)\b(?!\s+and\s+(?:gas|electricity)\b)', text, re.I) or
+                re.search(r'\b(?:gas|electricity)\s+(?:figures?|prices?|rates?|bills?|charges?)\s+includ(?:e|es|ing)\s+5%\s+VAT\b(?!\s+on\s+(?:both\s+)?(?:gas\s+and\s+electricity|electricity\s+and\s+gas)\b)', text, re.I)):
             raise ValidationError('Ofgem period-specific VAT basis is missing or changed')
         standard_vat=re.search(
             r'\b(?:includ(?:e|es|ing)\s+5%\s+VAT(?:\s+on\s+(?:both\s+)?(?:gas\s+and\s+electricity|electricity\s+and\s+gas))?(?!\s+on\b)|'
@@ -401,6 +407,7 @@ def parse_ofgem(key, body, today):
         period_tax_treatment='5% VAT on gas and electricity'
     no_compare='Costs cannot be compared directly to previous periods because of this change' in text
     next_quarter=_next_quarter_start(today)
+    matched_starts=[]
     periods=[]
     for index,match in enumerate(matches):
         start_year=match[2] or match[4]
@@ -412,6 +419,7 @@ def parse_ofgem(key, body, today):
                 end != date(end.year, quarter_end_month,
                             calendar.monthrange(end.year, quarter_end_month)[1])):
             raise ValidationError('Ofgem cap period is not a calendar quarter')
+        matched_starts.append(start)
         status='effective' if start <= today <= end else 'announced' if start == next_quarter else None
         if status is None:
             if today < start:
@@ -439,18 +447,17 @@ def parse_ofgem(key, body, today):
             if not parts: raise ValidationError('Ofgem rate cell format changed')
             rates[row[0].strip().lower()]={'unit_rate_p_per_kwh':parts[1], 'standing_charge_p_per_day':parts[2]}
         if set(rates)!={'electricity','gas'}: raise ValidationError('Ofgem dual-fuel rates incomplete')
-        tax_treatment=period_tax_treatment
-        comparison_status=('not_comparable_tax_change'
-                           if no_compare and (vat_start is None or start == vat_start)
-                           else 'compare_only_same_basis')
-        periods.append((start,end,status,str(int(match[5].replace(',',''))),rates,
-                        tax_treatment,comparison_status))
-    effective_count=sum(status == 'effective' for _,_,status,_,_,_,_ in periods)
-    announced_count=sum(status == 'announced' for _,_,status,_,_,_,_ in periods)
+        periods.append((start,end,status,str(int(match[5].replace(',',''))),rates,period_tax_treatment))
+    effective_count=sum(status == 'effective' for _,_,status,_,_,_ in periods)
+    announced_count=sum(status == 'announced' for _,_,status,_,_,_ in periods)
     if not periods or effective_count > 1 or announced_count > 1:
         raise ValidationError('Ofgem page does not identify a valid currently effective or next announced cap')
+    earliest_start=min(matched_starts)
     observations=[]
-    for start,end,status,bill,rates,tax_treatment,comparison_status in periods:
+    for start,end,status,bill,rates,tax_treatment in periods:
+        comparison_status=('not_comparable_tax_change'
+                           if no_compare and (start == vat_start if vat_start is not None else start == earliest_start)
+                           else 'compare_only_same_basis')
         reference={'effective_start':start.isoformat(),'effective_end':end.isoformat(),'announcement_date':None,
             'period_status':status,'geography':'Great Britain','regional_basis':'Ofgem average Direct Debit rates for England, Scotland and Wales',
             'payment_method':'Direct Debit','tariff':'default variable tariff',
