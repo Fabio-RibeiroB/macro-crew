@@ -862,7 +862,7 @@ export function previousPublishedWindow(metric) {
   if (expectedPrevious.toISOString().slice(0, 7) !== metric.latest.period) return null;
   return previous;
 }
-const londonDay = (now) =>
+export const londonDay = (now) =>
   new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/London",
     year: "numeric",
