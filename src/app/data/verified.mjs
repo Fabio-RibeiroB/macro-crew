@@ -922,6 +922,12 @@ export function percent(value) {
     ? "Not available"
     : `${Number(value).toLocaleString("en-GB", { maximumFractionDigits: 4 })}%`;
 }
+const NOT_AVAILABLE_PLACEHOLDER = "not available";
+const isUnavailableText = (value) =>
+  typeof value !== "string" ||
+  !value.trim() ||
+  value.trim().toLowerCase() === NOT_AVAILABLE_PLACEHOLDER;
+
 export function legacyReports(value) {
   const reports = value?.current_report_summaries;
   if (!object(reports)) return [];
@@ -932,8 +938,8 @@ export function legacyReports(value) {
           key,
         ) &&
         object(r) &&
-        typeof r.summary === "string" &&
-        r.summary.trim() &&
+        !isUnavailableText(r.summary) &&
+        !isUnavailableText(r.source) &&
         officialUrl(r.source),
     )
     .map(([key, r]) => ({

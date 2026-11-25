@@ -121,7 +121,7 @@ class TestUtils:
                     "uk_macro_crew.utils.build_history_from_snapshot",
                     return_value=_mock_history_payload(),
                 ):
-                    save_json_hook(result)
+                    save_json_hook(result, url_verifier=lambda url, domains: url)
                 
                 # Verify file was created
                 assert os.path.exists("research_report.json")
@@ -199,7 +199,7 @@ class TestUtils:
                     "uk_macro_crew.utils.build_history_from_snapshot",
                     return_value=_mock_history_payload(),
                 ):
-                    save_json_hook(result)
+                    save_json_hook(result, url_verifier=lambda url, domains: url)
                 
                 # Verify file was created and content is clean JSON
                 with open("research_report.json", "r") as f:
@@ -338,10 +338,222 @@ class TestUtils:
                     "uk_macro_crew.utils.build_history_from_snapshot",
                     return_value=_mock_history_payload(),
                 ):
-                    save_json_hook(result)
+                    save_json_hook(result, url_verifier=lambda url, domains: url)
                 with open("research_report.json", "r", encoding="utf-8") as f:
                     saved_data = json.load(f)
                 assert saved_data["current_economic_indicators"]["cpih"]["value"] == "+0.3%"
                 assert saved_data["current_economic_indicators"]["gdp"]["value"] == "+0.1%"
+            finally:
+                os.chdir(original_cwd)
+
+    def test_save_json_hook_rejects_404_report_source_url_and_preserves_existing_report(self):
+        """A 404 report source URL fails closed and leaves existing reports untouched."""
+        from uk_macro_crew.schema import verify_source_url
+
+        payload = {
+            "current_economic_indicators": {
+                "interest_rate": {
+                    "value": "3.75%",
+                    "publication_date": "2026-02-05",
+                    "next_publication_date": "2026-03-19",
+                    "source": "https://www.bankofengland.co.uk/monetary-policy/the-interest-rate-bank-rate",
+                },
+                "cpih": {
+                    "value": "+3.2%",
+                    "publication_date": "2026-02-18",
+                    "next_publication_date": "2026-03-25",
+                    "source": "https://www.ons.gov.uk/economy/inflationandpriceindices/bulletins/consumerpriceinflation/january2026",
+                },
+                "gdp": {
+                    "value": "+0.1%",
+                    "publication_date": "2026-02-12",
+                    "next_publication_date": "2026-03-31",
+                    "source": "https://www.ons.gov.uk/economy/grossdomesticproductgdp",
+                },
+            },
+            "current_report_summaries": {
+                "monetary_policy_report": {
+                    "summary": "Policy stance remains restrictive while inflation moderates.",
+                    "report_date": "2026-11-05",
+                    "next_publication_date": "2026-12-17",
+                    "source": "https://www.bankofengland.co.uk/-/media/boe/files/monetary-policy-report/2026/november/opening-remarks-november-2026",
+                },
+                "financial_stability_report": {
+                    "summary": "Hallucinated November financial stability report.",
+                    "report_date": "2026-11-05",
+                    "next_publication_date": "2026-12-17",
+                    "source": "https://www.bankofengland.co.uk/-/media/boe/files/financial-stability-report/2026/november/financial-stability-report-november-2026",
+                },
+            },
+        }
+
+        class MockResult:
+            def __init__(self, content):
+                self.raw = json.dumps(content)
+
+        existing_report = {"metadata": {"generated_at": "old", "last_updated": "old"}}
+        existing_history = _mock_history_payload()
+
+        def verifier(url, domains):
+            return verify_source_url(
+                url,
+                domains,
+                fetcher=lambda u, m, t: (404, u) if "financial-stability-report" in u else (200, u),
+            )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(temp_dir)
+                with open("research_report.json", "w", encoding="utf-8") as f:
+                    json.dump(existing_report, f)
+                with open("history_report.json", "w", encoding="utf-8") as f:
+                    json.dump(existing_history, f)
+
+                with pytest.raises(
+                    Exception,
+                    match="schema validation failed.*financial_stability_report.source.*HTTP 404",
+                ):
+                    save_json_hook(MockResult(payload), url_verifier=verifier)
+
+                with open("research_report.json", "r", encoding="utf-8") as f:
+                    assert json.load(f) == existing_report
+                with open("history_report.json", "r", encoding="utf-8") as f:
+                    assert json.load(f) == existing_history
+            finally:
+                os.chdir(original_cwd)
+
+    def test_save_json_hook_rejects_redirect_to_unapproved_host(self):
+        """A report source redirecting off bankofengland.co.uk fails closed."""
+        from uk_macro_crew.schema import verify_source_url
+
+        payload = {
+            "current_economic_indicators": {
+                "interest_rate": {
+                    "value": "3.75%",
+                    "publication_date": "2026-02-05",
+                    "next_publication_date": "2026-03-19",
+                    "source": "https://www.bankofengland.co.uk/monetary-policy/the-interest-rate-bank-rate",
+                },
+                "cpih": {
+                    "value": "+3.2%",
+                    "publication_date": "2026-02-18",
+                    "next_publication_date": "2026-03-25",
+                    "source": "https://www.ons.gov.uk/economy/inflationandpriceindices/bulletins/consumerpriceinflation/january2026",
+                },
+                "gdp": {
+                    "value": "+0.1%",
+                    "publication_date": "2026-02-12",
+                    "next_publication_date": "2026-03-31",
+                    "source": "https://www.ons.gov.uk/economy/grossdomesticproductgdp",
+                },
+            },
+            "current_report_summaries": {
+                "monetary_policy_report": {
+                    "summary": "Policy stance remains restrictive.",
+                    "report_date": "2026-02-05",
+                    "next_publication_date": "2026-03-19",
+                    "source": "https://www.bankofengland.co.uk/monetary-policy-report/2026/february-2026",
+                },
+                "financial_stability_report": {
+                    "summary": "Banking system remains resilient.",
+                    "report_date": "2025-12-15",
+                    "next_publication_date": "2026-06-15",
+                    "source": "https://www.bankofengland.co.uk/financial-stability-report",
+                },
+            },
+        }
+
+        class MockResult:
+            def __init__(self, content):
+                self.raw = json.dumps(content)
+
+        def verifier(url, domains):
+            return verify_source_url(
+                url,
+                domains,
+                fetcher=lambda u, m, t: (200, "https://evil.example/hijacked"),
+            )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(temp_dir)
+                with pytest.raises(Exception, match="schema validation failed.*not in approved domains"):
+                    save_json_hook(MockResult(payload), url_verifier=verifier)
+                assert not os.path.exists("research_report.json")
+            finally:
+                os.chdir(original_cwd)
+
+    def test_save_json_hook_accepts_head_405_get_200_fallback(self):
+        """A server rejecting HEAD with 405 succeeds when GET returns 200."""
+        from uk_macro_crew.schema import verify_source_url
+
+        payload = {
+            "current_economic_indicators": {
+                "interest_rate": {
+                    "value": "3.75%",
+                    "publication_date": "2026-02-05",
+                    "next_publication_date": "2026-03-19",
+                    "source": "https://www.bankofengland.co.uk/monetary-policy/the-interest-rate-bank-rate",
+                },
+                "cpih": {
+                    "value": "+3.2%",
+                    "publication_date": "2026-02-18",
+                    "next_publication_date": "2026-03-25",
+                    "source": "https://www.ons.gov.uk/economy/inflationandpriceindices/bulletins/consumerpriceinflation/january2026",
+                },
+                "gdp": {
+                    "value": "+0.1%",
+                    "publication_date": "2026-02-12",
+                    "next_publication_date": "2026-03-31",
+                    "source": "https://www.ons.gov.uk/economy/grossdomesticproductgdp",
+                },
+            },
+            "current_report_summaries": {
+                "monetary_policy_report": {
+                    "summary": "Policy stance remains restrictive.",
+                    "report_date": "2026-02-05",
+                    "next_publication_date": "2026-03-19",
+                    "source": "https://www.bankofengland.co.uk/monetary-policy-report/2026/february-2026",
+                },
+                "financial_stability_report": {
+                    "summary": "Banking system remains resilient.",
+                    "report_date": "2025-12-15",
+                    "next_publication_date": "2026-06-15",
+                    "source": "https://www.bankofengland.co.uk/financial-stability-report",
+                },
+            },
+        }
+
+        class MockResult:
+            def __init__(self, content):
+                self.raw = json.dumps(content)
+
+        seen = []
+
+        def verifier(url, domains):
+            def fake_fetcher(u, method, timeout):
+                seen.append((u, method))
+                return (405, u) if method == "HEAD" else (200, u)
+
+            return verify_source_url(url, domains, fetcher=fake_fetcher)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(temp_dir)
+                with patch(
+                    "uk_macro_crew.utils.build_history_from_snapshot",
+                    return_value=_mock_history_payload(),
+                ):
+                    save_json_hook(MockResult(payload), url_verifier=verifier)
+                assert os.path.exists("research_report.json")
+                assert seen == [
+                    ("https://www.bankofengland.co.uk/monetary-policy-report/2026/february-2026", "HEAD"),
+                    ("https://www.bankofengland.co.uk/monetary-policy-report/2026/february-2026", "GET"),
+                    ("https://www.bankofengland.co.uk/financial-stability-report", "HEAD"),
+                    ("https://www.bankofengland.co.uk/financial-stability-report", "GET"),
+                ]
             finally:
                 os.chdir(original_cwd)

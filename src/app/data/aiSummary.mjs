@@ -89,9 +89,11 @@ const MONTH_YEAR = { month: "long", year: "numeric", timeZone: "UTC" };
 /** The publication's name without a date: "Monetary Policy Summary and minutes". */
 export function publicationTitle(report) {
   const source = String(report?.source ?? "");
-  if (source.includes("/monetary-policy-report/")) return "Monetary Policy Report";
-  if (source.includes("monetary-policy-summary-and-minutes")) return "Monetary Policy Summary and minutes";
-  if (source.includes("financial-stability-report") || report?.key === "financial_stability_report") return "Financial Stability Report";
+  const lower = source.toLowerCase();
+  if (lower.includes("opening-remarks")) return "Monetary Policy Report opening remarks";
+  if (lower.includes("/monetary-policy-report/")) return "Monetary Policy Report";
+  if (lower.includes("monetary-policy-summary-and-minutes")) return "Monetary Policy Summary and minutes";
+  if (lower.includes("financial-stability-report") || report?.key === "financial_stability_report") return "Financial Stability Report";
   return "Monetary Policy Committee publication";
 }
 

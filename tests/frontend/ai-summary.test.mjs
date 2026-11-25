@@ -63,6 +63,23 @@ test("AI summary section is labelled, dated, linked and attributes its figures t
     // An undated report is stated plainly, and an empty feed stays honest.
     assert.match(renderToStaticMarkup(createElement(AiCommentary, { reports: [{ ...reports[0], report_date: null }], reportTime: null })), /date not supplied/);
     assert.match(renderToStaticMarkup(createElement(AiCommentary, { reports: [], reportTime: null })), /The AI summary could not be loaded/);
+
+    // Opening remarks PDFs render with the opening remarks title rather than "Monetary Policy Report".
+    const remarksHtml = renderToStaticMarkup(
+      createElement(AiCommentary, {
+        reports: [
+          {
+            key: "monetary_policy_report",
+            summary: "The Governor outlined the committee's inflation outlook.",
+            report_date: "2026-11-05",
+            source: "https://www.bankofengland.co.uk/-/media/boe/files/monetary-policy-report/2026/november/opening-remarks-november-2026",
+          },
+        ],
+        reportTime: null,
+      }),
+    );
+    assert.match(remarksHtml, /<h4>Monetary Policy Report opening remarks<\/h4>/);
+    assert.match(remarksHtml, /November 2026 Monetary Policy Report opening remarks/);
   } finally { await server.close(); }
 });
 
@@ -108,4 +125,24 @@ test("AI summary text is only split and laid out, never changed", async () => {
   assert.equal(publicationName(mpr), "February 2026 Monetary Policy Report");
   assert.equal(publicationName({ ...mpr, report_date: null }), "Monetary Policy Report");
   assert.equal(publicationName({ ...mpr, report_date: "not a date" }), "Monetary Policy Report");
+
+  // Press conference opening remarks PDFs are labelled as opening remarks, not the full report.
+  const remarks = {
+    key: "monetary_policy_report",
+    source: "https://www.bankofengland.co.uk/-/media/boe/files/monetary-policy-report/2026/november/opening-remarks-november-2026",
+    report_date: "2026-11-05",
+  };
+  assert.equal(publicationTitle(remarks), "Monetary Policy Report opening remarks");
+  assert.equal(publicationName(remarks), "November 2026 Monetary Policy Report opening remarks");
+  assert.equal(
+    publicationTitle({ ...remarks, source: `${remarks.source}.pdf` }),
+    "Monetary Policy Report opening remarks",
+  );
+  assert.equal(
+    publicationTitle({
+      ...remarks,
+      source: "https://www.bankofengland.co.uk/-/media/boe/files/monetary-policy-report/2026/november/Opening-Remarks-November-2026.PDF",
+    }),
+    "Monetary Policy Report opening remarks",
+  );
 });
