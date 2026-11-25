@@ -11,7 +11,7 @@ import zipfile
 import zlib
 import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from urllib.request import Request, urlopen
 from urllib.parse import urlsplit
@@ -351,6 +351,12 @@ _STANDARD_5PCT_VAT_SENTENCE_RE = re.compile(
     r'(?:(?:\s+and)?\s+are\s+rounded\s+to\s+two\s+decimal\s+places)?',
     re.I,
 )
+_OFGEM_WINDOW_GAS_VAT_SENTENCE_RE = re.compile(
+    r'(?:(?:these|all)\s+)?(?:figures|prices|rates|charges)\s+'
+    r'(?:are\s+rounded\s+to\s+two\s+decimal\s+places\s+and\s+)?includ(?:e|es)\s+5%\s+VAT\s+on\s+gas'
+    r'(?:\s+and\s+are\s+rounded\s+to\s+two\s+decimal\s+places)?',
+    re.I,
+)
 _SECONDARY_TARIFF_VAT_SENTENCE_RE = re.compile(
     r'(?:(?:these|all)\s+)?(?:figures|prices|rates|charges)\s+'
     r'(?:are\s+rounded\s+to\s+two\s+decimal\s+places\s+and\s+)?'
@@ -359,6 +365,27 @@ _SECONDARY_TARIFF_VAT_SENTENCE_RE = re.compile(
     r'(?:\s+and\s+are\s+rounded\s+to\s+two\s+decimal\s+places)?',
     re.I,
 )
+_SECONDARY_TARIFF_GAS_ONLY_VAT_SENTENCE_RE = re.compile(
+    r'(?:(?:these|all)\s+)?(?:figures|prices|rates|charges)\s+'
+    r'(?:are\s+rounded\s+to\s+two\s+decimal\s+places\s+and\s+)?'
+    r'includ(?:e|es)\s+VAT\s+on\s+gas\s+only'
+    r'(?:\s+and\s+are\s+rounded\s+to\s+two\s+decimal\s+places)?',
+    re.I,
+)
+
+
+_OFGEM_ZERO_WIDTH = {ord(c): None for c in '\u200b\u200c\u200d\ufeff\u00ad\u2060\u180e'}
+_OFGEM_EXPLICIT_TAX_WORD_RE = re.compile(
+    r'\b(?:VAT|value[\s-]+added[\s-]+tax|tax(?:ed|es|ation|[\s-]+free)|untax\w*)\b', re.I)
+_OFGEM_BARE_TAX_RE = re.compile(r'\btax\b', re.I)
+_OFGEM_UNRELATED_TAX_RE = re.compile(r'\bcouncil\s+tax\b', re.I)
+
+
+def _ofgem_mentions_tax(sentence):
+    return bool(
+        _OFGEM_EXPLICIT_TAX_WORD_RE.search(sentence)
+        or _OFGEM_BARE_TAX_RE.search(_OFGEM_UNRELATED_TAX_RE.sub('', sentence))
+    )
 
 
 class OfgemPage(HTMLParser):
@@ -377,6 +404,7 @@ class OfgemPage(HTMLParser):
         elif tag == 'tr' and self.table is not None: self.row=[]
         elif tag in ('td','th') and self.row is not None: self.cell=True; self.text=[]
     def handle_data(self, data):
+        data=data.translate(_OFGEM_ZERO_WIDTH)
         self.body.append(data)
         self._block.append(data)
         if self.cell: self.text.append(data)
@@ -392,25 +420,72 @@ class OfgemPage(HTMLParser):
         super().close(); self._flush_block()
 
 
-def _ofgem_has_unambiguous_standard_vat(blocks):
-    has_explicit_5pct = False
+def _ofgem_sentences(blocks):
     for block in blocks:
         for raw_sentence in re.split(r'(?<=[.!?])\s+|(?<!\d)\.(?!\d)', block):
             sentence = raw_sentence.strip().rstrip('.!?').strip()
-            if not sentence:
-                continue
-            if re.search(r'\bzero[\s-]+rated\b', sentence, re.I) or re.search(
-                    r'\b(?:electricity|gas)\b[^.]{0,40}\b(?:0%|tax[\s-]+free|exempt)\b', sentence, re.I):
-                return False
-            if not re.search(r'\bVAT\b', sentence, re.I):
-                continue
-            if _STANDARD_5PCT_VAT_SENTENCE_RE.fullmatch(sentence):
-                has_explicit_5pct = True
-            elif _SECONDARY_TARIFF_VAT_SENTENCE_RE.fullmatch(sentence):
-                continue
-            else:
-                return False
+            if sentence:
+                yield sentence
+
+
+_OFGEM_ZERO_RATED_RE = re.compile(r'\bzero[\s-]+rate(?:d|s)?\b', re.I)
+_OFGEM_ZERO_PCT_RE = re.compile(r'\b0\s*(?:%|per\s*cent\b)', re.I)
+_OFGEM_FUEL_EXEMPT_RE = re.compile(
+    r'\b(?:electricity|gas)\b[^.]{0,40}(?:\b0\s*%|\b(?:tax[\s-]+free|exempt)\b)', re.I)
+_OFGEM_FUEL_CONTRADICTION_RE = re.compile(
+    r'\b(?:electricity|gas)\b[^.]{0,60}(?:\b0\s*%|\b(?:zero|tax[\s-]+free|exempt\w*|extended|extension|'
+    r'remains?|continu\w+|except|apart|excluding|unless|subject)\b)', re.I)
+
+
+def _ofgem_has_unambiguous_standard_vat(blocks):
+    has_explicit_5pct = False
+    for sentence in _ofgem_sentences(blocks):
+        if _OFGEM_ZERO_RATED_RE.search(sentence) or _OFGEM_FUEL_EXEMPT_RE.search(sentence):
+            return False
+        if not _ofgem_mentions_tax(sentence):
+            continue
+        if _STANDARD_5PCT_VAT_SENTENCE_RE.fullmatch(sentence):
+            has_explicit_5pct = True
+        elif _SECONDARY_TARIFF_VAT_SENTENCE_RE.fullmatch(sentence):
+            continue
+        else:
+            return False
     return has_explicit_5pct
+
+
+def _ofgem_post_window_standard_vat(blocks, vat_start, vat_end):
+    """True only if Ofgem explicitly puts both fuels back on 5% VAT from the day after the window.
+
+    Every other VAT/tax sentence must be the window sentence, the window gas sentence,
+    or a known secondary-tariff table caption; anything else, or any contradiction, fails closed.
+    """
+    def day(value): return f'{value.day} {value.strftime("%B")} {value.year}'
+    resume = re.escape(day(vat_end + timedelta(days=1)))
+    fuels = r'(?:gas\s+and\s+electricity|electricity\s+and\s+gas)'
+    post_window = (
+        re.compile(rf'from\s+{resume},?\s+5%\s+VAT\s+applies\s+to\s+(?:both\s+)?{fuels}', re.I),
+        re.compile(rf'from\s+{resume},?\s+(?:figures|prices|rates|charges)\s+include\s+5%\s+VAT'
+                   rf'\s+on\s+(?:both\s+)?{fuels}', re.I),
+        re.compile(rf'(?:figures|prices|rates|charges)\s+from\s+{resume}\s+include\s+5%\s+VAT'
+                   rf'(?:\s+on\s+(?:both\s+)?{fuels})?', re.I),
+    )
+    window_sentence = re.compile(
+        rf'There is no VAT on electricity from {re.escape(day(vat_start))} to {re.escape(day(vat_end))}')
+    found = False
+    for sentence in _ofgem_sentences(blocks):
+        if any(pattern.fullmatch(sentence) for pattern in post_window):
+            found = True
+        elif (window_sentence.fullmatch(sentence)
+              or _OFGEM_WINDOW_GAS_VAT_SENTENCE_RE.fullmatch(sentence)
+              # Known captions on secondary regional tables; never set `found`, which still requires the exact resume date above.
+              or _SECONDARY_TARIFF_VAT_SENTENCE_RE.fullmatch(sentence)
+              or _SECONDARY_TARIFF_GAS_ONLY_VAT_SENTENCE_RE.fullmatch(sentence)
+              or _STANDARD_5PCT_VAT_SENTENCE_RE.fullmatch(sentence)):
+            continue
+        elif (_ofgem_mentions_tax(sentence) or _OFGEM_ZERO_RATED_RE.search(sentence)
+              or _OFGEM_ZERO_PCT_RE.search(sentence) or _OFGEM_FUEL_CONTRADICTION_RE.search(sentence)):
+            return False
+    return found
 
 
 def _next_quarter_start(today):
@@ -435,7 +510,7 @@ def parse_ofgem(key, body, today):
     rows=tables[0]; headers=rows[0]
     no_electricity_vat=re.search(r'There is no VAT on electricity from (\d{1,2} [A-Z][a-z]+ \d{4}) to (\d{1,2} [A-Z][a-z]+ \d{4})', text)
     if no_electricity_vat:
-        gas_vat=re.search(r'include 5% VAT on gas', text, re.I)
+        gas_vat=any(_OFGEM_WINDOW_GAS_VAT_SENTENCE_RE.fullmatch(s) for s in _ofgem_sentences(page.blocks))
         if not gas_vat:
             raise ValidationError('Ofgem period-specific VAT basis is missing or changed')
         try:
@@ -443,16 +518,17 @@ def parse_ofgem(key, body, today):
             vat_end=datetime.strptime(no_electricity_vat[2], '%d %B %Y').date()
         except ValueError as exc:
             raise ValidationError('Ofgem period-specific VAT basis is missing or changed') from exc
-        period_tax_treatment=f'5% VAT on gas; 0% VAT on electricity from {no_electricity_vat[1]} to {no_electricity_vat[2]}'
+        window_tax_treatment=f'5% VAT on gas; 0% VAT on electricity from {no_electricity_vat[1]} to {no_electricity_vat[2]}'
     else:
         if not _ofgem_has_unambiguous_standard_vat(page.blocks):
             raise ValidationError('Ofgem period-specific VAT basis is missing or changed')
         vat_start=vat_end=None
-        period_tax_treatment='5% VAT on gas and electricity'
+        window_tax_treatment='5% VAT on gas and electricity'
     no_compare='Costs cannot be compared directly to previous periods because of this change' in text
     next_quarter=_next_quarter_start(today)
     matched_starts=[]
     periods=[]
+    post_window_vat=None
     for index,match in enumerate(matches):
         start_year=match[2] or match[4]
         end_year=match[4]
@@ -476,8 +552,18 @@ def parse_ofgem(key, body, today):
         if explicit_usage and (int(explicit_usage[1].replace(',','')) != OFGEM_MEDIUM_SINGLE_RATE_ELECTRICITY_KWH or
                                int(explicit_usage[2].replace(',','')) != OFGEM_MEDIUM_GAS_KWH):
             raise ValidationError('Ofgem headline consumption basis conflicts with reviewed 2026 TDCVs')
-        if vat_start is not None and (start < vat_start or end > vat_end):
-            raise ValidationError('Ofgem source does not state VAT treatment for this cap period')
+        period_tax_treatment=window_tax_treatment
+        first_after_window=False
+        if vat_start is not None and not (vat_start <= start and end <= vat_end):
+            # Only whole quarters after the bounded window, and only on an explicit 5% VAT statement.
+            if start <= vat_end:
+                raise ValidationError('Ofgem source does not state VAT treatment for this cap period')
+            if post_window_vat is None:
+                post_window_vat=_ofgem_post_window_standard_vat(page.blocks, vat_start, vat_end)
+            if not post_window_vat:
+                raise ValidationError('Ofgem source does not state VAT treatment for this cap period')
+            period_tax_treatment='5% VAT on gas and electricity'
+            first_after_window=start == vat_end + timedelta(days=1)
         period_labels=(
             f'{start.day} {start.strftime("%B")} to {end.day} {end.strftime("%B")} {start.year}',
             f'{start.day} {start.strftime("%B")} {start.year} to {end.day} {end.strftime("%B")} {start.year}',
@@ -491,16 +577,17 @@ def parse_ofgem(key, body, today):
             if not parts: raise ValidationError('Ofgem rate cell format changed')
             rates[row[0].strip().lower()]={'unit_rate_p_per_kwh':parts[1], 'standing_charge_p_per_day':parts[2]}
         if set(rates)!={'electricity','gas'}: raise ValidationError('Ofgem dual-fuel rates incomplete')
-        periods.append((start,end,status,str(int(match[5].replace(',',''))),rates,period_tax_treatment))
-    effective_count=sum(status == 'effective' for _,_,status,_,_,_ in periods)
-    announced_count=sum(status == 'announced' for _,_,status,_,_,_ in periods)
+        periods.append((start,end,status,str(int(match[5].replace(',',''))),rates,period_tax_treatment,first_after_window))
+    effective_count=sum(p[2] == 'effective' for p in periods)
+    announced_count=sum(p[2] == 'announced' for p in periods)
     if not periods or effective_count > 1 or announced_count > 1:
         raise ValidationError('Ofgem page does not identify a valid currently effective or next announced cap')
     earliest_start=min(matched_starts)
     observations=[]
-    for start,end,status,bill,rates,tax_treatment in periods:
+    for start,end,status,bill,rates,tax_treatment,first_after_window in periods:
+        # Returning from 0% electricity VAT to 5% is a tax change whatever Ofgem's note says.
         comparison_status=('not_comparable_tax_change'
-                           if no_compare and (start == vat_start if vat_start is not None else start == earliest_start)
+                           if first_after_window or (no_compare and (start == vat_start if vat_start is not None else start == earliest_start))
                            else 'compare_only_same_basis')
         reference={'effective_start':start.isoformat(),'effective_end':end.isoformat(),'announcement_date':None,
             'period_status':status,'geography':'Great Britain','regional_basis':'Ofgem average Direct Debit rates for England, Scotland and Wales',

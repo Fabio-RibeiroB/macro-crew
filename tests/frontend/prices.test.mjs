@@ -149,3 +149,24 @@ test("announced upcoming energy cap is visible with annualised framing and keeps
   assert.match(fullText, /10\.96p\/kWh and 29\.65p\/day/);
   assert.match(fullText, /0% VAT on electricity from 1 October 2026 to 30 June 2027/);
 });
+
+test("effective Q2 2027 and announced Q3 2027 energy caps keep separate tax bases with no cross-period change", async () => {
+  const data = withInflation();
+  const base = data.metrics.household_energy.latest;
+  const window = "5% VAT on gas; 0% VAT on electricity from 1 October 2026 to 30 June 2027";
+  data.metrics.household_energy.latest = { ...base, period: "2027-04-01", value: "1800", reference: {
+    ...base.reference, effective_start: "2027-04-01", effective_end: "2027-06-30",
+    period_status: "effective", comparison_status: "compare_only_same_basis", tax_treatment: window } };
+  data.metrics.household_energy.history = [data.metrics.household_energy.latest];
+  data.metrics.household_energy.upcoming_period = { period: "2027-07-01", value: "1890", status: "observed", reference: {
+    ...base.reference, effective_start: "2027-07-01", effective_end: "2027-09-30",
+    period_status: "announced", comparison_status: "not_comparable_tax_change",
+    tax_treatment: "5% VAT on gas and electricity",
+    electricity: { unit_rate_p_per_kwh: "28.40", standing_charge_p_per_day: "56.10" },
+    gas: { unit_rate_p_per_kwh: "8.15", standing_charge_p_per_day: "30.20" } } };
+  const text = textOf(section(await renderPrices(data), "household-energy"));
+  assert.match(text, /Tax: 5% VAT on gas; 0% VAT on electricity from 1 October 2026 to 30 June 2027/);
+  assert.match(text, /Tax: 5% VAT on gas and electricity/);
+  assert.match(text, /£1,890\/year for 1 July 2027 to 30 September 2027/);
+  assert.doesNotMatch(text, /[+−]£\d/, "no rise or fall is shown between the two tax bases");
+});
