@@ -221,7 +221,7 @@ function housePriceRow(base, level, growth) {
 }
 
 const energyTaxBasis = (tax) =>
-  String(tax ?? "").replace(/\s+from \d{1,2} [A-Z][a-z]+ \d{4} to \d{1,2} [A-Z][a-z]+ \d{4}$/, "");
+  String(tax ?? "").replace(/( from \d{1,2} [A-Z][a-z]+ \d{4}) to \d{1,2} [A-Z][a-z]+ \d{4}$/, "$1");
 const energyBasis = (r) => [r.geography, r.payment_method, r.tariff, r.electricity_kwh_per_year,
   r.gas_kwh_per_year, r.consumption_basis, energyTaxBasis(r.tax_treatment)].join("|");
 /** Earlier cap period on the same consumption and tax basis, or a reason there is none. */

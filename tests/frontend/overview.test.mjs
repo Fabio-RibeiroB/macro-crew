@@ -132,9 +132,13 @@ test("extending the 0% electricity VAT window keeps consecutive cap quarters com
   const row = overviewRows({ ...data, metrics: { ...data.metrics, household_energy: metric } }).find((r) => r.id === "energy");
   assert.equal(row.change[0].text, "+£443/year");
 
-  // An actual tax-regime change remains non-comparable.
+  // An actual tax-regime change or separate 0% VAT window remains non-comparable.
   const jul = structuredClone(jan);
   jul.period = "2027-07-01";
   jul.reference.tax_treatment = "5% VAT on gas and electricity";
   assert.equal(comparableEnergyPrevious({ ...metric, latest: jul, history: [...metric.history, jul] }).kind, "unavailable");
+  const laterWindow = structuredClone(jan);
+  laterWindow.period = "2028-10-01";
+  laterWindow.reference.tax_treatment = "5% VAT on gas; 0% VAT on electricity from 1 October 2028 to 31 March 2029";
+  assert.equal(comparableEnergyPrevious({ ...metric, latest: laterWindow, history: [...metric.history, laterWindow] }).kind, "unavailable");
 });
