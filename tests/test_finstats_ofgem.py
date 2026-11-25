@@ -81,13 +81,48 @@ def test_changed_source_basis_or_tax_grammar_fails_closed(replacement):
         parse('household_energy', body, date(2026, 10, 22))
 
 
-def test_ofgem_effective_date_activation_fails_closed():
+def announced_only_jan_2027_page():
+    """Matches Ofgem's 25 November 2026 layout: next-quarter headline only, both columns in table."""
+    return '''<title>Energy price cap unit rates and standing charges | Ofgem</title>
+      <p>From 1 January to 31 March 2027, the price cap will be £2,166 per year. This has gone up by 26% compared to the last price cap period.</p>
+      <p>This figure is based on the average energy unit rate and standing charge for people who pay by Direct Debit in England, Scotland and Wales.</p>
+      <p>Average electricity and gas unit prices and standing charges by Direct Debit</p>
+      <table><tr><th></th>
+      <th>Energy price cap per unit and standing charge 1 October to 31 December 2026</th>
+      <th>Energy price cap per unit and standing charge 1 January to 31 March 2027</th></tr>
+      <tr><td>Electricity</td><td>26.32 pence per kWh 54.83 pence daily standing charge</td><td>32.69 pence per kWh 54.77 pence daily standing charge</td></tr>
+      <tr><td>Gas</td><td>7.97 pence per kWh 29.68 pence daily standing charge</td><td>10.96 pence per kWh 29.65 pence daily standing charge</td></tr></table>
+      <p>Figures are rounded to two decimal places and include 5% VAT on gas. There is no VAT on electricity from 1 October 2026 to 30 June 2027. Costs cannot be compared directly to previous periods because of this change.</p>'''.encode()
+
+
+def test_ofgem_effective_date_activation_fails_closed(tmp_path):
     body = BODY
-    with pytest.raises(ValueError, match='currently effective'):
-        parse('household_energy', body, date(2026, 9, 30))
+    # Day before effective start: parsed as announced, never promoted to effective or latest.
+    before = parse('household_energy', body, date(2026, 9, 30)).observations
+    assert [(p.period, p.value, p.reference['period_status']) for p in before] == [
+        ('2026-10-01', '1723', 'announced')]
+    store = Store(tmp_path)
+    try:
+        store.ingest('household_energy', body, datetime(2026, 9, 30, 12, tzinfo=timezone.utc),
+                     source_url=DEFINITIONS['household_energy'].download_url)
+        publish(store, datetime(2026, 9, 30, 12, tzinfo=timezone.utc))
+        manifest = json.loads((tmp_path / 'shadow' / 'current.json').read_text())
+        data = json.loads((tmp_path / 'shadow' / manifest['data_url']).read_text())
+        energy = data['metrics']['household_energy']
+        assert energy['validation_status'] == 'unavailable'
+        assert energy['latest'] is None
+        assert energy['upcoming_period']['period'] == '2026-10-01'
+    finally:
+        store.close()
+    # On effective start: active.
+    assert parse('household_energy', body, date(2026, 10, 1)).observations[0].reference['period_status'] == 'effective'
     assert parse('household_energy', body, date(2026, 10, 1)).observations[0].value == '1723'
-    with pytest.raises(ValueError, match='currently effective'):
+    # After expiry: fails closed.
+    with pytest.raises(ValueError, match='currently effective or next announced'):
         parse('household_energy', body, date(2027, 1, 1))
+    # More than one quarter ahead: fails closed.
+    with pytest.raises(ValueError, match='next calendar quarter'):
+        parse('household_energy', body, date(2026, 6, 30))
 
 
 def test_announced_cap_is_separate_until_its_effective_date():
@@ -265,3 +300,71 @@ def test_never_collected_empty_energy_is_publishable_with_official_sibling(tmp_p
         assert public['metrics']['bank_rate']['latest']['value'] == '3.75'
     finally:
         store.close()
+
+
+def test_announced_only_ofgem_page_keeps_effective_cap_and_rolls_over(tmp_path):
+    store = Store(tmp_path)
+    try:
+        store.ingest('household_energy', BODY, datetime(2026, 10, 22, tzinfo=timezone.utc),
+                     source_url=DEFINITIONS['household_energy'].download_url)
+        store.ingest('bank_rate', (FIXTURES / 'bank_rate.csv').read_bytes(),
+                     datetime(2026, 11, 25, 8, tzinfo=timezone.utc),
+                     source_url=DEFINITIONS['bank_rate'].download_url)
+        store.ingest('household_energy', announced_only_jan_2027_page(),
+                     datetime(2026, 11, 25, 8, tzinfo=timezone.utc),
+                     source_url=DEFINITIONS['household_energy'].download_url)
+
+        publish(store, datetime(2026, 11, 25, 8, tzinfo=timezone.utc))
+        public_dir = tmp_path.with_name(tmp_path.name + '-public')
+        deliver(tmp_path, public_dir)
+        manifest = json.loads((public_dir / 'current.json').read_text())
+        energy = json.loads((public_dir / manifest['data_url']).read_text())['metrics']['household_energy']
+        assert energy['collection_status'] == 'ok'
+        assert energy['validation_status'] == 'verified'
+        assert energy['release_status'] == 'awaiting_next_release'
+        assert energy['latest']['period'] == '2026-10-01'
+        assert energy['latest']['value'] == '1723'
+        assert energy['latest']['reference']['period_status'] == 'effective'
+        assert [p['period'] for p in energy['history']] == ['2026-10-01']
+        upcoming = energy['upcoming_period']
+        assert upcoming['period'] == '2027-01-01'
+        assert upcoming['value'] == '2166'
+        assert upcoming['reference']['period_status'] == 'announced'
+        assert upcoming['reference']['electricity'] == {
+            'unit_rate_p_per_kwh': '32.69', 'standing_charge_p_per_day': '54.77'}
+        assert upcoming['reference']['gas'] == {
+            'unit_rate_p_per_kwh': '10.96', 'standing_charge_p_per_day': '29.65'}
+        assert upcoming['reference']['tax_treatment'] == (
+            '5% VAT on gas; 0% VAT on electricity from 1 October 2026 to 30 June 2027')
+        assert upcoming['reference']['comparison_status'] == 'compare_only_same_basis'
+
+        # On 1 January 2027, the announced cap automatically becomes the active cap.
+        publish(store, datetime(2027, 1, 1, 0, 5, tzinfo=timezone.utc))
+        deliver(tmp_path, public_dir)
+        manifest = json.loads((public_dir / 'current.json').read_text())
+        energy = json.loads((public_dir / manifest['data_url']).read_text())['metrics']['household_energy']
+        assert energy['validation_status'] == 'verified'
+        assert energy['latest']['period'] == '2027-01-01'
+        assert energy['latest']['value'] == '2166'
+        assert energy['latest']['reference']['period_status'] == 'effective'
+        assert energy['upcoming_period'] is None
+        assert [(p['period'], p['reference']['period_status']) for p in energy['history']] == [
+            ('2026-10-01', 'expired'), ('2027-01-01', 'effective')]
+    finally:
+        store.close()
+
+
+def test_ofgem_duplicate_announced_headline_and_repeated_start_year():
+    repeated_year = announced_only_jan_2027_page().replace(
+        b'From 1 January to 31 March 2027', b'From 1 January 2027 to 31 March 2027')
+    snap = parse('household_energy', repeated_year, date(2026, 11, 25))
+    assert snap.observations[0].period == '2027-01-01'
+    assert snap.observations[0].value == '2166'
+
+    duplicate = announced_only_jan_2027_page().replace(
+        b'<p>Average electricity',
+        ('<p>From 1 January to 31 March 2027, the price cap will be £2,200 per year.</p>'
+         '<p>This figure is based on the average energy unit rate and standing charge for people who pay by Direct Debit in England, Scotland and Wales.</p>'
+         '<p>Average electricity').encode())
+    with pytest.raises(ValueError, match='currently effective or next announced'):
+        parse('household_energy', duplicate, date(2026, 11, 25))

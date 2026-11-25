@@ -356,6 +356,11 @@ class OfgemPage(HTMLParser):
             self.tables.append(self.table); self.table=None
 
 
+def _next_quarter_start(today):
+    month = ((today.month - 1) // 3) * 3 + 4
+    return date(today.year + (1 if month > 12 else 0), 1 if month > 12 else month, 1)
+
+
 def parse_ofgem(key, body, today):
     if key != 'household_energy': raise ValidationError('Unexpected Ofgem metric')
     if len(body) > MAX_OFGEM_BYTES: raise ValidationError('Ofgem page exceeds size limit')
@@ -366,7 +371,7 @@ def parse_ofgem(key, body, today):
     if ('Energy price cap unit rates and standing charges | Ofgem' not in text or
             'Average electricity and gas unit prices and standing charges by Direct Debit' not in text):
         raise ValidationError('Unexpected Ofgem page identity or payment basis')
-    matches=list(re.finditer(r'From (\d{1,2} [A-Z][a-z]+) to (\d{1,2} [A-Z][a-z]+) (\d{4}), the price cap will be £([\d,]+) per year', text))
+    matches=list(re.finditer(r'From (\d{1,2} [A-Z][a-z]+)(?: (\d{4}))? to (\d{1,2} [A-Z][a-z]+) (\d{4}), the price cap will be £([\d,]+) per year', text))
     if not matches: raise ValidationError('Ofgem cap headline/effective period missing')
     tables=[rows for rows in page.tables if rows and any('Energy price cap per unit' in c for c in rows[0])]
     if len(tables)!=1: raise ValidationError('Ofgem average rates table missing or ambiguous')
@@ -378,17 +383,23 @@ def parse_ofgem(key, body, today):
     vat_start=datetime.strptime(no_electricity_vat[1], '%d %B %Y').date()
     vat_end=datetime.strptime(no_electricity_vat[2], '%d %B %Y').date()
     no_compare='Costs cannot be compared directly to previous periods because of this change' in text
+    next_quarter=_next_quarter_start(today)
     periods=[]
     for index,match in enumerate(matches):
-        start=datetime.strptime(f'{match[1]} {match[3]}','%d %B %Y').date()
-        end=datetime.strptime(f'{match[2]} {match[3]}','%d %B %Y').date()
+        start_year=match[2] or match[4]
+        end_year=match[4]
+        start=datetime.strptime(f'{match[1]} {start_year}','%d %B %Y').date()
+        end=datetime.strptime(f'{match[3]} {end_year}','%d %B %Y').date()
         quarter_end_month=start.month + 2
-        if (start.day != 1 or start.month not in {1, 4, 7, 10} or
+        if (start.year != end.year or start.day != 1 or start.month not in {1, 4, 7, 10} or
                 end != date(end.year, quarter_end_month,
                             calendar.monthrange(end.year, quarter_end_month)[1])):
             raise ValidationError('Ofgem cap period is not a calendar quarter')
-        status='effective' if start <= today <= end else 'announced' if today < start else None
-        if status is None: continue
+        status='effective' if start <= today <= end else 'announced' if start == next_quarter else None
+        if status is None:
+            if today < start:
+                raise ValidationError('Ofgem announced cap is not for the next calendar quarter')
+            continue
         context=text[match.end():matches[index+1].start() if index+1 < len(matches) else len(text)]
         if not re.search(r'This figure is based on the average energy unit rate and standing charge for people who pay by Direct Debit in England, Scotland and Wales', context, re.I):
             raise ValidationError('Ofgem headline Direct Debit and GB basis mismatch')
@@ -398,7 +409,11 @@ def parse_ofgem(key, body, today):
             raise ValidationError('Ofgem headline consumption basis conflicts with reviewed 2026 TDCVs')
         if start < vat_start or end > vat_end:
             raise ValidationError('Ofgem source does not state VAT treatment for this cap period')
-        current=[i for i,h in enumerate(headers) if f'{start.day} {start.strftime("%B")} to {end.day} {end.strftime("%B")} {start.year}' in h]
+        period_labels=(
+            f'{start.day} {start.strftime("%B")} to {end.day} {end.strftime("%B")} {start.year}',
+            f'{start.day} {start.strftime("%B")} {start.year} to {end.day} {end.strftime("%B")} {start.year}',
+        )
+        current=[i for i,h in enumerate(headers) if any(label in h for label in period_labels)]
         if len(current)!=1: raise ValidationError('Ofgem cap rates column mismatch')
         rates={}
         for row in rows[1:]:
@@ -410,10 +425,12 @@ def parse_ofgem(key, body, today):
         tax_treatment=f'5% VAT on gas; 0% VAT on electricity from {no_electricity_vat[1]} to {no_electricity_vat[2]}'
         comparison_status=('not_comparable_tax_change' if start == vat_start and no_compare
                            else 'compare_only_same_basis')
-        periods.append((start,end,status,str(int(match[4].replace(',',''))),rates,
+        periods.append((start,end,status,str(int(match[5].replace(',',''))),rates,
                         tax_treatment,comparison_status))
-    if not periods or sum(status == 'effective' for _,_,status,_,_,_,_ in periods) != 1:
-        raise ValidationError('Ofgem page does not identify exactly one currently effective cap')
+    effective_count=sum(status == 'effective' for _,_,status,_,_,_,_ in periods)
+    announced_count=sum(status == 'announced' for _,_,status,_,_,_,_ in periods)
+    if not periods or effective_count > 1 or announced_count > 1:
+        raise ValidationError('Ofgem page does not identify a valid currently effective or next announced cap')
     observations=[]
     for start,end,status,bill,rates,tax_treatment,comparison_status in periods:
         reference={'effective_start':start.isoformat(),'effective_end':end.isoformat(),'announcement_date':None,

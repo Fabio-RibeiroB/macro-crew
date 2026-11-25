@@ -612,6 +612,74 @@ def test_compare_flags_missing_extra_and_changed_recent_periods():
     assert cc.compare({}, truth) == ['the site has no observations']
 
 
+OFGEM_ANNOUNCED_ONLY = '''<title>Energy price cap unit rates and standing charges | Ofgem</title>
+  <p>From 1 January to 31 March 2027, the price cap will be £2,166 per year.</p>
+  <p>This figure is based on the average energy unit rate and standing charge for people who pay by Direct Debit in England, Scotland and Wales.</p>
+  <table><tr><th></th>
+  <th>Energy price cap per unit and standing charge 1 October to 31 December 2026</th>
+  <th>Energy price cap per unit and standing charge 1 January to 31 March 2027</th></tr>
+  <tr><td>Electricity</td><td>26.32 pence per kWh 54.83 pence daily standing charge</td><td>32.69 pence per kWh 54.77 pence daily standing charge</td></tr>
+  <tr><td>Gas</td><td>7.97 pence per kWh 29.68 pence daily standing charge</td><td>10.96 pence per kWh 29.65 pence daily standing charge</td></tr></table>'''.encode()
+
+
+def _upcoming_jan_2027(latest_point):
+    ref = copy.deepcopy(latest_point['reference'])
+    ref.update(
+        effective_start='2027-01-01',
+        effective_end='2027-03-31',
+        period_status='announced',
+        comparison_status='compare_only_same_basis',
+        tax_treatment='5% VAT on gas; 0% VAT on electricity from 1 October 2026 to 30 June 2027',
+        electricity={'unit_rate_p_per_kwh': '32.69', 'standing_charge_p_per_day': '54.77'},
+        gas={'unit_rate_p_per_kwh': '10.96', 'standing_charge_p_per_day': '29.65'},
+    )
+    return {'period': '2027-01-01', 'value': '2166', 'status': 'observed', 'reference': ref}
+
+
+@needs_node
+def test_ofgem_announcement_only_page_checks_current_table_rates_and_upcoming_cap(generation):
+    ofgem_url = DEFINITIONS['household_energy'].source_url
+
+    # 1. Site missing upcoming_period (the 25 Nov failure mode before the fix) -> MISMATCH.
+    fake = web(copy.deepcopy(generation))
+    fake.replace(ofgem_url, OFGEM_ANNOUNCED_ONLY)
+    report = check(fake)
+    by_key = {r.key: r for r in report.results}
+    assert by_key['household_energy'].kinds == [cc.MISMATCH]
+    assert 'upcoming cap: site none, official 2027-01-01 (2166)' in by_key['household_energy'].details[0]
+
+    # 2. Site has matching current rates + matching upcoming cap & rates -> OK.
+    with_upcoming = copy.deepcopy(generation)
+    energy = with_upcoming['metrics']['household_energy']
+    energy['upcoming_period'] = _upcoming_jan_2027(energy['latest'])
+    fake = web(with_upcoming)
+    fake.replace(ofgem_url, OFGEM_ANNOUNCED_ONLY)
+    report = check(fake)
+    assert report.clean
+    assert {r.key: r for r in report.results}['household_energy'].kinds == [cc.OK]
+
+    # 3. Site has wrong upcoming value or wrong current table rate -> MISMATCH.
+    wrong_upcoming = copy.deepcopy(with_upcoming)
+    wrong_upcoming['metrics']['household_energy']['upcoming_period']['value'] = '2100'
+    fake = web(wrong_upcoming)
+    fake.replace(ofgem_url, OFGEM_ANNOUNCED_ONLY)
+    assert kinds(check(fake))['household_energy'] == [cc.MISMATCH]
+
+    wrong_active_rate = copy.deepcopy(with_upcoming)
+    wrong_active_rate['metrics']['household_energy']['latest']['reference']['electricity']['unit_rate_p_per_kwh'] = '99.99'
+    wrong_active_rate['metrics']['household_energy']['history'][-1]['reference']['electricity']['unit_rate_p_per_kwh'] = '99.99'
+    fake = web(wrong_active_rate)
+    fake.replace(ofgem_url, OFGEM_ANNOUNCED_ONLY)
+    res = {r.key: r for r in check(fake).results}['household_energy']
+    assert res.kinds == [cc.MISMATCH]
+    assert any('electricity unit rate' in d for d in res.details)
+
+    # 4. Announcement-only Ofgem page without the current-quarter table column -> COULD_NOT_CHECK.
+    fake = web(with_upcoming)
+    fake.replace(ofgem_url, b'<p>From 1 January to 31 March 2027, the price cap will be \xc2\xa32,166 per year.</p>')
+    assert kinds(check(fake))['household_energy'] == [cc.COULD_NOT_CHECK]
+
+
 # ------------------------------------------------------------------ issue lifecycle
 
 def problem_report():
