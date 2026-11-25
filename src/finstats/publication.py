@@ -1,14 +1,34 @@
 """Consistent immutable shadow exports; a single manifest activates a generation."""
 from __future__ import annotations
 
+from datetime import datetime
 import hashlib
 import json
 from pathlib import Path
+import re
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from finstats.sources import DEFINITIONS, public_definition, publication_deadline
 from finstats.storage import atomic_write, encode, timestamp
+
+_VAT_WINDOW_RE = re.compile(
+    r'^(.* from (\d{1,2} [A-Z][a-z]+ \d{4})) to (\d{1,2} [A-Z][a-z]+ \d{4})$'
+)
+
+
+def _energy_vat_window(tax_treatment):
+    if not isinstance(tax_treatment, str):
+        return None
+    match = _VAT_WINDOW_RE.fullmatch(tax_treatment)
+    if not match:
+        return None
+    try:
+        vat_start = datetime.strptime(match[2], '%d %B %Y').date().isoformat()
+        vat_end = datetime.strptime(match[3], '%d %B %Y').date().isoformat()
+    except ValueError:
+        return None
+    return match[1], vat_start, vat_end, tax_treatment
 
 
 def health(store, when):
@@ -71,11 +91,21 @@ def publish(store, when):
                 if key == 'household_energy':
                     retained = store.observations(key, selected['evidence_kind'])
                     local_date = when.astimezone(ZoneInfo('Europe/London')).date().isoformat()
+                    latest_vat_windows = {}
+                    for original in (*retained, *payload['observations']):
+                        vat = _energy_vat_window((original.get('reference') or {}).get('tax_treatment'))
+                        if vat:
+                            latest_vat_windows[vat[0]] = vat[1:]
                     history, active, future = [], [], []
                     for original in retained:
                         point = dict(original)
                         reference = dict(point['reference'])
                         start, end = reference['effective_start'], reference['effective_end']
+                        existing_vat = _energy_vat_window(reference.get('tax_treatment'))
+                        if existing_vat and existing_vat[0] in latest_vat_windows:
+                            vat_start, vat_end, updated_tax = latest_vat_windows[existing_vat[0]]
+                            if vat_start <= start and end <= vat_end:
+                                reference['tax_treatment'] = updated_tax
                         if start <= local_date <= end:
                             reference['period_status'] = 'effective'
                             active.append(point)

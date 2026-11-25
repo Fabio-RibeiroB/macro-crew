@@ -322,10 +322,13 @@ def test_announced_only_ofgem_page_keeps_effective_cap_and_rolls_over(tmp_path):
         assert energy['collection_status'] == 'ok'
         assert energy['validation_status'] == 'verified'
         assert energy['release_status'] == 'awaiting_next_release'
+        expected_tax = '5% VAT on gas; 0% VAT on electricity from 1 October 2026 to 30 June 2027'
         assert energy['latest']['period'] == '2026-10-01'
         assert energy['latest']['value'] == '1723'
         assert energy['latest']['reference']['period_status'] == 'effective'
+        assert energy['latest']['reference']['tax_treatment'] == expected_tax
         assert [p['period'] for p in energy['history']] == ['2026-10-01']
+        assert energy['history'][0]['reference']['tax_treatment'] == expected_tax
         upcoming = energy['upcoming_period']
         assert upcoming['period'] == '2027-01-01'
         assert upcoming['value'] == '2166'
@@ -334,8 +337,7 @@ def test_announced_only_ofgem_page_keeps_effective_cap_and_rolls_over(tmp_path):
             'unit_rate_p_per_kwh': '32.69', 'standing_charge_p_per_day': '54.77'}
         assert upcoming['reference']['gas'] == {
             'unit_rate_p_per_kwh': '10.96', 'standing_charge_p_per_day': '29.65'}
-        assert upcoming['reference']['tax_treatment'] == (
-            '5% VAT on gas; 0% VAT on electricity from 1 October 2026 to 30 June 2027')
+        assert upcoming['reference']['tax_treatment'] == expected_tax
         assert upcoming['reference']['comparison_status'] == 'compare_only_same_basis'
 
         # On 1 January 2027, the announced cap automatically becomes the active cap.
@@ -347,9 +349,35 @@ def test_announced_only_ofgem_page_keeps_effective_cap_and_rolls_over(tmp_path):
         assert energy['latest']['period'] == '2027-01-01'
         assert energy['latest']['value'] == '2166'
         assert energy['latest']['reference']['period_status'] == 'effective'
+        assert energy['latest']['reference']['tax_treatment'] == expected_tax
         assert energy['upcoming_period'] is None
-        assert [(p['period'], p['reference']['period_status']) for p in energy['history']] == [
-            ('2026-10-01', 'expired'), ('2027-01-01', 'effective')]
+        assert [(p['period'], p['reference']['period_status'], p['reference']['tax_treatment'])
+                for p in energy['history']] == [
+            ('2026-10-01', 'expired', expected_tax),
+            ('2027-01-01', 'effective', expected_tax),
+        ]
+
+        # A later separate 0% VAT window with a different start date must not overwrite the 2026 window.
+        future_window_page = (
+            announced_only_jan_2027_page()
+            .replace(b'From 1 January to 31 March 2027, the price cap will be \xc2\xa32,166 per year.',
+                     b'From 1 October to 31 December 2028, the price cap will be \xc2\xa31,900 per year.')
+            .replace(b'1 January to 31 March 2027', b'1 October to 31 December 2028')
+            .replace(b'from 1 October 2026 to 30 June 2027', b'from 1 October 2028 to 31 March 2029')
+        )
+        store.ingest('household_energy', future_window_page,
+                     datetime(2028, 10, 15, 8, tzinfo=timezone.utc),
+                     source_url=DEFINITIONS['household_energy'].download_url)
+        publish(store, datetime(2028, 10, 15, 8, tzinfo=timezone.utc))
+        deliver(tmp_path, public_dir)
+        manifest = json.loads((public_dir / 'current.json').read_text())
+        energy = json.loads((public_dir / manifest['data_url']).read_text())['metrics']['household_energy']
+        by_period = {p['period']: p['reference']['tax_treatment'] for p in energy['history']}
+        assert by_period == {
+            '2026-10-01': expected_tax,
+            '2027-01-01': expected_tax,
+            '2028-10-01': '5% VAT on gas; 0% VAT on electricity from 1 October 2028 to 31 March 2029',
+        }
     finally:
         store.close()
 
