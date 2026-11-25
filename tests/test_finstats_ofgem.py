@@ -524,3 +524,197 @@ def test_ofgem_real_fixture_rewritten_to_standard_5_percent_vat_parses_cleanly()
 def test_ofgem_missing_malformed_or_gas_only_vat_fails_closed(vat_text):
     with pytest.raises(ValueError, match='VAT basis is missing or changed'):
         parse('household_energy', standard_vat_july_2027_page(vat_text=vat_text), date(2027, 7, 15))
+
+
+# --- Mixed-VAT transition: 0% electricity VAT window ends 30 June 2027 (#203) ---
+
+HEADLINE_BASIS = ('<p>This figure is based on the average energy unit rate and standing charge for '
+                  'people who pay by Direct Debit in England, Scotland and Wales.</p>')
+WINDOW_VAT = ('<p>Figures are rounded to two decimal places and include 5% VAT on gas. '
+              'There is no VAT on electricity from 1 October 2026 to 30 June 2027.</p>')
+POST_WINDOW_VAT = '<p>From 1 July 2027, 5% VAT applies to both gas and electricity.</p>'
+TAX_CHANGE_NOTE = '<p>Costs cannot be compared directly to previous periods because of this change.</p>'
+
+
+def transition_page(two_periods=True, vat=WINDOW_VAT, post=POST_WINDOW_VAT, note=TAX_CHANGE_NOTE,
+                    q3_label='1 July to 30 September 2027', q3_headline='1 July to 30 September 2027'):
+    q2_head = ('<p>From 1 April to 30 June 2027, the price cap will be £1,800 per year.</p>' + HEADLINE_BASIS
+               if two_periods else '')
+    q2_col = '<th>1 April to 30 June 2027</th>' if two_periods else ''
+    q2_el = '<td>27.00 pence per kWh 55.00 pence daily standing charge</td>' if two_periods else ''
+    q2_gas = '<td>8.00 pence per kWh 30.00 pence daily standing charge</td>' if two_periods else ''
+    return (
+        '<title>Energy price cap unit rates and standing charges | Ofgem</title>'
+        '<p>Average electricity and gas unit prices and standing charges by Direct Debit</p>'
+        f'{q2_head}'
+        f'<p>From {q3_headline}, the price cap will be £1,890 per year.</p>{HEADLINE_BASIS}'
+        f'<table><tr><th>Energy price cap per unit and standing charge</th>{q2_col}<th>{q3_label}</th></tr>'
+        f'<tr><td>Electricity</td>{q2_el}<td>28.40 pence per kWh 56.10 pence daily standing charge</td></tr>'
+        f'<tr><td>Gas</td>{q2_gas}<td>8.15 pence per kWh 30.20 pence daily standing charge</td></tr></table>'
+        f'{vat}{post}{note}'
+    ).encode()
+
+
+WINDOW_TAX = '5% VAT on gas; 0% VAT on electricity from 1 October 2026 to 30 June 2027'
+POST_TAX = '5% VAT on gas and electricity'
+
+
+def test_ofgem_two_period_mixed_vat_transition_page_separates_tax_bases():
+    snap = parse('household_energy', transition_page(), date(2027, 5, 28))
+    assert [(o.period, o.value, o.reference['period_status'], o.reference['tax_treatment'],
+             o.reference['comparison_status']) for o in snap.observations] == [
+        ('2027-04-01', '1800', 'effective', WINDOW_TAX, 'compare_only_same_basis'),
+        ('2027-07-01', '1890', 'announced', POST_TAX, 'not_comparable_tax_change'),
+    ]
+
+
+@pytest.mark.parametrize('post', [
+    '<p>From 1 July 2027, 5% VAT applies to both gas and electricity.</p>',
+    '<p>From 1 July 2027, 5% VAT applies to gas and electricity.</p>',
+    '<p>From 1 July 2027, figures include 5% VAT on gas and electricity.</p>',
+    '<p>Prices from 1 July 2027 include 5% VAT.</p>',
+])
+def test_ofgem_announcement_only_transition_page_with_explicit_post_window_vat(post):
+    # No Ofgem "cannot be compared" note: returning to 5% VAT is still flagged.
+    snap = parse('household_energy', transition_page(two_periods=False, post=post, note=''), date(2027, 5, 28))
+    assert len(snap.observations) == 1
+    point = snap.observations[0]
+    assert (point.period, point.reference['period_status']) == ('2027-07-01', 'announced')
+    assert point.reference['tax_treatment'] == POST_TAX
+    assert point.reference['comparison_status'] == 'not_comparable_tax_change'
+
+
+def test_ofgem_post_window_cap_becomes_effective_after_window_ends():
+    snap = parse('household_energy', transition_page(), date(2027, 7, 2))
+    assert [(o.period, o.reference['period_status'], o.reference['tax_treatment'])
+            for o in snap.observations] == [('2027-07-01', 'effective', POST_TAX)]
+    assert snap.observations[0].reference['comparison_status'] == 'not_comparable_tax_change'
+
+
+@pytest.mark.parametrize('two_periods', [True, False])
+@pytest.mark.parametrize('post', [
+    '',  # Window mentioned, no post-window VAT statement.
+    '<p>From 1 August 2027, 5% VAT applies to both gas and electricity.</p>',  # Wrong date.
+    '<p>From 2 July 2027, 5% VAT applies to both gas and electricity.</p>',
+    '<p>From 1 July 2026, 5% VAT applies to both gas and electricity.</p>',
+    '<p>From 1 July 2027, 5% VAT applies to gas.</p>',  # Partial fuel.
+    '<p>From 1 July 2027, 5% VAT applies to electricity.</p>',
+    '<p>From 1 July 2027, figures include 5% VAT on gas.</p>',
+    '<p>From 1 July 2027, 5% VAT applies to both gas and electricity where applicable.</p>',
+    '<p>From 1 July 2027, 5% VAT applies to both gas and electricity, subject to confirmation.</p>',
+    '<p>From 1 July 2027, 5% VAT applies to both gas and electricity.</p><p>The 0% VAT on electricity is extended.</p>',
+    POST_WINDOW_VAT + '<p>0% VAT extended.</p>',
+    POST_WINDOW_VAT + '<p>Electricity remains exempt.</p>',
+    POST_WINDOW_VAT + '<p>Electricity VAT is zero-rated.</p>',
+    POST_WINDOW_VAT + '<p>There is no VAT on electricity from 1 October 2026 to 30 September 2027.</p>',
+    POST_WINDOW_VAT + '<p>Prices include VAT on gas only and are rounded to two decimal places.</p>',
+    POST_WINDOW_VAT + '<p>Figures exclude tax.</p>',
+    POST_WINDOW_VAT + '<p>Prices are untaxed.</p>',
+    POST_WINDOW_VAT + '<p>Prices include value added tax.</p>',
+    '<p>From 1 July 2027, 5% VAT applies to both gas and electricity. 5% VAT applies from 1 October 2027.</p>',
+])
+def test_ofgem_transition_page_fails_closed_on_missing_or_ambiguous_post_window_vat(two_periods, post):
+    with pytest.raises(ValueError, match='does not state VAT treatment'):
+        parse('household_energy', transition_page(two_periods=two_periods, post=post), date(2027, 5, 28))
+
+
+def test_ofgem_post_window_statement_cannot_stand_in_for_gas_vat_or_window_sentence():
+    # Post-window wording alone must not make the effective 0%-window period parse.
+    only_post = WINDOW_VAT.replace('Figures are rounded to two decimal places and include 5% VAT on gas. ', '')
+    with pytest.raises(ValueError, match='VAT basis is missing or changed'):
+        parse('household_energy', transition_page(vat=only_post, post='<p>From 1 July 2027, figures include 5% VAT on gas and electricity.</p>'), date(2027, 5, 28))
+
+
+def test_ofgem_pre_window_period_in_transition_page_fails_closed():
+    # The effective quarter starts before the stated 0% window: it never inherits any basis.
+    body = transition_page().replace(b'from 1 October 2026 to 30 June 2027', b'from 1 May 2027 to 30 June 2027')
+    with pytest.raises(ValueError, match='does not state VAT treatment'):
+        parse('household_energy', body, date(2027, 5, 28))
+
+
+def test_ofgem_straddling_period_across_window_end_fails_closed():
+    # Window ends mid-quarter: neither inside the window nor wholly after it.
+    body = transition_page(two_periods=False).replace(
+        b'from 1 October 2026 to 30 June 2027', b'from 1 October 2026 to 15 August 2027').replace(
+        b'From 1 July 2027, 5% VAT', b'From 16 August 2027, 5% VAT')
+    with pytest.raises(ValueError, match='does not state VAT treatment'):
+        parse('household_energy', body, date(2027, 5, 28))
+
+
+def test_ofgem_later_quarter_after_window_also_requires_post_window_statement():
+    page = transition_page(two_periods=False, q3_label='1 October to 31 December 2027',
+                           q3_headline='1 October to 31 December 2027')
+    # Starts after the first post-window day: accepted on the statement but never the tax-change flag.
+    snap = parse('household_energy', page, date(2027, 9, 1))
+    assert snap.observations[0].reference['tax_treatment'] == POST_TAX
+    assert snap.observations[0].reference['comparison_status'] == 'compare_only_same_basis'
+    with pytest.raises(ValueError, match='does not state VAT treatment'):
+        parse('household_energy', transition_page(two_periods=False, post='', q3_label='1 October to 31 December 2027',
+                                                  q3_headline='1 October to 31 December 2027'), date(2027, 9, 1))
+
+
+@pytest.mark.parametrize('vat_text', [
+    'Figures include 5% VAT. Prices include value added tax on gas only.',
+    'Figures include 5% VAT. Electricity is untaxed.',
+    'Figures include 5% VAT. Figures exclude tax.',
+    'Figures include 5% VAT. Electricity is tax-free.',
+    'Figures include 5% VAT. Electricity is taxed at 0%.',
+    'Figures include 5% VAT. Value added tax is not charged on electricity.',
+])
+def test_ofgem_standard_vat_mode_checks_tax_wording_beyond_vat_token(vat_text):
+    with pytest.raises(ValueError, match='VAT basis is missing or changed'):
+        parse('household_energy', standard_vat_july_2027_page(vat_text=vat_text), date(2027, 7, 15))
+
+
+@pytest.mark.parametrize('vat_text', [
+    'Figures include 5% VAT. Figures include 5%​ VAT on gas only; VAT‍ is zero on electricity.',
+    'Figures include 5% VAT. Electricity is 0​% VAT.',
+    'Figures include 5% VAT. Electricity is zero‌-rated.',
+    'Figures include 5% VAT. Electricity is un​taxed.',
+    'Figures include 5% VAT. Electricity is exem﻿pt.',
+])
+def test_ofgem_zero_width_characters_cannot_hide_vat_exceptions(vat_text):
+    with pytest.raises(ValueError, match='VAT basis is missing or changed'):
+        parse('household_energy', standard_vat_july_2027_page(vat_text=vat_text), date(2027, 7, 15))
+
+
+def test_ofgem_zero_width_characters_are_stripped_not_rejected_in_clean_wording():
+    page = standard_vat_july_2027_page(vat_text='Figures include 5%​ VAT﻿.')
+    snap = parse('household_energy', page, date(2027, 7, 15))
+    assert snap.observations[0].reference['tax_treatment'] == POST_TAX
+
+
+def test_ofgem_unrelated_tax_substring_words_do_not_reject_standard_vat():
+    page = standard_vat_july_2027_page().replace(
+        b'<p>Figures are', b'<p>Taxpayer information and innovation news.</p><p>Figures are', 1)
+    assert parse('household_energy', page, date(2027, 7, 15)).observations[0].value == '1890'
+
+
+def test_published_mixed_basis_energy_keeps_both_tax_bases_distinct(tmp_path):
+    store = Store(tmp_path / 'private')
+    try:
+        # Earlier quarter on the 0%-electricity window as first published (older window end date).
+        store.ingest('household_energy', announced_only_jan_2027_page().replace(
+            b'1 October 2026 to 30 June 2027', b'1 October 2026 to 31 March 2027'),
+            datetime(2027, 1, 5, 8, tzinfo=timezone.utc), source_url=DEFINITIONS['household_energy'].download_url)
+        store.ingest('household_energy', transition_page(), datetime(2027, 5, 28, 8, tzinfo=timezone.utc),
+                     source_url=DEFINITIONS['household_energy'].download_url)
+        publish(store, datetime(2027, 6, 10, 8, tzinfo=timezone.utc))
+        public_dir = tmp_path / 'public'
+        deliver(tmp_path / 'private', public_dir)
+        manifest = json.loads((public_dir / 'current.json').read_text())
+        energy = json.loads((public_dir / manifest['data_url']).read_text())['metrics']['household_energy']
+        assert energy['latest']['period'] == '2027-04-01'
+        assert energy['latest']['reference']['tax_treatment'] == WINDOW_TAX
+        assert energy['latest']['reference']['comparison_status'] == 'compare_only_same_basis'
+        upcoming = energy['upcoming_period']
+        assert upcoming['period'] == '2027-07-01'
+        assert upcoming['reference']['tax_treatment'] == POST_TAX
+        assert upcoming['reference']['comparison_status'] == 'not_comparable_tax_change'
+        # The unchanged 5%-on-both basis is never rewritten into a window, and the earlier
+        # quarter takes the latest window end date only when its own treatment was a window.
+        taxes = {p['period']: p['reference']['tax_treatment'] for p in energy['history']}
+        assert taxes['2027-04-01'] == WINDOW_TAX
+        assert POST_TAX not in taxes.values()
+    finally:
+        store.close()

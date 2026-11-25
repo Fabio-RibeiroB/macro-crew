@@ -142,3 +142,31 @@ test("extending the 0% electricity VAT window keeps consecutive cap quarters com
   laterWindow.reference.tax_treatment = "5% VAT on gas; 0% VAT on electricity from 1 October 2028 to 31 March 2029";
   assert.equal(comparableEnergyPrevious({ ...metric, latest: laterWindow, history: [...metric.history, laterWindow] }).kind, "unavailable");
 });
+
+test("effective Q2 2027 on the 0% electricity VAT window and announced Q3 2027 on 5% VAT stay separate", async () => {
+  const { comparableEnergyPrevious, comparableEnergyUpcoming } = await import("../../src/app/data/overview.mjs");
+  const data = full();
+  const window = "5% VAT on gas; 0% VAT on electricity from 1 October 2026 to 30 June 2027";
+  const base = data.metrics.household_energy.latest;
+  const point = (period, start, end, value, status, tax, comparison) => ({
+    ...structuredClone(base), period, value,
+    reference: { ...structuredClone(base.reference), effective_start: start, effective_end: end,
+      period_status: status, tax_treatment: tax, comparison_status: comparison },
+  });
+  const q1 = point("2027-01-01", "2027-01-01", "2027-03-31", "2166", "expired", window, "compare_only_same_basis");
+  const q2 = point("2027-04-01", "2027-04-01", "2027-06-30", "1800", "effective", window, "compare_only_same_basis");
+  const q3 = point("2027-07-01", "2027-07-01", "2027-09-30", "1890", "announced", "5% VAT on gas and electricity", "not_comparable_tax_change");
+  const metric = { ...data.metrics.household_energy, latest: q2, history: [q1, q2], upcoming_period: q3 };
+  assert.equal(comparableEnergyPrevious(metric).kind, "comparable", "Q2 compares with Q1 on the same window");
+  assert.equal(comparableEnergyPrevious(metric).previous.value, "2166");
+  assert.equal(comparableEnergyUpcoming(metric).kind, "tax_change", "Q3 is never a rise or fall on Q2");
+  // Without Ofgem's flag the differing tax basis alone still blocks the comparison.
+  const unflagged = { ...metric, upcoming_period: { ...q3, reference: { ...q3.reference, comparison_status: "compare_only_same_basis" } } };
+  assert.equal(comparableEnergyUpcoming(unflagged).kind, "unavailable");
+  // Once Q3 is the effective cap it has no comparable previous cap.
+  const q3Effective = { ...q3, reference: { ...q3.reference, period_status: "effective" } };
+  const later = { ...metric, latest: q3Effective, history: [q1, q2, q3Effective], upcoming_period: null };
+  assert.equal(comparableEnergyPrevious(later).kind, "tax_change");
+  const row = overviewRows({ ...data, metrics: { ...data.metrics, household_energy: later } }).find((r) => r.id === "energy");
+  assert.ok(!row.change.some((line) => /[+−]£/.test(line.text ?? "")), "no change figure across the tax change");
+});

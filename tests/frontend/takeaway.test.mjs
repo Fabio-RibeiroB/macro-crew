@@ -251,3 +251,21 @@ test("the crawl stays figures-only (ADR 0005)", async () => {
   assert.doesNotMatch(src("../../src/app/data/ticker.mjs").replace(/\/\/.*$/gm, ""), /takeaway/i);
   assert.doesNotMatch(src("../../src/app/components/FiguresTicker.tsx"), /takeaway/i);
 });
+
+test("announced Q3 2027 cap on 5% VAT is never compared with the effective Q2 2027 0% electricity VAT cap", () => {
+  const data = fullFixture();
+  const metric = data.metrics.household_energy;
+  const window = "5% VAT on gas; 0% VAT on electricity from 1 October 2026 to 30 June 2027";
+  metric.latest = { ...metric.latest, period: "2027-04-01", value: "1800", reference: {
+    ...metric.latest.reference, effective_start: "2027-04-01", effective_end: "2027-06-30",
+    period_status: "effective", comparison_status: "compare_only_same_basis", tax_treatment: window } };
+  metric.upcoming_period = { period: "2027-07-01", value: "1890", status: "observed", reference: {
+    ...metric.latest.reference, effective_start: "2027-07-01", effective_end: "2027-09-30",
+    period_status: "announced", tax_treatment: "5% VAT on gas and electricity",
+    comparison_status: "not_comparable_tax_change" } };
+  const now = new Date("2027-06-10T12:00:00Z");
+  const text = overviewTakeaway(data, now).text;
+  assert.doesNotMatch(text, /energy|cap|£|rise|fall/i);
+  metric.upcoming_period.reference.comparison_status = "compare_only_same_basis";
+  assert.doesNotMatch(overviewTakeaway(data, now).text, /energy|cap|£|rise|fall/i, "differing tax basis alone blocks it");
+});
