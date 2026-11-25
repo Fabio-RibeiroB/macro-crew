@@ -192,7 +192,7 @@ class FakeWeb:
         if isinstance(found, Exception):
             raise found
         if found is None:
-            raise cc.FetchError(f'no recorded response for {url}')
+            raise cc.FetchError(f'no recorded response for {url}', status=404)
         return found
 
     def replace(self, key, value):
@@ -678,6 +678,189 @@ def test_ofgem_announcement_only_page_checks_current_table_rates_and_upcoming_ca
     fake = web(with_upcoming)
     fake.replace(ofgem_url, b'<p>From 1 January to 31 March 2027, the price cap will be \xc2\xa32,166 per year.</p>')
     assert kinds(check(fake))['household_energy'] == [cc.COULD_NOT_CHECK]
+
+
+@needs_node
+def test_ofgem_unexpected_upcoming_period_is_reported_as_mismatch(generation):
+    # Official Ofgem page (recorded Oct 2026 fixture) has no upcoming cap, but site still publishes one.
+    stale_upcoming = copy.deepcopy(generation)
+    energy = stale_upcoming['metrics']['household_energy']
+    energy['upcoming_period'] = _upcoming_jan_2027(energy['latest'])
+    report = check(web(stale_upcoming))
+    res = {r.key: r for r in report.results}['household_energy']
+    assert not report.clean
+    assert res.kinds == [cc.MISMATCH]
+    assert 'upcoming cap: site 2027-01-01 (2166), official none' in res.details
+    assert 'upcoming 2166 (2027-01-01)' in res.site
+    assert 'upcoming none' in res.official
+
+
+@needs_node
+@pytest.mark.parametrize('mutator, expected_error', [
+    (lambda raw: raw.replace(b'26.32&nbsp;pence per kWh', b'26.32p/kWh', 1),
+     'cell format changed'),
+    (lambda raw: re.sub(rb'<tr>\s*<th>Gas.*?</tr>', b'', raw, count=1, flags=re.S),
+     'dual-fuel rates incomplete'),
+    (lambda raw: raw.replace(b'1 July to 30 September 2026', b'1 October to 31 December 2026', 1),
+     'duplicate column'),
+])
+def test_ofgem_malformed_or_incomplete_matched_rate_column_fails_closed(generation, mutator, expected_error):
+    ofgem_url = DEFINITIONS['household_energy'].source_url
+    fake = web(generation)
+    mutated = mutator(fake.exact[ofgem_url])
+    assert mutated != fake.exact[ofgem_url]
+    with pytest.raises(cc.SourceError, match=expected_error):
+        cc.ofgem_table_rates(mutated)
+    fake.replace(ofgem_url, mutated)
+    report = check(fake)
+    res = {r.key: r for r in report.results}['household_energy']
+    assert not report.clean
+    assert res.kinds == [cc.COULD_NOT_CHECK]
+    assert expected_error in res.details[0]
+
+
+# ------------------------------------------------------------------ AI report URL reachability
+
+def test_make_fetcher_check_url_head_get_fallback_and_host_enforcement(monkeypatch):
+    fetch = cc.make_fetcher({'www.bankofengland.co.uk'}, sleep=lambda s: None)
+    for bad in ('http://www.bankofengland.co.uk/doc.pdf',
+                'https://example.com/doc.pdf',
+                'https://user:pass@www.bankofengland.co.uk/doc.pdf'):
+        with pytest.raises(cc.FetchError, match='refusing to check'):
+            fetch.check_url(bad)
+
+    calls = []
+
+    class OkResponse:
+        status = 200
+        def __init__(self, url): self._url, self.reads = url, []
+        def __enter__(self): return self
+        def __exit__(self, *exc): return False
+        def geturl(self): return self._url
+        def read(self, n): self.reads.append(n); return b'%'
+
+    responses = []
+    def fake_urlopen(request, timeout):
+        calls.append((request.get_method(), request.full_url))
+        answer = responses.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    monkeypatch.setattr(cc, 'urlopen', fake_urlopen)
+    url = 'https://www.bankofengland.co.uk/-/media/boe/files/report.pdf'
+
+    # 1. HEAD 200 succeeds without reading body or sending GET.
+    resp = OkResponse(url)
+    responses[:] = [resp]
+    fetch.check_url(url)
+    assert calls == [('HEAD', url)] and resp.reads == []
+
+    # 2. HEAD 404 fails immediately with status=404 (no GET fallback, no retry).
+    calls.clear()
+    responses[:] = [HTTPError(url, 404, 'Not Found', {}, None)]
+    with pytest.raises(cc.FetchError) as exc_info:
+        fetch.check_url(url)
+    assert exc_info.value.status == 404
+    assert calls == [('HEAD', url)]
+
+    # 3. HEAD 405 falls back to bounded GET (reads 1 byte).
+    calls.clear()
+    get_resp = OkResponse(url)
+    responses[:] = [HTTPError(url, 405, 'Method Not Allowed', {}, None), get_resp]
+    fetch.check_url(url)
+    assert calls == [('HEAD', url), ('GET', url)]
+    assert get_resp.reads == [1]
+
+    # 4. Transient 503 on HEAD retries and succeeds.
+    calls.clear()
+    responses[:] = [HTTPError(url, 503, 'Unavailable', {}, None), OkResponse(url)]
+    fetch.check_url(url)
+    assert calls == [('HEAD', url), ('HEAD', url)]
+
+
+@needs_node
+def test_research_report_ai_summary_links_pass_when_200_and_skip_placeholders(generation):
+    mpr_url = 'https://www.bankofengland.co.uk/-/media/boe/files/monetary-policy-report/2026/november/mpr'
+    payload = {
+        'current_report_summaries': {
+            'monetary_policy_report': {'summary': 'Summary text.', 'source': mpr_url},
+            'financial_stability_report': {'summary': 'Not available.', 'source': 'not available'},
+        },
+    }
+    fake = web(generation)
+    fake.exact[SITE + 'research_report.json'] = json.dumps(payload).encode()
+    fake.exact[mpr_url] = b'%PDF-1.4'
+    report = check(fake)
+    assert report.clean
+    assert report.report_link_problems == []
+    assert len(report.results) == 22
+    assert mpr_url in fake.requested
+
+
+@needs_node
+def test_research_report_broken_404_ai_summary_url_triggers_issue_without_breaking_metrics(generation):
+    mpr_url = 'https://www.bankofengland.co.uk/-/media/boe/files/monetary-policy-report/2026/november/mpr'
+    fsr_url = 'https://www.bankofengland.co.uk/-/media/boe/files/financial-stability-report/2026/november/fsr'
+    payload = {
+        'current_report_summaries': {
+            'monetary_policy_report': {'summary': 'Summary text.', 'source': mpr_url},
+            'financial_stability_report': {'summary': 'FSR text.', 'source': fsr_url},
+        },
+    }
+    fake = web(generation)
+    fake.exact[SITE + 'research_report.json'] = json.dumps(payload).encode()
+    fake.exact[mpr_url] = b'%PDF-1.4'
+    fake.exact[fsr_url] = cc.FetchError('HTTP 404 from www.bankofengland.co.uk', status=404)
+
+    report = check(fake)
+    assert not report.clean
+    assert len(report.results) == 22
+    assert all(k == [cc.OK] for k in kinds(report).values())
+    assert report.problems == []
+    assert len(report.report_link_problems) == 1
+    problem = report.report_link_problems[0]
+    assert problem.key == 'financial_stability_report'
+    assert problem.kind == cc.BROKEN_LINK
+    assert problem.url == fsr_url
+    assert '404' in problem.detail
+
+    body = cc.render_report(report)
+    assert 'AI report source link needs attention' in body
+    assert '### AI report source links' in body
+    assert '`financial_stability_report`' in body and 'Broken link' in body and 'HTTP 404' in body
+
+    client = FakeGitHub()
+    assert cc.sync_issue(report, body, client, out=lambda s: None) == 'opened'
+    assert client.writes[0][0] == 'create' and fsr_url in client.writes[0][2]
+    assert cc.main([], fetch=fake, env={}, out=lambda s: None) == 1
+
+
+@needs_node
+def test_research_report_disallowed_url_timeout_and_invalid_json_are_reported(generation):
+    bad_host_url = 'https://evil.example/fake.pdf'
+    timeout_url = 'https://www.bankofengland.co.uk/-/media/boe/files/timeout.pdf'
+    payload = {
+        'current_report_summaries': {
+            'monetary_policy_report': {'summary': 'x', 'source': bad_host_url},
+            'financial_stability_report': {'summary': 'y', 'source': timeout_url},
+        },
+    }
+    fake = web(generation)
+    fake.exact[SITE + 'research_report.json'] = json.dumps(payload).encode()
+    fake.exact[timeout_url] = cc.FetchError('URLError: timed out')
+    report = check(fake)
+    assert not report.clean
+    assert bad_host_url not in fake.requested
+    by_key = {p.key: p for p in report.report_link_problems}
+    assert by_key['monetary_policy_report'].kind == cc.BROKEN_LINK
+    assert by_key['financial_stability_report'].kind == cc.COULD_NOT_CHECK
+
+    fake_bad_json = web(generation)
+    fake_bad_json.exact[SITE + 'research_report.json'] = b'{not json'
+    bad_json_report = check(fake_bad_json)
+    assert not bad_json_report.clean
+    assert bad_json_report.report_link_problems[0].kind == cc.COULD_NOT_CHECK
 
 
 # ------------------------------------------------------------------ issue lifecycle

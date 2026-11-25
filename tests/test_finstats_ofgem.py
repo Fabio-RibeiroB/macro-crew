@@ -396,3 +396,131 @@ def test_ofgem_duplicate_announced_headline_and_repeated_start_year():
          '<p>Average electricity').encode())
     with pytest.raises(ValueError, match='currently effective or next announced'):
         parse('household_energy', duplicate, date(2026, 11, 25))
+
+
+def standard_vat_july_2027_page(
+    vat_text='Figures are rounded to two decimal places and include 5% VAT.',
+    tax_change=False,
+):
+    change_note = (
+        '<p>Costs cannot be compared directly to previous periods because of this change.</p>'
+        if tax_change else ''
+    )
+    return (
+        '<title>Energy price cap unit rates and standing charges | Ofgem</title>'
+        '<p>Average electricity and gas unit prices and standing charges by Direct Debit</p>'
+        '<p>From 1 July to 30 September 2027, the price cap will be £1,890 per year.</p>'
+        '<p>This figure is based on the average energy unit rate and standing charge for people who pay by Direct Debit in England, Scotland and Wales.</p>'
+        '<table><tr><th>Energy price cap per unit and standing charge</th>'
+        '<th>1 July to 30 September 2027</th></tr>'
+        '<tr><td>Electricity</td><td>28.40 pence per kWh 56.10 pence daily standing charge</td></tr>'
+        '<tr><td>Gas</td><td>8.15 pence per kWh 30.20 pence daily standing charge</td></tr></table>'
+        f'<p>{vat_text}</p>{change_note}'
+    ).encode()
+
+
+@pytest.mark.parametrize('vat_text', [
+    'Figures are rounded to two decimal places and include 5% VAT.',
+    'Prices including 5% VAT are rounded to two decimal places.',
+    'Figures include 5% VAT on gas and electricity.',
+    'Figures include 5% VAT on both electricity and gas.',
+    'Rates shown with 5% VAT on gas and electricity.',
+    'Figures include VAT at 5%.',
+    'Figures are rounded to two decimal places and include 5% VAT. Prices include VAT and are rounded to two decimal places.',
+])
+def test_ofgem_standard_5_percent_vat_comparable_period(vat_text):
+    snap = parse('household_energy', standard_vat_july_2027_page(vat_text=vat_text), date(2027, 7, 15))
+    assert len(snap.observations) == 1
+    point = snap.observations[0]
+    assert point.period == '2027-07-01'
+    assert point.value == '1890'
+    assert point.reference['period_status'] == 'effective'
+    assert point.reference['tax_treatment'] == '5% VAT on gas and electricity'
+    assert point.reference['comparison_status'] == 'compare_only_same_basis'
+    assert point.reference['electricity'] == {
+        'unit_rate_p_per_kwh': '28.40', 'standing_charge_p_per_day': '56.10'}
+    assert point.reference['gas'] == {
+        'unit_rate_p_per_kwh': '8.15', 'standing_charge_p_per_day': '30.20'}
+
+
+def test_ofgem_standard_5_percent_vat_return_marks_not_comparable_tax_change():
+    snap = parse('household_energy', standard_vat_july_2027_page(tax_change=True), date(2027, 7, 15))
+    point = snap.observations[0]
+    assert point.reference['tax_treatment'] == '5% VAT on gas and electricity'
+    assert point.reference['comparison_status'] == 'not_comparable_tax_change'
+
+
+def test_ofgem_standard_5_percent_vat_two_period_page_marks_only_earliest_non_comparable():
+    two_period_page = (
+        '<title>Energy price cap unit rates and standing charges | Ofgem</title>'
+        '<p>What net zero means for consumers.</p>'
+        '<p>Average electricity and gas unit prices and standing charges by Direct Debit</p>'
+        '<p>From 1 July to 30 September 2027, the price cap will be £1,890 per year.</p>'
+        '<p>This figure is based on the average energy unit rate and standing charge for people who pay by Direct Debit in England, Scotland and Wales.</p>'
+        '<p>From 1 October to 31 December 2027, the price cap will be £1,920 per year.</p>'
+        '<p>This figure is based on the average energy unit rate and standing charge for people who pay by Direct Debit in England, Scotland and Wales.</p>'
+        '<table><tr><th>Energy price cap per unit and standing charge</th>'
+        '<th>1 July to 30 September 2027</th><th>1 October to 31 December 2027</th></tr>'
+        '<tr><td>Electricity</td><td>28.40 pence per kWh 56.10 pence daily standing charge</td>'
+        '<td>29.00 pence per kWh 56.50 pence daily standing charge</td></tr>'
+        '<tr><td>Gas</td><td>8.15 pence per kWh 30.20 pence daily standing charge</td>'
+        '<td>8.30 pence per kWh 30.40 pence daily standing charge</td></tr></table>'
+        '<p>Figures are rounded to two decimal places and include 5% VAT.</p>'
+        '<p>Costs cannot be compared directly to previous periods because of this change.</p>'
+    ).encode()
+    sep_snap = parse('household_energy', two_period_page, date(2027, 9, 1))
+    assert [(o.period, o.reference['period_status'], o.reference['comparison_status'])
+            for o in sep_snap.observations] == [
+        ('2027-07-01', 'effective', 'not_comparable_tax_change'),
+        ('2027-10-01', 'announced', 'compare_only_same_basis'),
+    ]
+    # Once Oct-Dec 2027 becomes effective while Jul-Sep remains in the headline, Oct-Dec stays comparable.
+    oct_snap = parse('household_energy', two_period_page, date(2027, 10, 5))
+    assert [(o.period, o.reference['period_status'], o.reference['comparison_status'])
+            for o in oct_snap.observations] == [
+        ('2027-10-01', 'effective', 'compare_only_same_basis'),
+    ]
+
+
+def test_ofgem_real_fixture_rewritten_to_standard_5_percent_vat_parses_cleanly():
+    rewritten = (
+        BODY
+        .replace(b'include 5% VAT on gas. There is no VAT on electricity from 1 October 2026 to 31 March 2027.',
+                 b'include 5% VAT.')
+        .replace(b'Prices include VAT on gas only and are rounded to two decimal places.',
+                 b'Prices include VAT and are rounded to two decimal places.')
+        .replace(b'Costs cannot be compared directly to previous periods because of this change.', b'')
+    )
+    snap = parse('household_energy', rewritten, date(2026, 10, 22))
+    assert snap.observations[0].reference['tax_treatment'] == '5% VAT on gas and electricity'
+    assert snap.observations[0].reference['comparison_status'] == 'compare_only_same_basis'
+
+
+@pytest.mark.parametrize('vat_text', [
+    'Figures are rounded to two decimal places.',
+    'Figures are rounded to two decimal places and include VAT.',
+    'Figures include 5% VAT on gas.',
+    'Figures include 5% VAT. There is no VAT on electricity until further notice.',
+    'Figures include 5% VAT on gas. There is no VAT on electricity from 32 October 2026 to 30 June 2027.',
+    'Figures include 5% VAT. Prices include VAT on gas only.',
+    'Figures include 5% VAT (0% VAT on electricity).',
+    'Figures include 5% VAT, except electricity which is zero-rated.',
+    'Figures include 5% VAT. Electricity is 0% VAT from 1 July 2027 to 30 September 2027.',
+    'Gas figures include 5% VAT. Electricity figures have zero VAT.',
+    'Gas figures include 5% VAT.',
+    'Figures include 5% VAT; no VAT applies to electricity.',
+    'Figures do not include 5% VAT.',
+    'Figures exclude VAT. Prepayment figures include 5% VAT.',
+    'Figures include 5% VAT. Electricity is VAT-free.',
+    'Figures include 5% VAT. VAT is not charged on electricity.',
+    'Figures include 5% VAT. Electricity is not subject to VAT.',
+    'Figures include 5% VAT, apart from electricity.',
+    'Figures include 5% VAT. Electricity VAT is zero.',
+    'Figures include 5% VAT. Electricity: 0 per cent VAT.',
+    'Figures include 5% VAT. From 1 October electricity VAT is removed.',
+    'Figures include 5% VAT where applicable.',
+    'Figures include 5% VAT. Electricity is zero-rated.',
+])
+def test_ofgem_missing_malformed_or_gas_only_vat_fails_closed(vat_text):
+    with pytest.raises(ValueError, match='VAT basis is missing or changed'):
+        parse('household_energy', standard_vat_july_2027_page(vat_text=vat_text), date(2027, 7, 15))
