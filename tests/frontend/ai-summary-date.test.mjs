@@ -79,7 +79,7 @@ test("the AI summary shows the publication date beside the written date; the MPC
     // Overview MPC line: short muted date, absent when no time is known.
     const line = renderToStaticMarkup(createElement(MpcLine, { reports: [report], reportTime: FILE_TIME }));
     assert.match(line, /<span class="fs-mpc-date"> AI · 15 Nov<\/span>/);
-    assert.match(text(line), /MPC: The committee held Bank Rate\. AI · 15 Nov/);
+    assert.match(text(line), /Bank of England \(MPC\): The committee held Bank Rate\. AI · 15 Nov/);
     const ownLine = renderToStaticMarkup(createElement(MpcLine, { reports: [{ ...report, generated_at: "2026-11-06T09:00:00Z" }], reportTime: FILE_TIME }));
     assert.match(ownLine, /AI · 6 Nov/);
     const bare = renderToStaticMarkup(createElement(MpcLine, { reports: [report], reportTime: null }));

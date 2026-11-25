@@ -23,7 +23,7 @@
   # A direct request for "/prices.html" goes to the canonical "/prices". THE_REQUEST
   # holds the client's original request line, so the internal rewrite below does
   # not trigger this rule again (no loop).
-  RewriteCond %{THE_REQUEST} "^[A-Z]+ /(calendar|prices|economy|jobs-pay|housing|government-budget|about|sources)\.html[ ?]"
+  RewriteCond %{THE_REQUEST} "^[A-Z]+ /(calendar|prices|economy|jobs-pay|housing|government-budget|about|sources|whos-who)\.html[ ?]"
   RewriteRule ^(.+)\.html$ /$1 [R=301,L]
-  RewriteRule ^(calendar|prices|economy|jobs-pay|housing|government-budget|about|sources)/?$ $1.html [L]
+  RewriteRule ^(calendar|prices|economy|jobs-pay|housing|government-budget|about|sources|whos-who)/?$ $1.html [L]
 </IfModule>

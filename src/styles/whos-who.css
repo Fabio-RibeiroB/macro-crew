@@ -1,0 +1,27 @@
+/* Who's who: one readable column of short, anchored entries. */
+.fs-whos {
+  max-width: 68ch;
+}
+.fs-whos .fs-contents {
+  margin: 0 0 18px;
+}
+.fs-whos-intro {
+  margin: 0 0 8px;
+}
+.fs-whos-entry {
+  padding: 18px 0 0;
+  margin: 18px 0 0;
+  border-top: 1px solid var(--fs-line);
+  scroll-margin-top: 96px;
+}
+.fs-whos-entry h2 {
+  margin: 0 0 8px;
+}
+.fs-whos-entry p {
+  margin: 0 0 12px;
+}
+.fs-whos-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}

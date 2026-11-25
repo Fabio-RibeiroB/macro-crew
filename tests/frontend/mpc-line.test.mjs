@@ -49,10 +49,10 @@ test("MpcLine renders the AI-labelled line with a link to the AI summary, and no
     const report = { key: "monetary_policy_report", summary: "Rates held at 3.75%. More follows.", headline: "The Bank held rates for now." };
     const html = renderToStaticMarkup(createElement(MpcLine, { reports: [report] }));
     assert.match(html, /<span class="fs-ai-tag">AI summary<\/span>/);
-    assert.match(html, /<strong>MPC:<\/strong> The Bank held rates for now\./);
+    assert.match(html, /<strong>Bank of England \(MPC\):<\/strong> The Bank held rates for now\./);
     assert.match(html, /<a class="fs-link" href="\/economy#ai-summary">Read the AI summary<\/a>/);
     const fallback = renderToStaticMarkup(createElement(MpcLine, { reports: [{ ...report, headline: undefined }] }));
-    assert.match(fallback, /MPC:<\/strong> Rates held at 3\.75%\./);
+    assert.match(fallback, /\(MPC\):<\/strong> Rates held at 3\.75%\./);
     assert.equal(renderToStaticMarkup(createElement(MpcLine, { reports: [] })), "");
     // The overview shows no MPC line before any report has loaded.
     const { default: App } = await server.ssrLoadModule("/src/app/App.tsx");
