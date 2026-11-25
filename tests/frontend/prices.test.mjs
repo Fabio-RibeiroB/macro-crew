@@ -121,3 +121,31 @@ test("missing values stay Not available and never become zero", async () => {
   assert.match(none, /Charts will appear when verified figures are available/);
   assert.doesNotMatch(none, /fs-fig-v/);
 });
+
+test("announced upcoming energy cap is visible with annualised framing and keeps its rates in How it's measured", async () => {
+  const data = withInflation();
+  const base = data.metrics.household_energy.latest;
+  data.metrics.household_energy.upcoming_period = {
+    period: "2027-01-01",
+    value: "2166",
+    status: "observed",
+    reference: {
+      ...base.reference,
+      effective_start: "2027-01-01",
+      effective_end: "2027-03-31",
+      period_status: "announced",
+      comparison_status: "compare_only_same_basis",
+      tax_treatment: "5% VAT on gas; 0% VAT on electricity from 1 October 2026 to 30 June 2027",
+      electricity: { unit_rate_p_per_kwh: "32.69", standing_charge_p_per_day: "54.77" },
+      gas: { unit_rate_p_per_kwh: "10.96", standing_charge_p_per_day: "29.65" },
+    },
+  };
+  const block = section(await renderPrices(data), "household-energy");
+  const beforeDetails = textOf(block.slice(block.indexOf('id="energy-means-label"'), block.indexOf("<details")));
+  assert.match(beforeDetails, /Next cap announced: £2,166\/year for 1 January 2027 to 31 March 2027 — an annualised typical bill for that three-month period, becoming current on 1 January 2027\./);
+  const fullText = textOf(block);
+  assert.match(fullText, /Key figure £1,723 ?\/year/, "current cap stays the headline until 1 January 2027");
+  assert.match(fullText, /32\.69p\/kWh and 54\.77p\/day/);
+  assert.match(fullText, /10\.96p\/kWh and 29\.65p\/day/);
+  assert.match(fullText, /0% VAT on electricity from 1 October 2026 to 30 June 2027/);
+});

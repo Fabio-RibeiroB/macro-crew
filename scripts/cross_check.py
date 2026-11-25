@@ -16,6 +16,7 @@ no AI, no paid services; nothing here changes site data.
 from __future__ import annotations
 
 import argparse
+import calendar
 import csv
 import hashlib
 import http.client
@@ -330,11 +331,84 @@ def page_text(body, what):
     return ' '.join(' '.join(parser.parts).replace(' ', ' ').replace(' ', ' ').split())
 
 
+def quarter_start(day):
+    return date(day.year, ((day.month - 1) // 3) * 3 + 1, 1)
+
+
+def next_quarter_start(day):
+    month = ((day.month - 1) // 3) * 3 + 4
+    return date(day.year + (1 if month > 12 else 0), 1 if month > 12 else month, 1)
+
+
+def is_calendar_quarter(start, end):
+    return (start.year == end.year and start.day == 1 and start.month in {1, 4, 7, 10} and
+            end == date(end.year, start.month + 2, calendar.monthrange(end.year, start.month + 2)[1]))
+
+
+def ofgem_table_rates(body):
+    """Extract {quarter_start_iso: {'electricity': (unit, standing), 'gas': (unit, standing)}} from Ofgem's DD table."""
+    class Tables(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.tables, self.table, self.row, self.cell, self.text = [], None, None, False, []
+        def handle_starttag(self, tag, attrs):
+            if tag == 'table': self.table = []
+            elif tag == 'tr' and self.table is not None: self.row = []
+            elif tag in ('td', 'th') and self.row is not None: self.cell, self.text = True, []
+        def handle_data(self, data):
+            if self.cell: self.text.append(data)
+        def handle_endtag(self, tag):
+            if tag in ('td', 'th') and self.cell:
+                self.row.append(' '.join(' '.join(self.text).replace('\u00a0', ' ').replace('\u202f', ' ').split()))
+                self.cell = False
+            elif tag == 'tr' and self.row is not None:
+                self.table.append(self.row); self.row = None
+            elif tag == 'table' and self.table is not None:
+                self.tables.append(self.table); self.table = None
+    parser = Tables()
+    parser.feed(decode(body, 'Ofgem page'))
+    matches = [rows for rows in parser.tables if rows and any('Energy price cap per unit' in c for c in rows[0])]
+    if len(matches) != 1:
+        return {}
+    rows = matches[0]
+    headers = rows[0]
+    columns = {}
+    for index, header in enumerate(headers):
+        m = re.search(r'(\d{1,2}) ([A-Z][a-z]+)(?: (\d{4}))? to (\d{1,2}) ([A-Z][a-z]+) (\d{4})', header)
+        if not m:
+            continue
+        try:
+            start = date(int(m[3] or m[6]), MONTH_NAMES[m[2].lower()], int(m[1]))
+            end = date(int(m[6]), MONTH_NAMES[m[5].lower()], int(m[4]))
+        except (KeyError, ValueError):
+            continue
+        if is_calendar_quarter(start, end):
+            period = start.isoformat()
+            if period in columns:
+                return {}
+            columns[period] = index
+    rates = {}
+    for period, col in columns.items():
+        fuels = {}
+        for row in rows[1:]:
+            if len(row) != len(headers) or row[0].strip().lower() not in {'electricity', 'gas'}:
+                continue
+            parts = re.fullmatch(r'([\d.]+) pence per kWh ([\d.]+) pence daily standing charge', row[col])
+            if not parts:
+                continue
+            fuels[row[0].strip().lower()] = (to_decimal(parts[1]), to_decimal(parts[2]))
+        if set(fuels) == {'electricity', 'gas'}:
+            rates[period] = fuels
+    return rates
+
+
 @dataclass
 class Official:
     """What the publisher says: observed values by period, and where it came from."""
     points: dict
     route: str
+    upcoming: dict = field(default_factory=dict)
+    rates: dict = field(default_factory=dict)
 
 
 def official(points, route):
@@ -508,22 +582,42 @@ class Sources:
             points[when.isoformat()] = to_decimal(row[columns[0]])
         return official(points, 'DESNZ weekly road fuel CSV')
 
-    # Ofgem: the price cap page headline for the cap in force today.
+    # Ofgem: the price cap page headline(s) plus Direct Debit average rates table.
     def energy(self, key):
-        text = page_text(self.fetch(DEFINITIONS[key].source_url, MAX_PAGE_BYTES), 'Ofgem page')
-        points = {}
+        raw = self.fetch(DEFINITIONS[key].source_url, MAX_PAGE_BYTES)
+        text = page_text(raw, 'Ofgem page')
+        next_q = next_quarter_start(self.today)
+        points, upcoming = {}, {}
         for match in re.finditer(
-                r'From (\d{1,2}) ([A-Z][a-z]+) to (\d{1,2}) ([A-Z][a-z]+) (\d{4}), the price cap will be £([\d,]+) per year', text):
+                r'From (\d{1,2}) ([A-Z][a-z]+)(?: (\d{4}))? to (\d{1,2}) ([A-Z][a-z]+) (\d{4}), the price cap will be £([\d,]+) per year', text):
             try:
-                start = date(int(match[5]), MONTH_NAMES[match[2].lower()], int(match[1]))
-                end = date(int(match[5]), MONTH_NAMES[match[4].lower()], int(match[3]))
+                start = date(int(match[3] or match[6]), MONTH_NAMES[match[2].lower()], int(match[1]))
+                end = date(int(match[6]), MONTH_NAMES[match[5].lower()], int(match[4]))
             except (KeyError, ValueError):
                 continue
+            if not is_calendar_quarter(start, end):
+                continue
+            value = to_decimal(match[7].replace(',', ''))
+            period = start.isoformat()
             if start <= self.today <= end:
-                points[start.isoformat()] = to_decimal(match[6].replace(',', ''))
-        if len(points) != 1:
+                if period in points:
+                    raise SourceError('Ofgem cap headline is ambiguous')
+                points[period] = value
+            elif start == next_q:
+                if period in upcoming:
+                    raise SourceError('Ofgem cap headline is ambiguous')
+                upcoming[period] = value
+        if len(points) > 1 or len(upcoming) > 1:
+            raise SourceError('Ofgem cap headline is ambiguous')
+        if not points and not upcoming:
             raise SourceError('Ofgem cap in force today not found')
-        return official(points, 'Ofgem price cap page')
+        rates = ofgem_table_rates(raw)
+        if not points:
+            current_q = quarter_start(self.today).isoformat()
+            upcoming_q = next(iter(upcoming))
+            if current_q not in rates or upcoming_q not in rates:
+                raise SourceError('Ofgem rates table missing current or upcoming quarter')
+        return Official(points, 'Ofgem price cap page', upcoming=upcoming, rates=rates)
 
     # ONS affordability: dataset page -> workbook -> Table 1c, England and Wales row.
     def affordability(self, key):
@@ -664,6 +758,49 @@ def compare(site, truth, periods=HISTORY_PERIODS):
     return problems
 
 
+def _compare_energy_rates(label, point, expected_rates):
+    problems = []
+    ref = (point or {}).get('reference') or {}
+    for fuel in ('electricity', 'gas'):
+        site_fuel = ref.get(fuel) or {}
+        want_unit, want_standing = expected_rates[fuel]
+        got_unit = to_decimal(site_fuel.get('unit_rate_p_per_kwh')) if site_fuel.get('unit_rate_p_per_kwh') is not None else None
+        got_standing = to_decimal(site_fuel.get('standing_charge_p_per_day')) if site_fuel.get('standing_charge_p_per_day') is not None else None
+        if got_unit != want_unit:
+            problems.append(f'{label} {fuel} unit rate: site {got_unit}, official {want_unit}')
+        if got_standing != want_standing:
+            problems.append(f'{label} {fuel} standing charge: site {got_standing}, official {want_standing}')
+    return problems
+
+
+def compare_energy(metric, truth, today, periods=HISTORY_PERIODS):
+    problems = []
+    if truth.points:
+        problems.extend(compare(site_points(metric), truth.points, periods))
+    else:
+        current = quarter_start(today).isoformat()
+        latest = (metric or {}).get('latest') or {}
+        if latest.get('period') != current:
+            problems.append(f'latest period: site {latest.get("period")}, official {current}')
+        else:
+            problems.extend(_compare_energy_rates(f'current cap ({current})', latest, truth.rates[current]))
+    if truth.upcoming:
+        want_period, want_value = next(iter(truth.upcoming.items()))
+        upcoming = (metric or {}).get('upcoming_period')
+        if not isinstance(upcoming, dict):
+            problems.append(f'upcoming cap: site none, official {want_period} ({want_value})')
+        else:
+            got_period = upcoming.get('period')
+            got_value = to_decimal(upcoming.get('value')) if upcoming.get('value') is not None else None
+            if got_period != want_period:
+                problems.append(f'upcoming period: site {got_period} ({got_value}), official {want_period} ({want_value})')
+            elif got_value != want_value:
+                problems.append(f'upcoming value for {want_period}: site {got_value}, official {want_value}')
+            if want_period in truth.rates and got_period == want_period:
+                problems.extend(_compare_energy_rates(f'upcoming cap ({want_period})', upcoming, truth.rates[want_period]))
+    return problems
+
+
 # ---------------------------------------------------------------- the report
 
 @dataclass
@@ -756,9 +893,26 @@ def run_check(site_url, fetch, today=None, node='node', reader=VERIFIED_MJS,
         try:
             truth = sources.read(key)
             result.route = truth.route
-            latest = max(truth.points)
-            result.official = f'{truth.points[latest]} ({latest})'
-            differences = compare(site_points(metric), truth.points, periods)
+            if key == 'household_energy' and (truth.upcoming or not truth.points):
+                if truth.points:
+                    latest = max(truth.points)
+                    official_parts = [f'{truth.points[latest]} ({latest})']
+                else:
+                    official_parts = [f'{quarter_start(today).isoformat()} table rates']
+                if truth.upcoming:
+                    up_period, up_value = next(iter(truth.upcoming.items()))
+                    official_parts.append(f'upcoming {up_value} ({up_period})')
+                    site_up = metric.get('upcoming_period')
+                    if isinstance(site_up, dict) and site_up.get('value') is not None:
+                        result.site = f"{result.site}; upcoming {site_up['value']} ({site_up.get('period')})"
+                    else:
+                        result.site = f'{result.site}; upcoming none'
+                result.official = '; '.join(official_parts)
+                differences = compare_energy(metric, truth, today, periods)
+            else:
+                latest = max(truth.points)
+                result.official = f'{truth.points[latest]} ({latest})'
+                differences = compare(site_points(metric), truth.points, periods)
         except Exception as exc:
             # Any unexpected source format change must degrade to "could not check" for this
             # metric rather than aborting the whole run without opening an issue.

@@ -175,6 +175,11 @@ export function PricesPage({ data, loading, error, refresh, topics, HistoricalTr
               The energy price cap is Ofgem’s illustrative yearly gas and electricity bill for a typical household.
               Your own bill depends on how much energy you use and where you live.
             </p>
+            {upcoming && (
+              <p>
+                <strong>Next cap announced:</strong> {money(upcoming.value)}/year for {formatPeriod(upcoming.reference.effective_start)} to {formatPeriod(upcoming.reference.effective_end)} — an annualised typical bill for that three-month period, becoming current on {formatPeriod(upcoming.reference.effective_start)}.
+              </p>
+            )}
             <MoreDetail label="How it's measured">
               <p>{topics.household_energy.meaning} {topics.household_energy.caution}</p>
               <p>
@@ -194,7 +199,7 @@ export function PricesPage({ data, loading, error, refresh, topics, HistoricalTr
               )}
               {upcoming && (
                 <p>
-                  Announced upcoming cap: {money(upcoming.value)}/year for {formatPeriod(upcoming.reference.effective_start)} to {formatPeriod(upcoming.reference.effective_end)}. It will become current only when that effective period begins. Announcement date: {upcoming.reference.announcement_date ?? "not supplied"}.
+                  Announced upcoming cap: {money(upcoming.value)}/year for {formatPeriod(upcoming.reference.effective_start)} to {formatPeriod(upcoming.reference.effective_end)}. Electricity: {upcoming.reference.electricity.unit_rate_p_per_kwh}p/kWh and {upcoming.reference.electricity.standing_charge_p_per_day}p/day. Gas: {upcoming.reference.gas.unit_rate_p_per_kwh}p/kWh and {upcoming.reference.gas.standing_charge_p_per_day}p/day. Tax: {upcoming.reference.tax_treatment}. It will become current only when that effective period begins. Announcement date: {upcoming.reference.announcement_date ?? "not supplied"}.
                 </p>
               )}
               <p>The cap limits unit rates and standing charges, not total bills. Actual costs depend on use and region. It does not cover Northern Ireland, fixed tariffs or heating oil.</p>

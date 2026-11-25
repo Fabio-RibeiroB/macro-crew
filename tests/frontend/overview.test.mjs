@@ -113,3 +113,28 @@ test("missing values stay Not available and never turn into zero", async () => {
   }
   assert.match(rows.inflation, /3\.5%/, "present measures are unaffected");
 });
+
+test("extending the 0% electricity VAT window keeps consecutive cap quarters comparable", async () => {
+  const { comparableEnergyPrevious } = await import("../../src/app/data/overview.mjs");
+  const data = full();
+  const oct = structuredClone(data.metrics.household_energy.latest);
+  const jan = structuredClone(oct);
+  jan.period = "2027-01-01";
+  jan.value = "2166";
+  jan.reference.effective_start = "2027-01-01";
+  jan.reference.effective_end = "2027-03-31";
+  jan.reference.comparison_status = "compare_only_same_basis";
+  jan.reference.tax_treatment = "5% VAT on gas; 0% VAT on electricity from 1 October 2026 to 30 June 2027";
+  const metric = { ...data.metrics.household_energy, latest: jan, history: [{ ...oct, reference: { ...oct.reference, period_status: "expired" } }, jan] };
+  const result = comparableEnergyPrevious(metric);
+  assert.equal(result.kind, "comparable");
+  assert.equal(result.previous.value, "1723");
+  const row = overviewRows({ ...data, metrics: { ...data.metrics, household_energy: metric } }).find((r) => r.id === "energy");
+  assert.equal(row.change[0].text, "+£443/year");
+
+  // An actual tax-regime change remains non-comparable.
+  const jul = structuredClone(jan);
+  jul.period = "2027-07-01";
+  jul.reference.tax_treatment = "5% VAT on gas and electricity";
+  assert.equal(comparableEnergyPrevious({ ...metric, latest: jul, history: [...metric.history, jul] }).kind, "unavailable");
+});
