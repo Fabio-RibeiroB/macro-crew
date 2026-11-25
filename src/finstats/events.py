@@ -16,12 +16,12 @@ from finstats.storage import atomic_write, encode, timestamp
 LONDON = ZoneInfo('Europe/London')
 MAX_BYTES = 2_000_000
 SOURCES = {
-    'ons': ('https://api.beta.ons.gov.uk/v1/search/releases?limit=1000&offset=0&sort=release_date_asc&fromDate={today}&toDate={year}', 'https://www.ons.gov.uk/releasecalendar'),
+    'ons': ('https://api.beta.ons.gov.uk/v1/search/releases?limit=1000&offset=0&sort=release_date_asc&release-type=type-upcoming&fromDate={today}&toDate={year}', 'https://www.ons.gov.uk/releasecalendar'),
     'boe_mpc': ('https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates', 'https://www.bankofengland.co.uk/monetary-policy/upcoming-mpc-dates'),
     'obr': ('https://obr.uk/publications/', 'https://obr.uk/publications/'),
-    'hm_treasury': ('https://www.gov.uk/government/publications/chancellor-letter-to-the-treasury-select-committee-tsc-budget-2026-date', 'https://www.gov.uk/government/publications/chancellor-letter-to-the-treasury-select-committee-tsc-budget-2026-date'),
+    'hm_treasury': ('https://www.gov.uk/api/search.json?filter_organisations=hm-treasury&q=%22date+of+the+Budget%22&order=-public_timestamp&count=20', 'https://www.gov.uk/government/organisations/hm-treasury'),
     'desnz_fuel': ('https://www.gov.uk/government/statistics/weekly-road-fuel-prices', 'https://www.gov.uk/government/statistics/weekly-road-fuel-prices'),
-    'ofgem_energy': ('https://www.ofgem.gov.uk/news/changes-energy-price-cap-between-1-october-and-31-december-2026', 'https://www.ofgem.gov.uk/energy-regulation/domestic-and-non-domestic/energy-pricing-rules/energy-price-cap'),
+    'ofgem_energy': ('https://www.ofgem.gov.uk/energy-regulation/domestic-and-non-domestic/energy-pricing-rules/energy-price-cap', 'https://www.ofgem.gov.uk/energy-regulation/domestic-and-non-domestic/energy-pricing-rules/energy-price-cap'),
 }
 INDICATORS = {
     'boe_mpc':['uk.bank_rate.daily'],
@@ -41,6 +41,8 @@ ONS_FAMILIES = {
 
 def _ons_indicators(title):
     title=' '.join(title.split())
+    if re.match(r'^Consumer price inflation(?:,\s*updating weights|\s+basket of goods and services)(?:,|:|\b)',title,re.I):
+        return []
     if re.match(r'^Consumer price inflation(?:,|:|\b)',title,re.I):
         return ONS_FAMILIES['inflation']
     if re.match(r'^GDP monthly estimate(?:,|:|\b)',title,re.I):
@@ -79,9 +81,16 @@ def _provider_url_valid(name,url):
     if parts.scheme!='https': return False
     if name=='ons':
         return bool(parts.hostname=='api.beta.ons.gov.uk' and parts.port is None and
+                    parts.username is None and parts.password is None and not parts.fragment and
                     re.fullmatch(r'/v1/search/releases',parts.path) and
-                    re.fullmatch(r'limit=1000&offset=0&sort=release_date_asc&fromDate=\d{4}-\d{2}-\d{2}&toDate=\d{4}-\d{2}-\d{2}',parts.query))
+                    re.fullmatch(r'limit=1000&offset=0&sort=release_date_asc&release-type=type-upcoming&fromDate=\d{4}-\d{2}-\d{2}&toDate=\d{4}-\d{2}-\d{2}',parts.query))
     return url==SOURCES[name][0]
+
+def _hm_treasury_event_url_valid(url):
+    parts=urlsplit(url)
+    return bool(parts.scheme=='https' and parts.hostname=='www.gov.uk' and parts.port is None and
+                parts.username is None and parts.password is None and not parts.query and not parts.fragment and
+                re.fullmatch(r'/government/(?:news|publications)/[a-z0-9-]+|/government/organisations/hm-treasury',parts.path))
 
 def _parse_ons(body, today):
     data=json.loads(body)
@@ -126,9 +135,9 @@ def event(identity,title,day,when,status,source,indicators,url):
 
 MONTH={'January':1,'February':2,'March':3,'April':4,'May':5,'June':6,'July':7,'August':8,'September':9,'October':10,'November':11,'December':12}
 def _date(text):
-    m=re.search(r'\b(\d{1,2})\s+('+'|'.join(MONTH)+r')\s+(20\d{2})\b',text)
+    m=re.search(r'\b(\d{1,2})\s+('+'|'.join(MONTH)+r')\s+(20\d{2})\b',text,re.I)
     if not m: return None
-    return date(int(m[3]),MONTH[m[2]],int(m[1])).isoformat()
+    return date(int(m[3]),MONTH[m[2].capitalize()],int(m[1])).isoformat()
 
 def parse_source(source,body,today):
     if source=='ons': return _parse_ons(body,today)
@@ -187,11 +196,89 @@ def _parse_obr(body,today):
     if d<today.isoformat(): return []
     return [event('obr:efo','OBR Economic and fiscal outlook',d,None,'scheduled','obr',INDICATORS['obr'],SOURCES['obr'][0])]
 
+def _infer_year_date(raw_date,pub_date,weekday):
+    m=re.fullmatch(r'(\d{1,2})\s+('+'|'.join(MONTH)+r')',raw_date.strip(),re.I)
+    if not m: raise ValueError('invalid HM Treasury Budget date')
+    day,month=int(m[1]),MONTH[m[2].capitalize()]
+    candidates=[]
+    for year in (pub_date.year,pub_date.year+1):
+        try: candidate=date(year,month,day)
+        except ValueError: continue
+        if pub_date<=candidate<=pub_date+timedelta(days=366): candidates.append(candidate)
+    if not candidates: raise ValueError('invalid HM Treasury Budget date')
+    # GOV.UK public_timestamp reflects last edit, not first publication; require a
+    # matching weekday before inferring a year so edited historical items cannot emit a false date.
+    if not weekday: return None
+    expected=weekday.lower()
+    for candidate in candidates:
+        if candidate.strftime('%A').lower()==expected: return candidate.isoformat()
+    return None
+
+_HMT_SPECULATION_RE=re.compile(
+    r'\b(?:speculation|rumours?|rumors?|reports?\s+that|claims?\s+that|'
+    r'not\s+(?:yet\s+)?(?:confirmed|announced|decided)|unconfirmed|denied|false|inaccurate|incorrect)\b',
+    re.I,
+)
+
+def _parse_hm_treasury_search(data,today):
+    # Count=20 newest-first results are bounded by recency rather than rejecting total > len(results),
+    # because older historical Budget announcements beyond the top 20 cannot be upcoming dates.
+    if (not isinstance(data,dict) or not isinstance(data.get('results'),list)
+            or not isinstance(data.get('total'),int) or isinstance(data.get('total'),bool)
+            or data['total']<len(data['results'])
+            or (data['total']>0 and not data['results'])):
+        raise ValueError('unrecognized HM Treasury search response')
+    months='|'.join(MONTH)
+    weekday=r'(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)'
+    budget_date_re=re.compile(
+        rf'\b(?:(?:the\s+)?date\s+of\s+the\s+(?:(?:Autumn|Spring|Summer|Emergency)\s+)?Budget\s+will\s+be'
+        rf'|(?:the\s+)?(?:(?:Autumn|Spring|Summer|Emergency|next)\s+)?Budget\s+will\s+be\s+held\s+on)\s+'
+        rf'(?:{weekday}\s+)?(\d{{1,2}}\s+(?:{months})(?:\s+20\d{{2}})?)\b',
+        re.I,
+    )
+    found=[]
+    for item in data['results']:
+        if not isinstance(item,dict): raise ValueError('invalid HM Treasury search item')
+        desc=item.get('description')
+        if not isinstance(desc,str): continue
+        normalized=' '.join(desc.split())
+        if _HMT_SPECULATION_RE.search(normalized): continue
+        match=budget_date_re.search(normalized)
+        if not match: continue
+        matched_weekday,raw_date=match.group(1),match.group(2)
+        if re.search(r'\b20\d{2}\b',raw_date):
+            d=_date(raw_date)
+            if not d: raise ValueError('invalid HM Treasury Budget date')
+            if matched_weekday and date.fromisoformat(d).strftime('%A').lower()!=matched_weekday.lower():
+                continue
+        else:
+            pub=item.get('public_timestamp')
+            if not isinstance(pub,str): raise ValueError('missing HM Treasury announcement timestamp')
+            try: instant=datetime.fromisoformat(pub.replace('Z','+00:00'))
+            except ValueError as exc: raise ValueError('invalid HM Treasury announcement timestamp') from exc
+            if instant.tzinfo is None or instant.utcoffset() is None:
+                raise ValueError('HM Treasury announcement timestamp requires timezone')
+            d=_infer_year_date(raw_date,instant.astimezone(LONDON).date(),matched_weekday)
+            if not d: continue
+            context=' '.join(str(item.get(k,'')) for k in ('title','link'))
+            budget_years=re.findall(r'budget[^0-9]{0,12}(20\d{2})\b',context,re.I)
+            if budget_years and d[:4] not in budget_years: continue
+        link=item.get('link')
+        if not isinstance(link,str) or not re.fullmatch(r'/government/(?:news|publications)/[a-z0-9-]+',link):
+            raise ValueError('invalid HM Treasury announcement URL')
+        if d<today.isoformat(): continue
+        found.append(event('hm_treasury:budget:'+d,'HM Treasury Budget',d,None,'scheduled','hm_treasury',INDICATORS['hm_treasury'],'https://www.gov.uk'+link))
+    return found
+
 def _parse_hm_treasury(body,today):
+    if body.lstrip().startswith(b'{'):
+        try: data=json.loads(body)
+        except ValueError as exc: raise ValueError('unrecognized HM Treasury search JSON') from exc
+        return _parse_hm_treasury_search(data,today)
     html=body.decode('utf-8','replace')
     heading=re.search(r'<h1\b[^>]*>(.*?)</h1\s*>',html,re.I|re.S)
     if (not re.search(r'<main\b',html,re.I) or not heading
-            or not re.search(r'Budget\s+2026\s+date',_text(heading.group(1).encode()),re.I)
+            or not re.search(r'Budget\s+20\d{2}\s+date',_text(heading.group(1).encode()),re.I)
             or not re.search(r'class=["\'][^"\']*\bgovspeak\b',html,re.I)):
         raise ValueError('unrecognized HM Treasury budget announcement structure')
     text=_text(body)
@@ -201,25 +288,52 @@ def _parse_hm_treasury(body,today):
         raise ValueError('unrecognized HM Treasury explicit Budget date')
     d=_date(match.group(1))
     if d<today.isoformat(): return []
-    return [event('hm_treasury:budget','HM Treasury Budget',d,None,'scheduled','hm_treasury',INDICATORS['hm_treasury'],SOURCES['hm_treasury'][0])]
+    return [event('hm_treasury:budget:'+d,'HM Treasury Budget',d,None,'scheduled','hm_treasury',INDICATORS['hm_treasury'],SOURCES['hm_treasury'][1])]
+
+def _parse_ofgem_period(raw_start,raw_end):
+    end=_date(raw_end)
+    if not end: raise ValueError('invalid Ofgem price-cap end date')
+    if re.search(r'\b20\d{2}\b',raw_start):
+        start=_date(raw_start)
+    else:
+        end_date=date.fromisoformat(end)
+        start=_date(f'{raw_start} {end_date.year}')
+        if start and start>end: start=_date(f'{raw_start} {end_date.year-1}')
+    if not start or start>end: raise ValueError('invalid Ofgem price-cap period')
+    return start,end
 
 def _parse_ofgem(body,today):
     html=body.decode('utf-8','replace')
     heading=re.search(r'<h1\b[^>]*>(.*?)</h1\s*>',html,re.I|re.S)
-    section=re.search(r'<h[2-4]\b[^>]*>\s*Energy\s+price\s+cap\s+level\s+dates\s*</h[2-4]\s*>',html,re.I)
-    if (not heading or not re.search(r'Changes\s+to\s+energy\s+price\s+cap',_text(heading.group(1).encode()),re.I)
+    section=re.search(r'<h[2-4]\b[^>]*>\s*Energy\s+price\s+cap(?:\s+level)?\s+dates\s*</h[2-4]\s*>',html,re.I)
+    heading_text=_text(heading.group(1).encode()) if heading else ''
+    if (not heading
+            or not re.fullmatch(r'(?:Energy\s+price\s+cap|Changes\s+to\s+energy\s+price\s+cap(?:\b.*)?)',heading_text,re.I)
             or not section):
         raise ValueError('unrecognized Ofgem price-cap announcement structure')
     text=_text(body)
-    anchor=re.search(r'Energy\s+price\s+cap\s+level\s+dates.*?levels\s+for\s+the\s+next\s+periods\s+will\s+be\s+announced\s+by\s*:\s*(.*?)(?:We\s+may\s+publish\s+before\s+these\s+dates|$)',text,re.I)
+    anchor=re.search(r'Energy\s+price\s+cap(?:\s+level)?\s+dates.*?levels\s+for\s+the\s+next\s+periods\s+will\s+be\s+announced\s+by\s*:\s*(.*?)(?:We\s+may\s+publish\s+before\s+these\s+dates|$)',text,re.I)
     if not anchor: raise ValueError('unrecognized Ofgem announcement date context')
-    pattern=r'(\d{1,2}\s+(?:'+'|'.join(MONTH)+r')\s+20\d{2})\s*[–—-]\s*period\s+(\d{1,2}\s+(?:'+'|'.join(MONTH)+r')\s+20\d{2})\s+to\s+(\d{1,2}\s+(?:'+'|'.join(MONTH)+r')\s+20\d{2})'
+    months='|'.join(MONTH)
+    outside_anchor=text[:anchor.start()]+' '+text[anchor.end():]
+    published_periods=set()
+    published_pattern=(rf'Changes\s+to\s+energy\s+price\s+cap\s+between\s+'
+                       rf'(\d{{1,2}}\s+(?:{months})(?:\s+20\d{{2}})?)\s+and\s+'
+                       rf'(\d{{1,2}}\s+(?:{months})\s+20\d{{2}})')
+    for pub_match in re.finditer(published_pattern,outside_anchor,re.I):
+        try: published_periods.add(_parse_ofgem_period(pub_match.group(1),pub_match.group(2)))
+        except ValueError: continue
+    pattern=(rf'(\d{{1,2}}\s+(?:{months})\s+20\d{{2}})\s*[–—-]\s*period\s+'
+             rf'(\d{{1,2}}\s+(?:{months})(?:\s+20\d{{2}})?)\s+to\s+'
+             rf'(\d{{1,2}}\s+(?:{months})\s+20\d{{2}})')
     matches=list(re.finditer(pattern,anchor.group(1),re.I))
     if not matches and re.sub(r'\s+',' ',anchor.group(1)).strip():
         raise ValueError('unrecognized Ofgem price-cap date rows')
     found=[]
     for match in matches:
-        announcement=_date(match.group(1)); start=_date(match.group(2)); end=_date(match.group(3))
+        announcement=_date(match.group(1))
+        start,end=_parse_ofgem_period(match.group(2),match.group(3))
+        if (start,end) in published_periods: continue
         if announcement>=today.isoformat():
             deadline=date.fromisoformat(announcement).strftime('%d %B %Y').lstrip('0')
             start_label=date.fromisoformat(start).strftime('%d %B %Y').lstrip('0')
@@ -235,6 +349,31 @@ def _paths(state):
 def _source_url(name,local):
     template=SOURCES[name][0]
     return template.format(today=local.isoformat(),year=(local+timedelta(days=365)).isoformat()) if '{' in template else template
+
+def _saved_provider_matches_contract(name,old,calendar_url):
+    if not isinstance(old,dict): return False
+    if not _provider_url_valid(name,old.get('source_url','')): return False
+    if old.get('calendar_url')!=calendar_url: return False
+    events=old.get('events',[])
+    if not isinstance(events,list): return False
+    for e in events:
+        if not isinstance(e,dict): return False
+        event_url=e.get('source_url','')
+        if name=='ons':
+            expected=_ons_indicators(e.get('title',''))
+            parts=urlsplit(event_url)
+            if (not expected or e.get('linked_indicators')!=expected
+                    or parts.scheme!='https' or parts.hostname!='www.ons.gov.uk'
+                    or parts.port is not None or parts.username is not None or parts.password is not None
+                    or parts.query or parts.fragment
+                    or not re.fullmatch(r'/releases/[a-zA-Z0-9/_-]+',parts.path)
+                    or e.get('id')!='ons:'+parts.path):
+                return False
+        elif name=='hm_treasury':
+            if not _hm_treasury_event_url_valid(event_url): return False
+        else:
+            if event_url!=SOURCES[name][0]: return False
+    return True
 
 def collect_events(state,clock=None,fetch=_fetch,fixtures=None):
     """Read one official bounded endpoint/provider; retain last verified events on failure."""
@@ -277,12 +416,24 @@ def collect_events(state,clock=None,fetch=_fetch,fixtures=None):
         except Exception as exc:
             failed.append(name); old=saved['providers'].get(name,{})
             had_success=old.get('evidence_kind')=='official_download' and old.get('retrieved_at')
-            old.update(status='stale' if had_success else 'unavailable',
-                       qualification='unqualified' if name in UNQUALIFIED_SOURCES else 'qualified',
-                       events=old.get('events',[]),
-                       source_url=old.get('source_url',url),calendar_url=old.get('calendar_url',source_url),
-                       last_failure_at=timestamp(now),last_error=type(exc).__name__)
-            saved['providers'][name]=old
+            qualification='unqualified' if name in UNQUALIFIED_SOURCES else 'qualified'
+            if had_success and _saved_provider_matches_contract(name,old,source_url):
+                old.update(status='stale',
+                           qualification=qualification,
+                           events=old.get('events',[]),
+                           source_url=old.get('source_url',url),calendar_url=old.get('calendar_url',source_url),
+                           last_failure_at=timestamp(now),last_error=type(exc).__name__)
+                saved['providers'][name]=old
+            else:
+                saved['providers'][name]={
+                    'status':'unavailable',
+                    'qualification':qualification,
+                    'events':[],
+                    'source_url':url,
+                    'calendar_url':source_url,
+                    'last_failure_at':timestamp(now),
+                    'last_error':type(exc).__name__,
+                }
             saved['attempts'].append({'provider':name,'at':timestamp(now),'status':'failed','source_url':url,'error_type':type(exc).__name__,'evidence_kind':'recorded_fixture' if fixtures else 'official_download'})
     saved['checked_at']=timestamp(now); saved['mode']='fixtures' if fixtures else 'official'
     atomic_write(state_file,encode(saved))
@@ -337,9 +488,14 @@ def public_events(state):
                 if not expected or e.get('linked_indicators')!=expected: raise ValueError('invalid ONS indicator links')
                 event_url=urlsplit(e.get('source_url',''))
                 if (event_url.scheme!='https' or event_url.hostname!='www.ons.gov.uk'
+                        or event_url.port is not None or event_url.username is not None or event_url.password is not None
+                        or event_url.query or event_url.fragment
                         or not re.fullmatch(r'/releases/[a-zA-Z0-9/_-]+',event_url.path)
                         or e['id']!='ons:'+event_url.path):
                     raise ValueError('invalid ONS release URL')
+            elif name=='hm_treasury':
+                if e.get('linked_indicators')!=INDICATORS[name] or not _hm_treasury_event_url_valid(e.get('source_url','')):
+                    raise ValueError('invalid HM Treasury event provenance')
             else:
                 if e.get('linked_indicators')!=INDICATORS[name] or e.get('source_url')!=SOURCES[name][0]:
                     raise ValueError('invalid event provenance')

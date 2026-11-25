@@ -91,7 +91,7 @@ def test_additive_events_sidecar_is_separate_and_checksummed(tmp_path):
     (private / 'events.json').write_text(json.dumps({
         'schema_version':1,'mode':'official','checked_at':'2026-10-22T12:00:00Z',
         'providers':{'ons':{'status':'ok','qualification':'qualified','retrieved_at':'2026-10-22T12:00:00Z',
-          'source_url':'https://api.beta.ons.gov.uk/v1/search/releases?limit=1000&offset=0&sort=release_date_asc&fromDate=2026-10-22&toDate=2027-10-22',
+          'source_url':'https://api.beta.ons.gov.uk/v1/search/releases?limit=1000&offset=0&sort=release_date_asc&release-type=type-upcoming&fromDate=2026-10-22&toDate=2027-10-22',
           'calendar_url':'https://www.ons.gov.uk/releasecalendar','sha256':'a'*64,
           'evidence_kind':'official_download','events':[event]}},'attempts':[],'revisions':[]}))
     deliver(private, public)
@@ -111,7 +111,7 @@ def test_invalid_event_state_does_not_block_metric_activation_or_replace_event_m
     (private/'events.json').write_text(json.dumps({
         'schema_version':1,'mode':'official','checked_at':'2026-10-22T12:00:00Z',
         'providers':{'ons':{'status':'ok','qualification':'qualified',
-          'evidence_kind':'official_download','source_url':'https://api.beta.ons.gov.uk/v1/search/releases?limit=1000&offset=0&sort=release_date_asc&fromDate=2026-10-22&toDate=2027-10-22',
+          'evidence_kind':'official_download','source_url':'https://api.beta.ons.gov.uk/v1/search/releases?limit=1000&offset=0&sort=release_date_asc&release-type=type-upcoming&fromDate=2026-10-22&toDate=2027-10-22',
           'calendar_url':'https://www.ons.gov.uk/releasecalendar','events':[{'id':'bad','source':'ons','title':'GDP release',
           'date':'2027-01-01','time':None,'time_precision':'date','status':'scheduled',
           'source_url':'https://evil.example/releases/gdp','linked_indicators':['uk.gdp.monthly_growth']}]}}
@@ -137,7 +137,7 @@ def test_event_payload_write_failure_keeps_old_event_manifest_and_publishes_metr
     (private/'events.json').write_text(json.dumps({
         'schema_version':1,'mode':'official','checked_at':'2026-10-22T12:00:00Z',
         'providers':{'ons':{'status':'ok','qualification':'qualified','retrieved_at':'2026-10-22T12:00:00Z',
-          'source_url':'https://api.beta.ons.gov.uk/v1/search/releases?limit=1000&offset=0&sort=release_date_asc&fromDate=2026-10-22&toDate=2027-10-22',
+          'source_url':'https://api.beta.ons.gov.uk/v1/search/releases?limit=1000&offset=0&sort=release_date_asc&release-type=type-upcoming&fromDate=2026-10-22&toDate=2027-10-22',
           'calendar_url':'https://www.ons.gov.uk/releasecalendar','sha256':'a'*64,
           'evidence_kind':'official_download','events':[event]}}}))
     original=delivery.atomic_write
