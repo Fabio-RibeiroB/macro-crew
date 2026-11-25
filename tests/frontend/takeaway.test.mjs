@@ -10,6 +10,7 @@ import { fullFixture, textOf } from "./overview-helpers.mjs";
 
 const point = (value, period = "2026-09") => ({ latest: { value, period, status: "observed" }, history: [] });
 const snapshot = (metrics) => ({ metrics });
+const NOW = new Date("2026-11-25T12:00:00Z");
 const text = (metrics) => overviewTakeaway(snapshot(metrics))?.text;
 
 test("inflation is described against the 2% target, with CPIH as the labelled fallback", () => {
@@ -32,8 +33,8 @@ test("real pay is described as ahead of, level with or behind prices", () => {
   const pay = (value) => text({ regular_pay_real_growth: point(value, "2026-08") });
   assert.equal(pay("0.6"), "Average regular pay is growing faster than prices (+0.6% in real terms).");
   assert.equal(pay("0.5"), "Average regular pay is growing faster than prices (+0.5% in real terms).");
-  assert.equal(pay("0.2"), "Average regular pay is only just ahead of inflation (+0.2% in real terms).");
-  assert.equal(pay("0.0"), "Average regular pay is roughly matching inflation (0.0% in real terms).");
+  assert.equal(pay("0.2"), "Average regular pay is slightly ahead of prices (+0.2% in real terms).");
+  assert.equal(pay("0.0"), "Average regular pay is roughly matching prices (0.0% in real terms).");
   assert.equal(pay("-0.8"), "Average regular pay is rising more slowly than prices (−0.8% in real terms).");
   assert.deepEqual([0.5, 0.49, 0, -0.1].map(realPayBand), ["strong", "narrow", "level", "negative"]);
 });
@@ -41,7 +42,7 @@ test("real pay is described as ahead of, level with or behind prices", () => {
 test("inflation and pay join with 'but' for opposite signals and 'and' for matching ones", () => {
   const both = (cpi, pay) => overviewTakeaway(snapshot({ cpi: point(cpi), regular_pay_real_growth: point(pay) })).sentences[0];
   assert.match(both("3.5", "0.6"), /\(3\.5%\), but average regular pay is growing faster/);
-  assert.match(both("3.5", "0.2"), /\(3\.5%\), but average regular pay is only just ahead/);
+  assert.match(both("3.5", "0.2"), /\(3\.5%\), but average regular pay is slightly ahead/);
   assert.match(both("3.5", "-0.8"), /\(3\.5%\) and average regular pay is rising more slowly/);
   assert.match(both("3.5", "0.0"), /\(3\.5%\) and average regular pay is roughly matching/);
   assert.match(both("2.0", "0.6"), /\(2\.0%\) and average regular pay is growing faster/);
@@ -51,17 +52,17 @@ test("inflation and pay join with 'but' for opposite signals and 'and' for match
 
 test("GDP direction, private rents and Bank Rate each read plainly", () => {
   const second = (metrics) => overviewTakeaway(snapshot(metrics)).sentences.at(-1);
-  assert.equal(second({ gdp: point("0.4", "2026-08") }), "The economy grew 0.4% in the latest month.");
-  assert.equal(second({ gdp: point("0.2", "2026-08") }), "The economy grew modestly (0.2% in the latest month).");
-  assert.equal(second({ gdp: point("0.1", "2026-08") }), "The economy grew modestly (0.1% in the latest month).");
+  assert.equal(second({ gdp: point("0.4", "2026-08") }), "GDP grew 0.4% in the latest month.");
+  assert.equal(second({ gdp: point("0.2", "2026-08") }), "GDP grew 0.2% in the latest month.");
+  assert.equal(second({ gdp: point("0.1", "2026-08") }), "GDP grew 0.1% in the latest month.");
   assert.equal(second({ gdp: point("0.0", "2026-08") }), "The economy was flat in the latest month.");
-  assert.equal(second({ gdp: point("-0.3", "2026-08") }), "The economy shrank 0.3% in the latest month.");
+  assert.equal(second({ gdp: point("-0.3", "2026-08") }), "GDP shrank 0.3% in the latest month.");
   assert.deepEqual([0.3, 0.2, 0.1, 0, -0.1].map(gdpBand), ["growing", "modest", "modest", "flat", "contracted"]);
   assert.equal(second({ private_rent_growth: point("3.8") }), "Private rents are up 3.8% over the year.");
   assert.equal(second({ private_rent_growth: point("0.0") }), "Private rents are flat over the year.");
   assert.equal(second({ private_rent_growth: point("-1.2") }), "Private rents are down 1.2% over the year.");
-  assert.equal(second({ bank_rate: point("4", "2026-10-19") }), "Bank Rate sits at 4.00%.");
-  assert.equal(second({ bank_rate: point("3.75", "2026-10-19") }), "Bank Rate sits at 3.75%.");
+  assert.equal(second({ bank_rate: point("4", "2026-10-19") }), "Bank Rate is 4.00%.");
+  assert.equal(second({ bank_rate: point("3.75", "2026-10-19") }), "Bank Rate is 3.75%.");
 });
 
 // An announced cap on the same tax basis as the effective one.
@@ -86,14 +87,14 @@ function energy({ upcomingValue, comparison = "compare_only_same_basis", tax } =
 }
 
 test("a comparable announced energy cap is stated as a rise, fall or no change", () => {
-  const second = (data) => overviewTakeaway(data).sentences.at(-1);
-  assert.match(second(energy({ upcomingValue: "2166" })), /and the energy price cap is set to rise to £2,166\/year on 1 Jan 2027\.$/);
-  assert.match(second(energy({ upcomingValue: "1500" })), /and the energy price cap is set to fall to £1,500\/year on 1 Jan 2027\.$/);
-  assert.match(second(energy({ upcomingValue: "1723" })), /and the energy price cap is set to stay at £1,723\/year on 1 Jan 2027\.$/);
+  const second = (data) => overviewTakeaway(data, NOW).sentences.at(-1);
+  assert.match(second(energy({ upcomingValue: "2166" })), /and the energy cap is set to rise to £2,166\/year on 1 Jan 2027\.$/);
+  assert.match(second(energy({ upcomingValue: "1500" })), /and the energy cap is set to fall to £1,500\/year on 1 Jan 2027\.$/);
+  assert.match(second(energy({ upcomingValue: "1723" })), /and the energy cap is set to stay at £1,723\/year on 1 Jan 2027\.$/);
 });
 
 test("an energy cap across a tax-basis change is never described as a rise or fall", () => {
-  const rendered = (data) => overviewTakeaway(data).text;
+  const rendered = (data) => overviewTakeaway(data, NOW).text;
   const flagged = energy({ upcomingValue: "2166", comparison: "not_comparable_tax_change" });
   const regime = energy({ upcomingValue: "2166", tax: "5% VAT on gas and electricity" });
   const none = energy({});
@@ -103,6 +104,37 @@ test("an energy cap across a tax-basis change is never described as a rise or fa
     assert.doesNotMatch(rendered(data), /rise|fall|higher|lower/i);
   }
   assert.equal(rendered(flagged), rendered(none), "a non-comparable cap changes nothing");
+});
+
+test("an announced cap that has started, is stale or is malformed is omitted", () => {
+  const withEnergy = (mutate) => {
+    const data = energy({ upcomingValue: "2166" });
+    mutate(data.metrics.household_energy);
+    return data;
+  };
+  const energyText = /energy|cap|£/i;
+  const rendered = (data, now = NOW) => overviewTakeaway(data, now).text;
+  assert.match(rendered(energy({ upcomingValue: "2166" })), /£2,166\/year on 1 Jan 2027/, "control: future cap shown");
+  // effective_start on or before today's London date.
+  assert.doesNotMatch(rendered(energy({ upcomingValue: "2166" }), new Date("2027-01-01T12:00:00Z")), energyText);
+  assert.doesNotMatch(rendered(energy({ upcomingValue: "2166" }), new Date("2027-03-01T12:00:00Z")), energyText);
+  // The London date decides: 23:30 UTC on 31 Dec is already 1 Jan in London only in BST, so use a summer start.
+  const summer = withEnergy((m) => { m.upcoming_period.reference.effective_start = "2027-07-01"; m.upcoming_period.period = "2027-07-01"; });
+  assert.match(rendered(summer, new Date("2027-06-30T22:30:00Z")), /on 1 Jul 2027/);
+  assert.doesNotMatch(rendered(summer, new Date("2027-06-30T23:30:00Z")), energyText, "1 Jul in London already");
+  // Degraded collection must not announce a stale upcoming cap.
+  for (const status of ["degraded", "unavailable"])
+    assert.doesNotMatch(rendered(withEnergy((m) => { m.collection_status = status; })), energyText);
+  assert.match(rendered(withEnergy((m) => { m.collection_status = "ok"; })), /£2,166/);
+  // Announced period not after the effective period.
+  assert.doesNotMatch(rendered(withEnergy((m) => { m.upcoming_period.period = m.latest.period; })), energyText);
+  assert.doesNotMatch(rendered(withEnergy((m) => { m.upcoming_period.period = "2000-01-01"; })), energyText);
+  // Not announced.
+  for (const status of ["effective", "observed", undefined])
+    assert.doesNotMatch(rendered(withEnergy((m) => { m.upcoming_period.reference.period_status = status; })), energyText);
+  // Non-numeric announced value.
+  for (const value of ["TBC", "", "£2,166", "NaN"])
+    assert.doesNotMatch(rendered(withEnergy((m) => { m.upcoming_period.value = value; })), energyText);
 });
 
 test("energy alone is not enough to show a takeaway", () => {
@@ -119,11 +151,11 @@ test("missing, null, NaN and blank metrics are omitted cleanly", () => {
   data.metrics.private_rent_growth = { latest: null, history: [] };
   delete data.metrics.gdp;
   const only = overviewTakeaway(data);
-  assert.equal(only.text, "Bank Rate sits at 3.75%.");
-  assert.deepEqual(only.sentences, ["Bank Rate sits at 3.75%."]);
+  assert.equal(only.text, "Bank Rate is 3.75%.");
+  assert.deepEqual(only.sentences, ["Bank Rate is 3.75%."]);
 
   const partial = text({ cpi: point("3.5"), gdp: point("-0.1", "2026-08") });
-  assert.equal(partial, "Inflation is well above the 2% target (3.5%). The economy shrank 0.1% in the latest month.");
+  assert.equal(partial, "Inflation is well above the 2% target (3.5%). GDP shrank 0.1% in the latest month.");
   for (const value of [only.text, partial, overviewTakeaway(fullFixture()).text])
     assert.doesNotMatch(value, /undefined|NaN|null|Not available|,\s*\.|\.\.|\s{2}|\(\s*\)|\band\s*\./);
 });
@@ -141,11 +173,14 @@ test("it is two short sentences with no forecast, judgement or advice", () => {
   const { text: copy, sentences } = overviewTakeaway(fullFixture());
   assert.equal(sentences.length, 2);
   const words = copy.split(/\s+/).length;
-  assert.ok(words >= 30 && words <= 55, `${words} words`);
-  assert.doesNotMatch(copy, /could|may|might|will|expect|forecast|should|good|bad|fine|okay|worry|pricey|advice/i);
+  assert.ok(words >= 30 && words <= 54, `${words} words`);
+  assert.doesNotMatch(copy, /\b(could|might|will|expect|expected|forecast|predict|should|would|likely|good|bad|fine|okay|ok|worry|pricey|advice)\b/i);
+  assert.doesNotMatch(copy, /\bmay\b/, "lowercase modal 'may', not the month");
   // Even with every clause, including the announced energy cap, it stays compact.
-  const full = overviewTakeaway(energy({ upcomingValue: "2166" })).text;
-  assert.ok(full.split(/\s+/).length <= 60, full);
+  const full = overviewTakeaway(energy({ upcomingValue: "2166" }), NOW).text;
+  assert.ok(full.split(/\s+/).length <= 54, full);
+  assert.doesNotMatch(full, /\b(could|would|should|likely|forecast|predict|expected|okay|ok)\b/i);
+  assert.doesNotMatch(full, /\bmay\b/);
 });
 
 const lookup = (rows, id) => rows.find((row) => row.id === id);
@@ -174,7 +209,7 @@ test("the numbers follow the data rather than fixed copy", () => {
   data.metrics.bank_rate.latest = { ...data.metrics.bank_rate.latest, value: "4.25" };
   const copy = overviewTakeaway(data).text;
   assert.match(copy, /^Inflation is below the 2% target \(1\.4%\), but average regular pay is rising more slowly than prices \(−0\.8% in real terms\)\./);
-  assert.match(copy, /Bank Rate sits at 4\.25%\.$/);
+  assert.match(copy, /Bank Rate is 4\.25%\.$/);
 });
 
 async function renderApp(initialData) {

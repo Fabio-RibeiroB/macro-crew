@@ -4,6 +4,7 @@
 // is left out rather than shown as zero. It states what the latest figures show and
 // makes no judgement or advice. `null` means there is nothing to say (card hidden).
 import { comparableEnergyUpcoming, dayLabel, decimalDifference, formatFigure, inflationKind } from "./overview.mjs";
+import { londonDay } from "./verified.mjs";
 
 export const INFLATION_TARGET = 2;
 
@@ -62,8 +63,8 @@ function payClause(data) {
   const figure = formatFigure(metric.latest.value, "signedPercent");
   const text = {
     strong: `average regular pay is growing faster than prices (${figure} in real terms)`,
-    narrow: `average regular pay is only just ahead of inflation (${figure} in real terms)`,
-    level: `average regular pay is roughly matching inflation (${figure} in real terms)`,
+    narrow: `average regular pay is slightly ahead of prices (${figure} in real terms)`,
+    level: `average regular pay is roughly matching prices (${figure} in real terms)`,
     negative: `average regular pay is rising more slowly than prices (${figure} in real terms)`,
   }[band];
   return { band, text };
@@ -98,37 +99,41 @@ function gdpClause(data) {
   if (value === null) return null;
   const figure = formatFigure(unsigned(metric.latest.value), "percent");
   return {
-    growing: `the economy grew ${figure} in the latest month`,
-    modest: `the economy grew modestly (${figure} in the latest month)`,
+    growing: `GDP grew ${figure} in the latest month`,
+    modest: `GDP grew ${figure} in the latest month`,
     flat: "the economy was flat in the latest month",
-    contracted: `the economy shrank ${figure} in the latest month`,
+    contracted: `GDP shrank ${figure} in the latest month`,
   }[gdpBand(value)];
 }
 
 function bankRateClause(data) {
   const metric = data?.metrics?.bank_rate;
-  return numeric(metric) === null ? null : `Bank Rate sits at ${formatFigure(metric.latest.value, "bankRate")}`;
+  return numeric(metric) === null ? null : `Bank Rate is ${formatFigure(metric.latest.value, "bankRate")}`;
 }
 
 /** Only an announced cap on the same tax basis as the effective cap; never across a tax change. */
-function energyClause(data) {
+function energyClause(data, now) {
   const metric = data?.metrics?.household_energy;
   if (numeric(metric) === null) return null;
+  // A degraded collection cannot vouch that the announced cap is still upcoming.
+  if (metric.collection_status && metric.collection_status !== "ok") return null;
   const result = comparableEnergyUpcoming(metric);
   if (result.kind !== "comparable") return null;
   const { upcoming } = result;
   const start = upcoming.reference.effective_start;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start ?? "") || !/^-?\d+(\.\d+)?$/.test(String(upcoming.value))) return null;
+  // Once the cap has started it is no longer upcoming (UK date, ISO strings compare in order).
+  if (start <= londonDay(now)) return null;
   const change = decimalDifference(String(upcoming.value), String(metric.latest.value));
   const direction = change.startsWith("+") ? "rise" : change === "0" ? "stay the same" : "fall";
   const to = direction === "stay the same" ? "at" : "to";
   const verb = direction === "stay the same" ? "stay" : direction;
-  return `the energy price cap is set to ${verb} ${to} ${formatFigure(upcoming.value, "poundsPerYear")} on ${dayLabel(start)}`;
+  return `the energy cap is set to ${verb} ${to} ${formatFigure(upcoming.value, "poundsPerYear")} on ${dayLabel(start)}`;
 }
 
 /** Sentence 2: household costs and the wider economy, as a short list of verified facts. */
-function householdAndEconomy(data) {
-  const parts = [rentClause(data), gdpClause(data), bankRateClause(data), energyClause(data)].filter(Boolean);
+function householdAndEconomy(data, now) {
+  const parts = [rentClause(data), gdpClause(data), bankRateClause(data), energyClause(data, now)].filter(Boolean);
   if (!parts.length) return null;
   const list = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;
   return `${capitalise(list)}.`;
@@ -137,14 +142,15 @@ function householdAndEconomy(data) {
 /**
  * `{ text, sentences }` for the overview, or null when no core figure (inflation, real
  * pay, rents, GDP, Bank Rate) is available. The energy cap only adds to other facts.
+ * `now` fixes "today" so an announced cap that has already started is left out.
  */
-export function overviewTakeaway(data) {
+export function overviewTakeaway(data, now = new Date()) {
   const metrics = data?.metrics;
   if (!metrics || typeof metrics !== "object") return null;
   const hasCore = Boolean(
     inflationClause(data) || payClause(data) || rentClause(data) || gdpClause(data) || bankRateClause(data),
   );
   if (!hasCore) return null;
-  const sentences = [pricesAndPay(data), householdAndEconomy(data)].filter(Boolean);
+  const sentences = [pricesAndPay(data), householdAndEconomy(data, now)].filter(Boolean);
   return { text: sentences.join(" "), sentences };
 }
