@@ -77,9 +77,9 @@ export function MortgageRatesSection({ data }: { data: any }) {
         ))}
         <MoreDetail label="How the rates are compiled">
           <p className="fs-src-note">
-            Published in Bank of England Bankstats Table G1.3 (2-year fixed: IUMBV34; 5-year fixed: IUMBV42) from
-            January 1995. Before February 2019, figures used month-end values from a sample of lenders; from February
-            2019 they are monthly averages across the whole market.
+            Both rates come from Bank of England Bankstats Table G1.3 (2-year fixed: IUMBV34; 5-year fixed: IUMBV42),
+            with data from January 1995. Before February 2019, figures used month-end values from a sample of lenders;
+            from February 2019 they are monthly averages across the whole market.
           </p>
         </MoreDetail>
       </Row>

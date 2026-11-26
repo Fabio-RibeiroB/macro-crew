@@ -142,6 +142,25 @@ test("gilt methodology stays plain in How it's measured and each maturity has it
     assert.match(entry, /Last successful check/);
     assert.match(entry, /4 January 2000/);
   }
+
+  // Partial definitions keep sibling sources visible and show an honest placeholder for an absent maturity.
+  const partial = fixture();
+  delete partial.metrics.gilt_20y;
+  const partialBlock = section(await renderGovernment(partial), "gilt-yields");
+  const partialSources = partialBlock.slice(partialBlock.indexOf('id="gilt-sources-label"'));
+  const twentyStart = partialSources.indexOf('<div class="fs-src-set"><h4 class="fs-fig-name">20-year gilt yield</h4>');
+  assert.ok(twentyStart >= 0, "missing maturity keeps its heading");
+  assert.match(textOf(partialSources.slice(twentyStart)), /20-year gilt yield Source details appear when a verified reading is available\./);
+  assert.match(textOf(partialSources), /IADB \/ IUDMNPY/);
+  assert.match(textOf(partialSources), /IADB \/ IUDSNPY/);
+
+  // When no gilt maturity is present, Sources falls back to the Bank of England Database link.
+  const noGilts = fixture();
+  for (const key of ["gilt_10y", "gilt_5y", "gilt_20y"]) delete noGilts.metrics[key];
+  const fallbackBlock = section(await renderGovernment(noGilts), "gilt-yields");
+  const fallbackSources = fallbackBlock.slice(fallbackBlock.indexOf('id="gilt-sources-label"'));
+  assert.match(fallbackSources, /https:\/\/www\.bankofengland\.co\.uk\/boeapps\/database\//);
+  assert.match(textOf(fallbackSources), /Source details appear when a verified reading is available\./);
 });
 
 test("2 decimal display rounds half away from zero and never shows a real change as zero", async () => {

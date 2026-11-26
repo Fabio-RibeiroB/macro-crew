@@ -243,8 +243,9 @@ export function GovernmentPage({ data, loading, error, refresh, topics, Historic
                 </p>
                 <p>
                   It is not the average cost of the government’s outstanding debt, and not the redemption yield on one
-                  benchmark gilt. Instead, the Bank of England estimates a fitted nominal par yield each trading day from UK
-                  government bond prices using its yield-curve model (Variable Roughness Penalty).
+                  benchmark gilt. Each trading day, the Bank of England estimates a fitted nominal par yield (the yield at
+                  which a gilt would be priced at face value) from UK government bond prices using its yield-curve model
+                  (Variable Roughness Penalty).
                 </p>
                 <p>
                   The change compares with the previous available trading observation, in basis points (bp), where one
