@@ -2,7 +2,6 @@ import { Suspense } from "react";
 import { chartUpdated } from "../data/chartMeta.mjs";
 import { chartPoints, previousReading } from "../data/verified.mjs";
 import { NOT_AVAILABLE, changeDirection, dayLabel, decimalDifference, monthLabel } from "../data/overview.mjs";
-import { checkedAt } from "../data/format.mjs";
 import { UpdatedChip } from "./UpdatedChip";
 import { PageContents } from "./PageContents";
 import { OfficialLink } from "./OfficialLink";
@@ -244,21 +243,18 @@ export function GovernmentPage({ data, loading, error, refresh, topics, Historic
                 </p>
                 <p>
                   It is not the average cost of the government’s outstanding debt, and not the redemption yield on one
-                  benchmark gilt. It is a fitted nominal par yield from a Bank of England model.
+                  benchmark gilt. Each trading day, the Bank of England estimates a fitted nominal par yield (the yield at
+                  which a gilt would be priced at face value) from UK government bond prices using its yield-curve model
+                  (Variable Roughness Penalty).
                 </p>
                 <p>
-                  The change compares with the previous available trading observation, in percentage points (pp). One
+                  The change compares with the previous available trading observation, in basis points (bp), where one
                   percentage point equals 100 basis points. Weekends and other non-trading dates have no value, and are never
                   filled with zero.
                 </p>
                 <p>
-                  Figures show 2 decimal places; the chart’s exact values table keeps the published precision. Source: Bank
-                  of England Database nominal par yields (IUDSNPY, IUDMNPY and IUDLNPY), fitted with its Variable Roughness
-                  Penalty term-structure model at fixed 5-, 10- and 20-year maturities. The 10-year maturity is primary. The
-                  comparable family begins 4 January 2000. Last successful checks: 5-year{" "}
-                  {checkedAt(data?.metrics?.gilt_5y?.last_successful_check_at ?? null)}; 10-year{" "}
-                  {checkedAt(primary?.last_successful_check_at ?? null)}; 20-year{" "}
-                  {checkedAt(data?.metrics?.gilt_20y?.last_successful_check_at ?? null)}.
+                  The headline figure and maturity table round yields to 2 decimal places; each chart and its Exact values
+                  table keep the unrounded published values.
                 </p>
               </MoreDetail>
             </div>
@@ -282,11 +278,20 @@ export function GovernmentPage({ data, loading, error, refresh, topics, Historic
             )}
           </Row>
           <Row label="Sources" labelId="gilt-sources-label">
-            <Sources metric={primary} />
-            {!primary?.definition && (
-              <OfficialLink href="https://www.bankofengland.co.uk/boeapps/database/">
-                Bank of England Database nominal par yields
-              </OfficialLink>
+            {giltRows.some(({ metric }) => metric?.definition) ? (
+              giltRows.map(({ key, tenor, metric }) => (
+                <div className="fs-src-set" key={key}>
+                  <h4 className="fs-fig-name">{tenor} gilt yield</h4>
+                  <Sources metric={metric} />
+                </div>
+              ))
+            ) : (
+              <>
+                <Sources metric={primary} />
+                <OfficialLink href="https://www.bankofengland.co.uk/boeapps/database/">
+                  Bank of England Database nominal par yields
+                </OfficialLink>
+              </>
             )}
           </Row>
         </section>

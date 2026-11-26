@@ -169,7 +169,8 @@ test("Housing shows the Mortgage rates section with the quoted-rate label, both 
   assert.match(text, /Official figure · Bank of England/);
   assert.match(text, /They are averages, not offers/);
   assert.match(text, /Bank Rate, the Bank of England policy rate, is drawn for context/);
-  assert.match(text, /IUMBV34 and IUMBV42/);
+  assert.match(text, /2-year fixed: IUMBV34; 5-year fixed: IUMBV42/);
+  assert.doesNotMatch(text, /Last successful checks:/);
   assert.match(text, /IADB \/ IUMBV34/);
   assert.match(text, /IADB \/ IUMBV42/);
   assert.match(text, /Chart Loading chart/, "the trend chart is lazy, so server rendering shows its loading state");

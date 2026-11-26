@@ -1,6 +1,5 @@
 import { Suspense, lazy } from "react";
 import { chartUpdated } from "../data/chartMeta.mjs";
-import { checkedAt } from "../data/format.mjs";
 import { MORTGAGE_BASIS, MORTGAGE_RATES, mortgageChart, mortgageFigureRow, mortgageMetrics } from "../data/mortgageRates.mjs";
 import { MoreDetail } from "./MoreDetail";
 import { KeyFigure, Row, Sources } from "./SubjectBlock";
@@ -78,10 +77,9 @@ export function MortgageRatesSection({ data }: { data: any }) {
         ))}
         <MoreDetail label="How the rates are compiled">
           <p className="fs-src-note">
-            Bank of England Database quoted household interest rates (IUMBV34 and IUMBV42), Bankstats Table G1.3, from
-            January 1995. Before February 2019 they used month-end values from a sample of lenders; from February 2019 they
-            are monthly averages across the whole market. Last successful checks:{" "}
-            {MORTGAGE_RATES.map(({ key, name }) => `${name} ${checkedAt(data.metrics[key]?.last_successful_check_at ?? null)}`).join("; ")}.
+            Both rates come from Bank of England Bankstats Table G1.3 (2-year fixed: IUMBV34; 5-year fixed: IUMBV42),
+            with data from January 1995. Before February 2019, figures used month-end values from a sample of lenders;
+            from February 2019 they are monthly averages across the whole market.
           </p>
         </MoreDetail>
       </Row>

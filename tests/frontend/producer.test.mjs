@@ -376,7 +376,9 @@ test("BoE 5/10/20 nominal par producer export binds exact series and renders Gov
     assert.match(government, /4 January 2000/);
     assert.match(government, /market financing conditions/);
     assert.match(government, /not the average cost of the government’s outstanding debt/);
-    assert.match(government, /IUDSNPY, IUDMNPY and IUDLNPY/);
+    assert.match(government, /IADB \/ IUDMNPY/);
+    assert.match(government, /IADB \/ IUDSNPY/);
+    assert.match(government, /IADB \/ IUDLNPY/);
   } finally { await server.close(); }
 
   const changed = JSON.parse(giltBytes.toString("utf8"));
